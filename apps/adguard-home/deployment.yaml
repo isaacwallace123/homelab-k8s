@@ -1,34 +1,8 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: adguard-work
-  namespace: networking
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: adguard-config
-  namespace: networking
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 1Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: adguard-home
   namespace: networking
-  labels:
-    app: adguard-home
 spec:
   replicas: 1
   strategy:
@@ -49,16 +23,12 @@ spec:
               name: setup
             - containerPort: 80
               name: http
-            - containerPort: 443
-              name: https
             - containerPort: 53
               name: dns-tcp
               protocol: TCP
             - containerPort: 53
               name: dns-udp
               protocol: UDP
-            - containerPort: 853
-              name: dns-tls
           volumeMounts:
             - name: work
               mountPath: /opt/adguardhome/work
@@ -72,11 +42,13 @@ spec:
               memory: 512Mi
       volumes:
         - name: work
-          persistentVolumeClaim:
-            claimName: adguard-work
+          hostPath:
+            path: /mnt/k3s-data/adguard/work
+            type: DirectoryOrCreate
         - name: config
-          persistentVolumeClaim:
-            claimName: adguard-config
+          hostPath:
+            path: /mnt/k3s-data/adguard/conf
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -94,7 +66,6 @@ spec:
       targetPort: 80
       name: http
 ---
-# DNS service — use LoadBalancer or NodePort so your network can reach it
 apiVersion: v1
 kind: Service
 metadata:
@@ -123,7 +94,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`adguard.${DOMAIN}`)
+    - match: Host(`adguard.isaacwallace.dev`)
       kind: Rule
       services:
         - name: adguard-home

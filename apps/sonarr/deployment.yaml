@@ -1,22 +1,8 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: sonarr-config
-  namespace: media
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 5Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sonarr
   namespace: media
-  labels:
-    app: sonarr
 spec:
   replicas: 1
   strategy:
@@ -34,11 +20,11 @@ spec:
           image: lscr.io/linuxserver/sonarr:latest
           env:
             - name: PUID
-              value: "${PUID}"
+              value: "1000"
             - name: PGID
-              value: "${PGID}"
+              value: "1000"
             - name: TZ
-              value: "${TZ}"
+              value: America/New_York
           ports:
             - containerPort: 8989
           volumeMounts:
@@ -56,16 +42,17 @@ spec:
               memory: 1Gi
       volumes:
         - name: config
-          persistentVolumeClaim:
-            claimName: sonarr-config
+          hostPath:
+            path: /mnt/k3s-data/sonarr
+            type: DirectoryOrCreate
         - name: tv
           hostPath:
-            path: ${MEDIA_TV}
-            type: Directory
+            path: /mnt/media/tv
+            type: DirectoryOrCreate
         - name: downloads
           hostPath:
-            path: ${MEDIA_DOWNLOADS}
-            type: Directory
+            path: /mnt/media/downloads
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -88,11 +75,8 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`sonarr.${DOMAIN}`)
+    - match: Host(`sonarr.isaacwallace.dev`)
       kind: Rule
       services:
         - name: sonarr
           port: 8989
-      middlewares:
-        - name: authentik-auth
-          namespace: kube-system

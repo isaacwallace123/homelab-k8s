@@ -1,22 +1,8 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: prowlarr-config
-  namespace: media
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 2Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: prowlarr
   namespace: media
-  labels:
-    app: prowlarr
 spec:
   replicas: 1
   strategy:
@@ -34,11 +20,11 @@ spec:
           image: lscr.io/linuxserver/prowlarr:latest
           env:
             - name: PUID
-              value: "${PUID}"
+              value: "1000"
             - name: PGID
-              value: "${PGID}"
+              value: "1000"
             - name: TZ
-              value: "${TZ}"
+              value: America/New_York
           ports:
             - containerPort: 9696
           volumeMounts:
@@ -52,8 +38,9 @@ spec:
               memory: 512Mi
       volumes:
         - name: config
-          persistentVolumeClaim:
-            claimName: prowlarr-config
+          hostPath:
+            path: /mnt/k3s-data/prowlarr
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -76,11 +63,8 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`prowlarr.${DOMAIN}`)
+    - match: Host(`prowlarr.isaacwallace.dev`)
       kind: Rule
       services:
         - name: prowlarr
           port: 9696
-      middlewares:
-        - name: authentik-auth
-          namespace: kube-system

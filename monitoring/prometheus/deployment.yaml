@@ -32,18 +32,6 @@ subjects:
     namespace: monitoring
 ---
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: prometheus-data
-  namespace: monitoring
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 50Gi
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-config
@@ -53,13 +41,11 @@ data:
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
-
     scrape_configs:
-      - job_name: 'prometheus'
+      - job_name: prometheus
         static_configs:
           - targets: ['localhost:9090']
-
-      - job_name: 'node-exporter'
+      - job_name: node-exporter
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:
@@ -68,8 +54,7 @@ data:
           - source_labels: [__meta_kubernetes_service_name]
             regex: node-exporter
             action: keep
-
-      - job_name: 'kubernetes-pods'
+      - job_name: kubernetes-pods
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:
@@ -85,29 +70,10 @@ data:
             regex: ([^:]+)(?::\d+)?;(\d+)
             replacement: $1:$2
             target_label: __address__
-
-      - job_name: 'kubernetes-service-endpoints'
-        kubernetes_sd_configs:
-          - role: endpoints
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
-            action: keep
-            regex: true
-          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
-            action: replace
-            target_label: __metrics_path__
-            regex: (.+)
-          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
-            action: replace
-            regex: ([^:]+)(?::\d+)?;(\d+)
-            replacement: $1:$2
-            target_label: __address__
-
-      - job_name: 'traefik'
+      - job_name: traefik
         static_configs:
           - targets: ['traefik.kube-system.svc.cluster.local:8080']
-
-      - job_name: 'loki'
+      - job_name: loki
         static_configs:
           - targets: ['loki.monitoring.svc.cluster.local:3100']
 ---
@@ -116,8 +82,6 @@ kind: Deployment
 metadata:
   name: prometheus
   namespace: monitoring
-  labels:
-    app: prometheus
 spec:
   replicas: 1
   strategy:
@@ -161,8 +125,9 @@ spec:
           configMap:
             name: prometheus-config
         - name: data
-          persistentVolumeClaim:
-            claimName: prometheus-data
+          hostPath:
+            path: /mnt/k3s-data/prometheus
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -185,11 +150,8 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`prometheus.${DOMAIN}`)
+    - match: Host(`prometheus.isaacwallace.dev`)
       kind: Rule
       services:
         - name: prometheus
           port: 9090
-      middlewares:
-        - name: authentik-auth
-          namespace: kube-system

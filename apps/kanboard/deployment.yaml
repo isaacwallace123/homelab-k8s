@@ -1,22 +1,8 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: kanboard-data
-  namespace: collab
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 5Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kanboard
   namespace: collab
-  labels:
-    app: kanboard
 spec:
   replicas: 1
   strategy:
@@ -47,8 +33,9 @@ spec:
               memory: 256Mi
       volumes:
         - name: data
-          persistentVolumeClaim:
-            claimName: kanboard-data
+          hostPath:
+            path: /mnt/k3s-data/kanboard
+            type: DirectoryOrCreate
         - name: plugins
           emptyDir: {}
 ---
@@ -73,11 +60,8 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`kanboard.${DOMAIN}`)
+    - match: Host(`kanboard.isaacwallace.dev`)
       kind: Rule
       services:
         - name: kanboard
           port: 80
-      middlewares:
-        - name: authentik-auth
-          namespace: kube-system
