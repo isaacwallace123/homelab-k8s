@@ -370,3 +370,47 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+---
+# Doppler Operator
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: doppler-operator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: base/secrets/doppler-operator
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: secrets
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# Doppler-managed app secrets
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: doppler-secrets
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: base/secrets/doppler-secrets
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: secrets
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
