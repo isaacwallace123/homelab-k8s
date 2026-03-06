@@ -10,6 +10,8 @@ spec:
     repoURL: https://github.com/isaacwallace123/homelab-k8s.git
     targetRevision: main
     path: base
+    directory:
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
