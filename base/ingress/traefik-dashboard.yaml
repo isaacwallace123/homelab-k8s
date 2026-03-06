@@ -8,11 +8,11 @@ spec:
     - web
     - websecure
   routes:
-    - match: Host(`traefik.isaacwallace.dev`)
-      kind: Rule
+    - kind: Rule
+      match: Host(`traefik.isaacwallace.dev`)
       middlewares:
         - name: default-headers
       services:
-        - name: api@internal
-          kind: TraefikService
+        - kind: TraefikService
+          name: api@internal
   tls: {}
