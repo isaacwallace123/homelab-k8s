@@ -148,6 +148,7 @@ metadata:
   namespace: monitoring
 spec:
   entryPoints:
+    - web
     - websecure
   routes:
     - match: Host(`prometheus.isaacwallace.dev`)

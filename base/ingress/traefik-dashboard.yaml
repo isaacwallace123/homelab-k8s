@@ -5,9 +5,10 @@ metadata:
   namespace: kube-system
 spec:
   entryPoints:
+    - web
     - websecure
   routes:
-    - match: Host(`traefik.local`)
+    - match: Host(`traefik.isaacwallace.dev`)
       kind: Rule
       middlewares:
         - name: default-headers
