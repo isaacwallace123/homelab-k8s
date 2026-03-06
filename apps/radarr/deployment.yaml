@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radarr-config
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: media
+  labels:
+    app: radarr
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: radarr
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      containers:
+        - name: radarr
+          image: lscr.io/linuxserver/radarr:latest
+          env:
+            - name: PUID
+              value: "${PUID}"
+            - name: PGID
+              value: "${PGID}"
+            - name: TZ
+              value: "${TZ}"
+          ports:
+            - containerPort: 7878
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: movies
+              mountPath: /movies
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: radarr-config
+        - name: movies
+          hostPath:
+            path: ${MEDIA_MOVIES}
+            type: Directory
+        - name: downloads
+          hostPath:
+            path: ${MEDIA_DOWNLOADS}
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  selector:
+    app: radarr
+  ports:
+    - port: 7878
+      targetPort: 7878
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`radarr.${DOMAIN}`)
+      kind: Rule
+      services:
+        - name: radarr
+          port: 7878
+      middlewares:
+        - name: authentik-auth
+          namespace: kube-system

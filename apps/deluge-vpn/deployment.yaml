@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: deluge-config
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: deluge-vpn-creds
+  namespace: media
+type: Opaque
+stringData:
+  VPN_USER: "${VPN_USER}"
+  VPN_PASS: "${VPN_PASS}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deluge-vpn
+  namespace: media
+  labels:
+    app: deluge-vpn
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: deluge-vpn
+  template:
+    metadata:
+      labels:
+        app: deluge-vpn
+    spec:
+      containers:
+        - name: deluge
+          image: binhex/arch-delugevpn:latest
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+            privileged: true    # Required for VPN tunnel
+          env:
+            - name: VPN_ENABLED
+              value: "${VPN_ENABLED}"
+            - name: VPN_PROV
+              value: "${VPN_PROV}"
+            - name: VPN_CLIENT
+              value: wireguard
+            - name: STRICT_PORT_FORWARD
+              value: "yes"
+            - name: ENABLE_PRIVOXY
+              value: "no"
+            - name: LAN_NETWORK
+              value: "${LAN_NETWORK}"
+            - name: NAME_SERVERS
+              value: "1.1.1.1,8.8.8.8"
+            - name: DELUGE_DAEMON_LOG_LEVEL
+              value: info
+            - name: DELUGE_WEB_LOG_LEVEL
+              value: info
+            - name: DELUGE_ENABLE_WEBUI_PASSWORD
+              value: "yes"
+            - name: PUID
+              value: "${PUID}"
+            - name: PGID
+              value: "${PGID}"
+            - name: TZ
+              value: "${TZ}"
+          envFrom:
+            - secretRef:
+                name: deluge-vpn-creds
+          ports:
+            - containerPort: 8112
+              name: webui
+            - containerPort: 58846
+              name: daemon
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: deluge-config
+        - name: downloads
+          hostPath:
+            path: ${MEDIA_DOWNLOADS}
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deluge-vpn
+  namespace: media
+spec:
+  selector:
+    app: deluge-vpn
+  ports:
+    - port: 8112
+      targetPort: 8112
+      name: webui
+    - port: 58846
+      targetPort: 58846
+      name: daemon
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: deluge
+  namespace: media
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`deluge.${DOMAIN}`)
+      kind: Rule
+      services:
+        - name: deluge-vpn
+          port: 8112
+      middlewares:
+        - name: authentik-auth
+          namespace: kube-system

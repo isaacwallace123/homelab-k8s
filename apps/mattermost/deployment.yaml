@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mattermost-data
+  namespace: collab
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mattermost-postgres
+  namespace: collab
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mattermost-secrets
+  namespace: collab
+type: Opaque
+stringData:
+  MATTERMOST_DB_PASSWORD: "${MATTERMOST_DB_PASSWORD}"
+---
+# PostgreSQL for Mattermost
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost-postgres
+  namespace: collab
+  labels:
+    app: mattermost-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mattermost-postgres
+  template:
+    metadata:
+      labels:
+        app: mattermost-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          env:
+            - name: POSTGRES_USER
+              value: mattermost
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-secrets
+                  key: MATTERMOST_DB_PASSWORD
+            - name: POSTGRES_DB
+              value: mattermost
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mattermost-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost-postgres
+  namespace: collab
+spec:
+  selector:
+    app: mattermost-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# Mattermost
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost
+  namespace: collab
+  labels:
+    app: mattermost
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mattermost
+  template:
+    metadata:
+      labels:
+        app: mattermost
+    spec:
+      containers:
+        - name: mattermost
+          image: mattermost/mattermost-team-edition:latest
+          env:
+            - name: TZ
+              value: "${TZ}"
+            - name: MM_SQLSETTINGS_DRIVERNAME
+              value: postgres
+            - name: MM_SQLSETTINGS_DATASOURCE
+              value: "postgres://mattermost:$(MATTERMOST_DB_PASSWORD)@mattermost-postgres:5432/mattermost?sslmode=disable&connect_timeout=10"
+            - name: MM_SERVICESETTINGS_SITEURL
+              value: "https://chat.${DOMAIN}"
+          envFrom:
+            - secretRef:
+                name: mattermost-secrets
+          ports:
+            - containerPort: 8065
+          volumeMounts:
+            - name: data
+              mountPath: /mattermost/data
+            - name: data
+              mountPath: /mattermost/logs
+              subPath: logs
+            - name: data
+              mountPath: /mattermost/config
+              subPath: config
+            - name: data
+              mountPath: /mattermost/plugins
+              subPath: plugins
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mattermost-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost
+  namespace: collab
+spec:
+  selector:
+    app: mattermost
+  ports:
+    - port: 8065
+      targetPort: 8065
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: mattermost
+  namespace: collab
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`chat.${DOMAIN}`)
+      kind: Rule
+      services:
+        - name: mattermost
+          port: 8065

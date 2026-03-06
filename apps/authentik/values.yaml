@@ -1,0 +1,62 @@
+# Authentik is best deployed via its official Helm chart.
+# This file contains the Helm values. The deploy script handles `helm install`.
+
+# helm repo add authentik https://charts.goauthentik.io
+# helm install authentik authentik/authentik -n identity -f values.yaml
+
+authentik:
+  secret_key: "${AUTHENTIK_SECRET_KEY}"
+  error_reporting:
+    enabled: false
+  postgresql:
+    password: "${AUTHENTIK_POSTGRES_PASSWORD}"
+  email:
+    host: "${AUTHENTIK_EMAIL_HOST}"
+    port: ${AUTHENTIK_EMAIL_PORT}
+    username: "${AUTHENTIK_EMAIL_USERNAME}"
+    password: "${AUTHENTIK_EMAIL_PASSWORD}"
+    from: "${AUTHENTIK_EMAIL_FROM}"
+    use_tls: true
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - auth.${DOMAIN}
+    tls:
+      - secretName: homelab-wildcard-tls
+        hosts:
+          - auth.${DOMAIN}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+worker:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+postgresql:
+  enabled: true
+  auth:
+    password: "${AUTHENTIK_POSTGRES_PASSWORD}"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 8Gi
+
+redis:
+  enabled: true
+  master:
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 2Gi
