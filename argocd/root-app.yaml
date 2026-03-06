@@ -1,0 +1,23 @@
+# Root Application — ArgoCD "App of Apps" pattern
+# This single app tells ArgoCD to watch the entire repo
+# and deploy everything it finds.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: homelab-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

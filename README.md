@@ -1,147 +1,74 @@
-# Homelab Kubernetes Stack — pve2
+# Homelab — isaacwallace.dev
 
-GitOps-managed Kubernetes homelab on Proxmox. Everything is in git so you never lose configs again.
+GitOps-managed Kubernetes homelab on Proxmox. ArgoCD watches this repo and auto-deploys on push.
 
-## Your Setup
+## Infrastructure
 
 | Component | Detail |
 |-----------|--------|
-| **Host** | pve2 (192.168.0.254) — Ryzen 5 5500, 64GB RAM |
-| **Storage** | 8TB ZFS pool (`tank`) passed through to VM via virtiofs |
-| **VM** | k3s-homelab (VM 200) — 10 cores, 52GB RAM, Ubuntu 24.04 |
-| **K8s** | k3s single-node (can add workers later) |
-| **Ingress** | Traefik (built into k3s) |
-| **DNS/Adblock** | AdGuard Home via MetalLB LoadBalancer |
-| **LB IPs** | 192.168.0.20–30 (MetalLB pool) |
-
-## Deployment Order
-
-```
-Step 1: setup-pve2-vm.sh    (run on pve2 host — creates the VM)
-Step 2: Install Ubuntu       (via Proxmox console)
-Step 3: setup-k3s.sh         (run inside VM — installs k3s + MetalLB)
-Step 4: deploy.sh            (run inside VM — deploys all apps)
-Step 5: setup-dns.sh         (configure AdGuard for local DNS)
-```
-
-### Step 1: Create the VM (on pve2)
-
-```bash
-ssh root@192.168.0.254
-# Download Ubuntu ISO first if needed:
-# wget -P /var/lib/vz/template/iso/ https://releases.ubuntu.com/24.04/ubuntu-24.04.1-live-server-amd64.iso
-
-bash setup-pve2-vm.sh
-```
-
-### Step 2: Install Ubuntu Server
-
-Open the VM console in Proxmox web UI and install Ubuntu:
-- Hostname: `k3s-homelab`
-- Static IP: `192.168.0.10/24`, Gateway: `192.168.0.1`
-- Enable OpenSSH
-- Create a user (e.g., `admin`)
-
-After install, remove the ISO:
-```bash
-qm set 200 --ide2 none
-```
-
-### Step 3: Install k3s
-
-```bash
-ssh admin@192.168.0.10
-sudo bash setup-k3s.sh
-```
-
-### Step 4: Deploy the stack
-
-```bash
-cd homelab-k8s
-cp .env.example .env
-vim .env          # Fill in YOUR values
-./scripts/deploy.sh
-```
-
-### Step 5: Set up DNS for your network
-
-```bash
-./scripts/setup-dns.sh
-# Then point your router's DNS to the AdGuard LoadBalancer IP
-```
+| Host | pve2 (192.168.0.254) — Ryzen 5 5500, 64GB RAM |
+| Storage | 8TB ext4 (`/tank`) on pve2, NFS-mounted to VM |
+| VM | mainframe (VM 104) — 10 cores, 48GB RAM, Ubuntu 24.04 |
+| IP | 192.168.0.252 |
+| K8s | k3s single-node |
+| Ingress | Traefik (built into k3s) |
+| GitOps | ArgoCD — auto-syncs from this repo |
+| DNS/Adblock | AdGuard Home via MetalLB (192.168.0.20-30) |
+| Domain | isaacwallace.dev |
 
 ## Services
 
-| Service | URL | Access |
-|---------|-----|--------|
-| Portfolio | `yourdomain.com` | Public |
-| Plex | `plex.yourdomain.com` | Family |
-| Sonarr | `sonarr.yourdomain.com` | Family |
-| Radarr | `radarr.yourdomain.com` | Family |
-| Prowlarr | `prowlarr.yourdomain.com` | You (behind Authentik) |
-| Deluge | `deluge.yourdomain.com` | You (behind Authentik) |
-| AdGuard | `adguard.yourdomain.com` | You |
-| Authentik | `auth.yourdomain.com` | You |
-| Kanboard | `kanboard.yourdomain.com` | You (behind Authentik) |
-| Kimai | `kimai.yourdomain.com` | You (behind Authentik) |
-| Mattermost | `chat.yourdomain.com` | You |
-| Prometheus | `prometheus.yourdomain.com` | You (behind Authentik) |
-| Grafana | `grafana.yourdomain.com` | You |
+| Service | URL | Who |
+|---------|-----|-----|
+| Portfolio | isaacwallace.dev | Public |
+| Plex | plex.isaacwallace.dev | Family |
+| Sonarr | sonarr.isaacwallace.dev | Family |
+| Radarr | radarr.isaacwallace.dev | Family |
+| ArgoCD | argocd.isaacwallace.dev | Isaac |
+| Prowlarr | prowlarr.isaacwallace.dev | Isaac |
+| Deluge | deluge.isaacwallace.dev | Isaac |
+| AdGuard | adguard.isaacwallace.dev | Isaac |
+| Authentik | auth.isaacwallace.dev | Isaac |
+| Kanboard | kanboard.isaacwallace.dev | Isaac |
+| Kimai | kimai.isaacwallace.dev | Isaac |
+| Mattermost | chat.isaacwallace.dev | Isaac |
+| Prometheus | prometheus.isaacwallace.dev | Isaac |
+| Grafana | grafana.isaacwallace.dev | Isaac |
 
-## Parent Access
+## Setup
 
-Your parents are on the same network, so once AdGuard DNS is set as your router's DNS:
-- **Plex**: Just works at `plex.yourdomain.com` — they get their own Plex accounts
-- **Sonarr/Radarr**: They can request shows/movies (remove the Authentik middleware from these if you want open family access, or create Authentik accounts for them)
-- **AdGuard**: Automatic — every device on the network gets ad blocking
+k3s + MetalLB are already installed. To deploy everything:
+
+```bash
+# 1. Install ArgoCD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# 2. Apply the root ArgoCD application (points to this repo)
+kubectl apply -f argocd/root-app.yaml
+
+# 3. ArgoCD picks up everything else automatically
+```
+
+## How GitOps Works
+
+```
+Edit manifests → git push → ArgoCD detects change → auto-deploys to cluster
+```
+
+ArgoCD checks this repo every 3 minutes. You can also click "Sync" in the UI for immediate deployment.
 
 ## Storage Layout
 
 ```
-tank (ZFS on pve2)
-├── media/              → /mnt/media in VM (virtiofs)
+/tank (8TB ext4 on pve2, NFS to VM)
+├── media/           → /mnt/media in VM
 │   ├── movies/
 │   ├── tv/
 │   └── downloads/
-└── k3s-data/           → /mnt/k3s-data in VM (virtiofs)
+└── k3s-data/        → /mnt/k3s-data in VM
     ├── plex/
     ├── sonarr/
     ├── radarr/
-    ├── prowlarr/
-    ├── deluge/
-    ├── adguard/
-    ├── kanboard/
-    ├── kimai/
-    ├── mattermost/
-    ├── prometheus/
-    ├── grafana/
-    ├── loki/
-    ├── authentik/
-    └── portfolio/
-```
-
-## Adding pve1 as a Worker Later
-
-If you want to expand to your second server:
-```bash
-# On the new worker VM:
-bash scripts/add-worker.sh
-```
-
-## Backup
-
-```bash
-# Export K8s configs
-./scripts/backup.sh
-
-# Your data is on ZFS — use ZFS snapshots:
-# (run on pve2 host)
-zfs snapshot -r tank@backup-$(date +%Y%m%d)
-```
-
-## Teardown
-
-```bash
-./scripts/teardown.sh
-# Data on ZFS is preserved — only K8s resources are removed
+    └── ... (per-app config)
 ```

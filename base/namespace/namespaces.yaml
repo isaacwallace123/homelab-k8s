@@ -2,40 +2,28 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: media
-  labels:
-    app.kubernetes.io/part-of: homelab
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: identity
-  labels:
-    app.kubernetes.io/part-of: homelab
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: collab
-  labels:
-    app.kubernetes.io/part-of: homelab
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: monitoring
-  labels:
-    app.kubernetes.io/part-of: homelab
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: networking
-  labels:
-    app.kubernetes.io/part-of: homelab
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: portfolio
-  labels:
-    app.kubernetes.io/part-of: homelab

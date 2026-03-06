@@ -1,32 +1,12 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: deluge-config
-  namespace: media
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 2Gi
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: deluge-vpn-creds
-  namespace: media
-type: Opaque
-stringData:
-  VPN_USER: "${VPN_USER}"
-  VPN_PASS: "${VPN_PASS}"
----
+# NOTE: Before deploying, create the VPN secret manually:
+# kubectl create secret generic deluge-vpn-creds -n media \
+#   --from-literal=VPN_USER=your_vpn_user \
+#   --from-literal=VPN_PASS=your_vpn_pass
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: deluge-vpn
   namespace: media
-  labels:
-    app: deluge-vpn
 spec:
   replicas: 1
   strategy:
@@ -45,12 +25,12 @@ spec:
           securityContext:
             capabilities:
               add: ["NET_ADMIN"]
-            privileged: true    # Required for VPN tunnel
+            privileged: true
           env:
             - name: VPN_ENABLED
-              value: "${VPN_ENABLED}"
+              value: "yes"
             - name: VPN_PROV
-              value: "${VPN_PROV}"
+              value: pia
             - name: VPN_CLIENT
               value: wireguard
             - name: STRICT_PORT_FORWARD
@@ -58,7 +38,7 @@ spec:
             - name: ENABLE_PRIVOXY
               value: "no"
             - name: LAN_NETWORK
-              value: "${LAN_NETWORK}"
+              value: "192.168.0.0/24"
             - name: NAME_SERVERS
               value: "1.1.1.1,8.8.8.8"
             - name: DELUGE_DAEMON_LOG_LEVEL
@@ -68,11 +48,11 @@ spec:
             - name: DELUGE_ENABLE_WEBUI_PASSWORD
               value: "yes"
             - name: PUID
-              value: "${PUID}"
+              value: "1000"
             - name: PGID
-              value: "${PGID}"
+              value: "1000"
             - name: TZ
-              value: "${TZ}"
+              value: America/New_York
           envFrom:
             - secretRef:
                 name: deluge-vpn-creds
@@ -94,12 +74,13 @@ spec:
               memory: 2Gi
       volumes:
         - name: config
-          persistentVolumeClaim:
-            claimName: deluge-config
+          hostPath:
+            path: /mnt/k3s-data/deluge
+            type: DirectoryOrCreate
         - name: downloads
           hostPath:
-            path: ${MEDIA_DOWNLOADS}
-            type: Directory
+            path: /mnt/media/downloads
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -126,11 +107,8 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`deluge.${DOMAIN}`)
+    - match: Host(`deluge.isaacwallace.dev`)
       kind: Rule
       services:
         - name: deluge-vpn
           port: 8112
-      middlewares:
-        - name: authentik-auth
-          namespace: kube-system

@@ -1,24 +1,6 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: grafana-data
-  namespace: monitoring
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: grafana-secrets
-  namespace: monitoring
-type: Opaque
-stringData:
-  admin-password: "${GRAFANA_ADMIN_PASSWORD}"
----
+# NOTE: Before deploying, create the secret:
+# kubectl create secret generic grafana-secrets -n monitoring \
+#   --from-literal=admin-password=YourGrafanaPassword
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -33,39 +15,16 @@ data:
         access: proxy
         url: http://prometheus.monitoring.svc.cluster.local:9090
         isDefault: true
-        editable: true
       - name: Loki
         type: loki
         access: proxy
         url: http://loki.monitoring.svc.cluster.local:3100
-        editable: true
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-dashboards-provider
-  namespace: monitoring
-data:
-  dashboards.yaml: |
-    apiVersion: 1
-    providers:
-      - name: 'default'
-        orgId: 1
-        folder: ''
-        type: file
-        disableDeletion: false
-        editable: true
-        options:
-          path: /var/lib/grafana/dashboards
-          foldersFromFilesStructure: true
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
   namespace: monitoring
-  labels:
-    app: grafana
 spec:
   replicas: 1
   strategy:
@@ -91,19 +50,7 @@ spec:
                   name: grafana-secrets
                   key: admin-password
             - name: GF_SERVER_ROOT_URL
-              value: "https://grafana.${DOMAIN}"
-            - name: GF_AUTH_GENERIC_OAUTH_ENABLED
-              value: "true"
-            - name: GF_AUTH_GENERIC_OAUTH_NAME
-              value: "Authentik"
-            - name: GF_AUTH_GENERIC_OAUTH_SCOPES
-              value: "openid profile email"
-            - name: GF_AUTH_GENERIC_OAUTH_AUTH_URL
-              value: "https://auth.${DOMAIN}/application/o/authorize/"
-            - name: GF_AUTH_GENERIC_OAUTH_TOKEN_URL
-              value: "https://auth.${DOMAIN}/application/o/token/"
-            - name: GF_AUTH_GENERIC_OAUTH_API_URL
-              value: "https://auth.${DOMAIN}/application/o/userinfo/"
+              value: "https://grafana.isaacwallace.dev"
           ports:
             - containerPort: 3000
           volumeMounts:
@@ -111,8 +58,6 @@ spec:
               mountPath: /var/lib/grafana
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
-            - name: dashboards-provider
-              mountPath: /etc/grafana/provisioning/dashboards
           resources:
             requests:
               cpu: 100m
@@ -121,14 +66,12 @@ spec:
               memory: 512Mi
       volumes:
         - name: data
-          persistentVolumeClaim:
-            claimName: grafana-data
+          hostPath:
+            path: /mnt/k3s-data/grafana
+            type: DirectoryOrCreate
         - name: datasources
           configMap:
             name: grafana-datasources
-        - name: dashboards-provider
-          configMap:
-            name: grafana-dashboards-provider
 ---
 apiVersion: v1
 kind: Service
@@ -151,7 +94,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`grafana.${DOMAIN}`)
+    - match: Host(`grafana.isaacwallace.dev`)
       kind: Rule
       services:
         - name: grafana

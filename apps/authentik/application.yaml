@@ -1,0 +1,76 @@
+# NOTE: Before deploying, create the secrets manually:
+# kubectl create namespace identity
+# kubectl create secret generic authentik-secrets -n identity \
+#   --from-literal=secret-key=$(openssl rand -base64 36) \
+#   --from-literal=postgres-password=$(openssl rand -base64 24)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: authentik-helm
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.goauthentik.io
+    chart: authentik
+    targetRevision: "*"
+    helm:
+      values: |
+        authentik:
+          secret_key: ""
+          error_reporting:
+            enabled: false
+        global:
+          env:
+            - name: AUTHENTIK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-secrets
+                  key: secret-key
+        server:
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            hosts:
+              - auth.isaacwallace.dev
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+        worker:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+        postgresql:
+          enabled: true
+          auth:
+            password: ""
+            existingSecret: authentik-secrets
+            secretKeys:
+              adminPasswordKey: postgres-password
+          primary:
+            persistence:
+              enabled: true
+              storageClass: local-path
+              size: 8Gi
+        redis:
+          enabled: true
+          master:
+            persistence:
+              enabled: true
+              storageClass: local-path
+              size: 2Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: identity
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
