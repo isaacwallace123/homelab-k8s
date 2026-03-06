@@ -384,21 +384,9 @@ spec:
   source:
     repoURL: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
     chart: infisical-standalone
-    targetRevision: 1.5.0
+    targetRevision: 1.7.2
     helm:
       values: |
-        postgresql:
-          enabled: true
-          image:
-            registry: mirror.gcr.io
-            repository: bitnamilegacy/postgresql
-
-        redis:
-          enabled: true
-          image:
-            registry: mirror.gcr.io
-            repository: bitnamilegacy/redis
-
         ingress:
           enabled: false
 
