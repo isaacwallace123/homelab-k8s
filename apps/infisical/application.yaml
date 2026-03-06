@@ -14,14 +14,14 @@ spec:
         postgresql:
           enabled: true
           image:
-            repository: docker.io/bitnami/postgresql
-            tag: "16"
+            registry: mirror.gcr.io
+            repository: bitnamilegacy/postgresql
 
         redis:
           enabled: true
           image:
-            repository: docker.io/bitnami/redis
-            tag: "7.2"
+            registry: mirror.gcr.io
+            repository: bitnamilegacy/redis
 
         ingress:
           enabled: false
