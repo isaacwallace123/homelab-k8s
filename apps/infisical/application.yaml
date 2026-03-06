@@ -15,13 +15,13 @@ spec:
           enabled: true
           image:
             repository: docker.io/bitnami/postgresql
-            tag: 16
+            tag: "16"
 
         redis:
           enabled: true
           image:
             repository: docker.io/bitnami/redis
-            tag: 7.2
+            tag: "7.2"
 
         ingress:
           enabled: false
