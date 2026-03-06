@@ -373,18 +373,18 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
-# Doppler Operator
+# Infisical
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: doppler-operator
+  name: infisical
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/isaacwallace123/homelab-k8s.git
     targetRevision: main
-    path: base/secrets/doppler-operator
+    path: apps/infisical
   destination:
     server: https://kubernetes.default.svc
     namespace: secrets
@@ -395,18 +395,18 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
-# Doppler-managed app secrets
+# Infisical Operator
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: doppler-secrets
+  name: infisical-operator
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/isaacwallace123/homelab-k8s.git
     targetRevision: main
-    path: base/secrets/doppler-secrets
+    path: base/infisical-operator
   destination:
     server: https://kubernetes.default.svc
     namespace: secrets
