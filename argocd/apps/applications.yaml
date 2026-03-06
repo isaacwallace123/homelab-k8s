@@ -382,9 +382,38 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
-    targetRevision: main
-    path: apps/infisical
+    repoURL: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
+    chart: infisical-standalone
+    targetRevision: 1.5.0
+    helm:
+      values: |
+        postgresql:
+          enabled: true
+          image:
+            registry: mirror.gcr.io
+            repository: bitnamilegacy/postgresql
+
+        redis:
+          enabled: true
+          image:
+            registry: mirror.gcr.io
+            repository: bitnamilegacy/redis
+
+        ingress:
+          enabled: false
+
+        secrets:
+          existingSecretName: infisical-secrets
+
+        autoBootstrap:
+          enabled: true
+          organization: "Homelab"
+          secretTemplate: '{"data":{"token":"{{.Identity.Credentials.Token}}"}}'
+          secretDestination:
+            name: "infisical-bootstrap-secret"
+            namespace: "secrets"
+          credentialSecret:
+            name: "infisical-bootstrap-credentials"
   destination:
     server: https://kubernetes.default.svc
     namespace: secrets
@@ -404,9 +433,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
-    targetRevision: main
-    path: base/infisical-operator
+    repoURL: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
+    chart: secrets-operator
+    targetRevision: 0.8.3
   destination:
     server: https://kubernetes.default.svc
     namespace: secrets
