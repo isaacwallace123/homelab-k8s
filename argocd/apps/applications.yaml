@@ -395,18 +395,44 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
-# ExternalDNS
+# MetalLB
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: externaldns
+  name: metallb
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/isaacwallace123/homelab-k8s.git
     targetRevision: main
-    path: base/externaldns
+    path: base/metallb
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: networking
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# Cloudflared
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudflared
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: base/cloudflared
+    directory:
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: networking
