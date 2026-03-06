@@ -6,7 +6,6 @@ metadata:
 spec:
   entryPoints:
     - web
-    - websecure
   routes:
     - kind: Rule
       match: Host(`traefik.isaacwallace.dev`)
@@ -15,4 +14,3 @@ spec:
       services:
         - kind: TraefikService
           name: api@internal
-  tls: {}
