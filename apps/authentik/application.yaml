@@ -38,6 +38,8 @@ spec:
           ingress:
             enabled: true
             ingressClassName: traefik
+            annotations:
+              traefik.ingress.kubernetes.io/router.entrypoints: web
             hosts:
               - auth.isaacwallace.dev
           resources:
