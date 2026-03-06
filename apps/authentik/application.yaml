@@ -1,8 +1,10 @@
 # NOTE: Before deploying, create the secrets manually:
 # kubectl create namespace identity
+# PGPASS=$(openssl rand -base64 24)
 # kubectl create secret generic authentik-secrets -n identity \
-#   --from-literal=secret-key=$(openssl rand -base64 36) \
-#   --from-literal=postgres-password=$(openssl rand -base64 24)
+#   --from-literal=secret-key="$(openssl rand -base64 48)" \
+#   --from-literal=postgres-password="$PGPASS" \
+#   --from-literal=password="$PGPASS"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -27,6 +29,11 @@ spec:
                 secretKeyRef:
                   name: authentik-secrets
                   key: secret-key
+            - name: AUTHENTIK_POSTGRESQL__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-secrets
+                  key: password
         server:
           ingress:
             enabled: true
@@ -53,6 +60,7 @@ spec:
             existingSecret: authentik-secrets
             secretKeys:
               adminPasswordKey: postgres-password
+              userPasswordKey: password
           primary:
             persistence:
               enabled: true
