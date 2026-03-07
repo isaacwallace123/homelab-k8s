@@ -285,64 +285,21 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
-# Infisical Operator
+# Sealed Secrets
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: infisical-operator
+  name: sealed-secrets
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
-    chart: secrets-operator
-    targetRevision: 0.8.3
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: secrets
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
----
-# Infisical Dashboard
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: infisical
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
-    chart: infisical-standalone
-    targetRevision: 1.7.2
+    repoURL: https://bitnami-labs.github.io/sealed-secrets
+    chart: sealed-secrets
+    targetRevision: "*"
     helm:
       values: |
-        infisical:
-          kubeSecretRef: "infisical-secrets"
-        ingress:
-          enabled: false
-        ingress-nginx:
-          enabled: false
-        postgresql:
-          enabled: true
-          auth:
-            existingSecret: infisical-db-secrets
-          primary:
-            persistence:
-              enabled: true
-              storageClass: local-path
-              size: 8Gi
-        redis:
-          enabled: true
-          master:
-            persistence:
-              enabled: true
-              storageClass: local-path
-              size: 2Gi
+        fullnameOverride: sealed-secrets-controller
   destination:
     server: https://kubernetes.default.svc
     namespace: secrets
