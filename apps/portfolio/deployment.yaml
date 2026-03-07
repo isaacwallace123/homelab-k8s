@@ -143,7 +143,7 @@ metadata:
   name: infra-agent
 rules:
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "nodes", "namespaces", "services"]
+    resources: ["pods", "pods/log", "nodes", "namespaces", "services", "configmaps"]
     verbs: ["get", "list"]
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
