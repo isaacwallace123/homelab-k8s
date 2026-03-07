@@ -49,7 +49,7 @@ metadata:
   name: prowlarr
   namespace: media
   annotations:
-    metallb.universe.tf/loadBalancerIPs: "192.168.0.242"
+    metallb.io/loadBalancerIPs: "192.168.0.242"
 spec:
   type: LoadBalancer
   selector:
