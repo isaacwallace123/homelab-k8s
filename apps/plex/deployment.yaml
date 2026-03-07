@@ -15,7 +15,6 @@ spec:
       labels:
         app: plex
     spec:
-      hostNetwork: true
       containers:
         - name: plex
           image: lscr.io/linuxserver/plex:latest
@@ -57,12 +56,17 @@ spec:
             path: /mnt/media/tv
             type: DirectoryOrCreate
 ---
+# Web UI — accessible at http://192.168.0.241:32400/web
 apiVersion: v1
 kind: Service
 metadata:
   name: plex
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
 spec:
+  type: LoadBalancer
   selector:
     app: plex
   ports:
