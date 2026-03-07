@@ -15,12 +15,15 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
     spec:
+      automountServiceAccountToken: false
       tolerations:
         - effect: NoSchedule
           operator: Exists
       containers:
         - name: cadvisor
           image: gcr.io/cadvisor/cadvisor:latest
+          securityContext:
+            privileged: true
           ports:
             - containerPort: 8080
           volumeMounts:
