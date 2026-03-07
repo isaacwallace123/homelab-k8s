@@ -82,12 +82,16 @@ spec:
             path: /mnt/media/downloads
             type: DirectoryOrCreate
 ---
+# Web UI — accessible at http://192.168.0.241:8112
 apiVersion: v1
 kind: Service
 metadata:
   name: deluge-vpn
   namespace: media
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: "192.168.0.241"
 spec:
+  type: LoadBalancer
   selector:
     app: deluge-vpn
   ports:
@@ -97,18 +101,3 @@ spec:
     - port: 58846
       targetPort: 58846
       name: daemon
----
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: deluge
-  namespace: media
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`deluge.isaacwallace.dev`)
-      kind: Rule
-      services:
-        - name: deluge-vpn
-          port: 8112

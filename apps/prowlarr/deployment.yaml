@@ -42,29 +42,18 @@ spec:
             path: /mnt/k3s-data/prowlarr
             type: DirectoryOrCreate
 ---
+# Web UI — accessible at http://192.168.0.242:9696
 apiVersion: v1
 kind: Service
 metadata:
   name: prowlarr
   namespace: media
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: "192.168.0.242"
 spec:
+  type: LoadBalancer
   selector:
     app: prowlarr
   ports:
     - port: 9696
       targetPort: 9696
----
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: prowlarr
-  namespace: media
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`prowlarr.isaacwallace.dev`)
-      kind: Rule
-      services:
-        - name: prowlarr
-          port: 9696

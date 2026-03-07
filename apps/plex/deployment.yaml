@@ -68,18 +68,3 @@ spec:
   ports:
     - port: 32400
       targetPort: 32400
----
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: plex
-  namespace: media
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`plex.isaacwallace.dev`)
-      kind: Rule
-      services:
-        - name: plex
-          port: 32400
