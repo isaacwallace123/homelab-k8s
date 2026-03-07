@@ -1,79 +1,309 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: portfolio-clone-script
-  namespace: portfolio
-data:
-  clone.sh: |
-    #!/bin/sh
-    set -e
-    if [ -d "/data/.git" ]; then
-      cd /data && git pull origin main
-    else
-      git clone --depth 1 -b main https://github.com/isaacwallace123/portfolio.git /data
-    fi
----
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: portfolio
+  name: postgres
+  namespace: portfolio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: POSTGRES_DB
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 15
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/k3s-data/portfolio/postgres
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: portfolio
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# ── Redis ─────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: portfolio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+      volumes:
+        - name: data
+          hostPath:
+            path: /mnt/k3s-data/portfolio/redis
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: portfolio
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+# ── Infra Agent ───────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: infra-agent
   namespace: portfolio
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: portfolio
+      app: infra-agent
   template:
     metadata:
       labels:
-        app: portfolio
+        app: infra-agent
     spec:
-      initContainers:
-        - name: git-clone
-          image: alpine/git:latest
-          command: ["/bin/sh", "/scripts/clone.sh"]
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: clone-script
-              mountPath: /scripts
       containers:
-        - name: nginx
-          image: nginx:alpine
+        - name: infra-agent
+          image: ghcr.io/isaacwallace123/portfolio-infra:latest
+          imagePullPolicy: Always
+          env:
+            - name: INFRA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: INFRA_API_KEY
+            - name: PROMETHEUS_URL
+              value: "http://prometheus.monitoring.svc.cluster.local:9090"
           ports:
-            - containerPort: 80
-          volumeMounts:
-            - name: data
-              mountPath: /usr/share/nginx/html
-              readOnly: true
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests:
-              cpu: 25m
+              cpu: 100m
               memory: 32Mi
             limits:
+              cpu: 500m
               memory: 128Mi
-      volumes:
-        - name: data
-          hostPath:
-            path: /mnt/k3s-data/portfolio
-            type: DirectoryOrCreate
-        - name: clone-script
-          configMap:
-            name: portfolio-clone-script
-            defaultMode: 0755
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: portfolio
+  name: infra-agent
   namespace: portfolio
 spec:
   selector:
-    app: portfolio
+    app: infra-agent
   ports:
-    - port: 80
-      targetPort: 80
+    - port: 8080
+      targetPort: 8080
 ---
+# ── Frontend ──────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: portfolio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/isaacwallace123/portfolio-frontend:latest
+          imagePullPolicy: Always
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: DATABASE_URL
+            - name: NEXTAUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: NEXTAUTH_URL
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: NEXTAUTH_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: ENCRYPTION_KEY
+            - name: SESSION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: SESSION_PASSWORD
+            - name: HASH_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: HASH_ENCRYPTION_KEY
+            - name: ADMIN_PASSWORD_HASH_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: ADMIN_PASSWORD_HASH_ENCRYPTED
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: ADMIN_EMAIL
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: RESEND_API_KEY
+            - name: CONTACT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: CONTACT_EMAIL
+            - name: DEEPL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: DEEPL_API_KEY
+            - name: INFRA_API_URL
+              value: "http://infra-agent:8080"
+            - name: INFRA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portfolio-secrets
+                  key: INFRA_API_KEY
+            - name: NODE_ENV
+              value: "production"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/public/uploads
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1500m
+              memory: 1Gi
+      volumes:
+        - name: uploads
+          hostPath:
+            path: /mnt/k3s-data/portfolio/uploads
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: portfolio
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# ── Ingress ───────────────────────────────────────────────────────────────────
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -86,5 +316,5 @@ spec:
     - match: Host(`portfolio.isaacwallace.dev`)
       kind: Rule
       services:
-        - name: portfolio
-          port: 80
+        - name: frontend
+          port: 3000
