@@ -351,6 +351,54 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
+# Traefik
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://helm.traefik.io/traefik
+    chart: traefik
+    targetRevision: "*"
+    helm:
+      values: |
+        service:
+          annotations:
+            metallb.universe.tf/loadBalancerIPs: "192.168.0.245"
+        providers:
+          kubernetesCRD:
+            enabled: true
+            allowCrossNamespace: true
+          kubernetesIngress:
+            enabled: true
+        ingressClass:
+          enabled: true
+          isDefaultClass: true
+        ingressRoute:
+          dashboard:
+            enabled: false
+        api:
+          dashboard: true
+        ports:
+          web:
+            port: 8000
+            exposedPort: 80
+          websecure:
+            port: 8443
+            exposedPort: 443
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: networking
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
 # MetalLB
 apiVersion: argoproj.io/v1alpha1
 kind: Application
