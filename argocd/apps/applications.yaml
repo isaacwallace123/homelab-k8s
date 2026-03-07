@@ -131,18 +131,18 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
-# Deluge VPN
+# qBittorrent + Gluetun VPN
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: deluge-vpn
+  name: qbittorrent
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/isaacwallace123/homelab-k8s.git
     targetRevision: main
-    path: apps/deluge-vpn
+    path: apps/qbittorrent
   destination:
     server: https://kubernetes.default.svc
     namespace: media

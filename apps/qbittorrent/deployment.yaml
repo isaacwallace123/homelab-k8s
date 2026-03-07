@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: qbittorrent
+  template:
+    metadata:
+      labels:
+        app: qbittorrent
+    spec:
+      containers:
+        - name: gluetun
+          image: qmcgaw/gluetun:latest
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+          env:
+            - name: VPN_SERVICE_PROVIDER
+              value: nordvpn
+            - name: VPN_TYPE
+              value: openvpn
+            - name: OPENVPN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-nordvpn
+                  key: OPENVPN_USER
+            - name: OPENVPN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-nordvpn
+                  key: OPENVPN_PASSWORD
+            - name: SERVER_COUNTRIES
+              value: Canada
+            - name: HTTPPROXY
+              value: "on"
+            - name: HTTPPROXY_LOG
+              value: "off"
+          ports:
+            - containerPort: 8888
+              name: http-proxy
+            - containerPort: 8388
+              name: socks5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+
+        - name: qbittorrent
+          image: lscr.io/linuxserver/qbittorrent:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+            - name: WEBUI_PORT
+              value: "8080"
+          ports:
+            - containerPort: 8080
+              name: webui
+            - containerPort: 6881
+              name: torrent-tcp
+            - containerPort: 6881
+              name: torrent-udp
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+      volumes:
+        - name: config
+          hostPath:
+            path: /mnt/k3s-data/qbittorrent
+            type: DirectoryOrCreate
+        - name: downloads
+          hostPath:
+            path: /mnt/media/downloads
+            type: DirectoryOrCreate
+---
+# Web UI — accessible at http://192.168.0.241:8080
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+spec:
+  type: LoadBalancer
+  selector:
+    app: qbittorrent
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: webui
+---
+# Gluetun SOCKS5/HTTP proxy — internal use by arr stack
+# Prowlarr/Radarr/Sonarr can use http://gluetun-proxy.media.svc.cluster.local:8888
+apiVersion: v1
+kind: Service
+metadata:
+  name: gluetun-proxy
+  namespace: media
+spec:
+  type: ClusterIP
+  selector:
+    app: qbittorrent
+  ports:
+    - port: 8888
+      targetPort: 8888
+      name: http-proxy
+    - port: 8388
+      targetPort: 8388
+      name: socks5
