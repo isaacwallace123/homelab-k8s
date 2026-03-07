@@ -90,7 +90,10 @@ kind: Service
 metadata:
   name: grafana
   namespace: monitoring
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.247"
 spec:
+  type: LoadBalancer
   selector:
     app: grafana
   ports:
