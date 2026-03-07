@@ -191,6 +191,8 @@ spec:
                   key: INFRA_API_KEY
             - name: PROMETHEUS_URL
               value: "http://prometheus.monitoring.svc.cluster.local:9090"
+            - name: LOKI_URL
+              value: "http://loki.monitoring.svc.cluster.local:3100"
           ports:
             - containerPort: 8080
           readinessProbe:

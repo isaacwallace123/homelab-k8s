@@ -247,6 +247,28 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
+# Monitoring — cAdvisor
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cadvisor
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: monitoring/cadvisor
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
 # Monitoring — Prometheus
 apiVersion: argoproj.io/v1alpha1
 kind: Application
