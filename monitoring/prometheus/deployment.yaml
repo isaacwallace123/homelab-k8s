@@ -72,10 +72,12 @@ data:
             target_label: __address__
       - job_name: traefik
         static_configs:
-          - targets: ['traefik.kube-system.svc.cluster.local:8080']
+          - targets: ['traefik.networking.svc.cluster.local:9000']
+        metrics_path: /metrics
       - job_name: loki
         static_configs:
           - targets: ['loki.monitoring.svc.cluster.local:3100']
+        metrics_path: /metrics
 ---
 apiVersion: apps/v1
 kind: Deployment
