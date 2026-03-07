@@ -168,6 +168,9 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
           resources:
             requests:
               cpu: 100m
@@ -175,6 +178,11 @@ spec:
             limits:
               cpu: 500m
               memory: 128Mi
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
 ---
 apiVersion: v1
 kind: Service
@@ -204,6 +212,10 @@ spec:
       labels:
         app: frontend
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
       containers:
         - name: frontend
           image: ghcr.io/isaacwallace123/portfolio-frontend:latest
@@ -311,6 +323,7 @@ metadata:
   namespace: portfolio
 spec:
   entryPoints:
+    - web
     - websecure
   routes:
     - match: Host(`isaacwallace.dev`)
