@@ -225,6 +225,12 @@ kind: Application
 metadata:
   name: portfolio
   namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/isaacwallace123/portfolio-frontend,infra=ghcr.io/isaacwallace123/portfolio-infra
+    argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/infra.update-strategy: digest
+    argocd-image-updater.argoproj.io/frontend.pull-secret: pullsecret:argocd/ghcr-pull-secret
+    argocd-image-updater.argoproj.io/infra.pull-secret: pullsecret:argocd/ghcr-pull-secret
 spec:
   project: default
   source:
@@ -322,6 +328,52 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# ArgoCD namespace resources (sealed secrets, pull secrets, etc.)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: argocd
+    directory:
+      exclude: "apps/**"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# ArgoCD Image Updater
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-image-updater
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argocd-image-updater
+    targetRevision: "*"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true
