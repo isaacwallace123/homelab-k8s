@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  # Add custom dashboards here (exported from Grafana UI → Share → Export → Save to file).
+  # Each key becomes a file in /var/lib/grafana/custom-dashboards/ and appears in the "Homelab" folder.
+  #
+  # Example:
+  # my-dashboard.json: |
+  #   { "title": "My Dashboard", ... }
+  #
+  # Community dashboards (Node Exporter, Prometheus, Loki, Traefik) are downloaded
+  # automatically at startup by the download-dashboards init container.
+  placeholder: |
+    {}
