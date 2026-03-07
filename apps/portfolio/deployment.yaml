@@ -130,6 +130,38 @@ spec:
     - port: 6379
       targetPort: 6379
 ---
+# ── Infra Agent RBAC ──────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infra-agent
+  namespace: portfolio
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: infra-agent
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "nodes", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infra-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infra-agent
+subjects:
+  - kind: ServiceAccount
+    name: infra-agent
+    namespace: portfolio
+---
 # ── Infra Agent ───────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
@@ -146,6 +178,7 @@ spec:
       labels:
         app: infra-agent
     spec:
+      serviceAccountName: infra-agent
       containers:
         - name: infra-agent
           image: ghcr.io/isaacwallace123/portfolio-infra:latest
@@ -168,9 +201,6 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
-          volumeMounts:
-            - name: docker-sock
-              mountPath: /var/run/docker.sock
           resources:
             requests:
               cpu: 100m
@@ -178,11 +208,6 @@ spec:
             limits:
               cpu: 500m
               memory: 128Mi
-      volumes:
-        - name: docker-sock
-          hostPath:
-            path: /var/run/docker.sock
-            type: Socket
 ---
 apiVersion: v1
 kind: Service
