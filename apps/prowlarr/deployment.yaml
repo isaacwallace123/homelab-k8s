@@ -25,6 +25,12 @@ spec:
               value: "1000"
             - name: TZ
               value: America/New_York
+            - name: HTTP_PROXY
+              value: "http://gluetun-proxy.media.svc.cluster.local:8888"
+            - name: HTTPS_PROXY
+              value: "http://gluetun-proxy.media.svc.cluster.local:8888"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,.svc.cluster.local,.cluster.local"
           ports:
             - containerPort: 9696
           volumeMounts:

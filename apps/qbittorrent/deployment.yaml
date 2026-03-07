@@ -15,45 +15,38 @@ spec:
       labels:
         app: qbittorrent
     spec:
-      containers:
-        - name: gluetun
-          image: qmcgaw/gluetun:latest
-          securityContext:
-            capabilities:
-              add: ["NET_ADMIN"]
-          env:
-            - name: VPN_SERVICE_PROVIDER
-              value: nordvpn
-            - name: VPN_TYPE
-              value: openvpn
-            - name: OPENVPN_USER
-              valueFrom:
-                secretKeyRef:
-                  name: gluetun-nordvpn
-                  key: OPENVPN_USER
-            - name: OPENVPN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: gluetun-nordvpn
-                  key: OPENVPN_PASSWORD
-            - name: SERVER_COUNTRIES
-              value: Canada
-            - name: HTTPPROXY
-              value: "on"
-            - name: HTTPPROXY_LOG
-              value: "off"
-          ports:
-            - containerPort: 8888
-              name: http-proxy
-            - containerPort: 8388
-              name: socks5
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              memory: 256Mi
+      initContainers:
+        - name: configure-proxy
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /config/qBittorrent
+              CONFIG=/config/qBittorrent/qBittorrent.conf
 
+              if ! grep -q '^\[Preferences\]' "$CONFIG" 2>/dev/null; then
+                echo '[Preferences]' >> "$CONFIG"
+              fi
+
+              set_pref() {
+                key="$1"; val="$2"
+                if grep -q "^${key}=" "$CONFIG"; then
+                  sed -i "s|^${key}=.*|${key}=${val}|" "$CONFIG"
+                else
+                  sed -i "/^\[Preferences\]/a ${key}=${val}" "$CONFIG"
+                fi
+              }
+
+              set_pref 'Connection\\ProxyType' '2'
+              set_pref 'Connection\\ProxyIp' 'gluetun-proxy.media.svc.cluster.local'
+              set_pref 'Connection\\ProxyPort' '8388'
+              set_pref 'Connection\\ProxyPeerConnections' 'true'
+              echo "SOCKS5 proxy configured."
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      containers:
         - name: qbittorrent
           image: lscr.io/linuxserver/qbittorrent:latest
           env:
@@ -112,22 +105,3 @@ spec:
     - port: 8080
       targetPort: 8080
       name: webui
----
-# Gluetun SOCKS5/HTTP proxy — internal use by arr stack
-# Prowlarr/Radarr/Sonarr can use http://gluetun-proxy.media.svc.cluster.local:8888
-apiVersion: v1
-kind: Service
-metadata:
-  name: gluetun-proxy
-  namespace: media
-spec:
-  type: ClusterIP
-  selector:
-    app: qbittorrent
-  ports:
-    - port: 8888
-      targetPort: 8888
-      name: http-proxy
-    - port: 8388
-      targetPort: 8388
-      name: socks5
