@@ -103,6 +103,7 @@ metadata:
   namespace: media
   annotations:
     metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
 spec:
   type: LoadBalancer
   selector:

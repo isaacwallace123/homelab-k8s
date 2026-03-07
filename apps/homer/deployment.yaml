@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homer-config
+  namespace: networking
+data:
+  config.yml: |
+    title: "Homelab"
+    subtitle: "Service Dashboard"
+    logo: "logo.png"
+
+    header: true
+    footer: false
+
+    columns: 3
+    connectivityCheck: true
+
+    services:
+      - name: "Media"
+        icon: "fas fa-film"
+        items:
+          - name: "Plex"
+            subtitle: "Media Server"
+            url: "http://192.168.0.241:32400/web"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/plex.png"
+          - name: "Radarr"
+            subtitle: "Movie Management"
+            url: "http://192.168.0.241:7878"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/radarr.png"
+          - name: "Sonarr"
+            subtitle: "TV Management"
+            url: "http://192.168.0.241:8989"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/sonarr.png"
+          - name: "Prowlarr"
+            subtitle: "Indexer Manager"
+            url: "http://192.168.0.241:9696"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/prowlarr.png"
+          - name: "qBittorrent"
+            subtitle: "Torrent Client (VPN)"
+            url: "http://192.168.0.241:8080"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/qbittorrent.png"
+
+      - name: "Networking"
+        icon: "fas fa-network-wired"
+        items:
+          - name: "AdGuard Home"
+            subtitle: "DNS / Ad Blocker"
+            url: "http://192.168.0.240"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/adguard-home.png"
+          - name: "Traefik"
+            subtitle: "Reverse Proxy"
+            url: "http://192.168.0.245"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/traefik.png"
+
+      - name: "Monitoring"
+        icon: "fas fa-chart-line"
+        items:
+          - name: "Grafana"
+            subtitle: "Metrics & Dashboards"
+            url: "http://192.168.0.247:3000"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/grafana.png"
+
+      - name: "Infrastructure"
+        icon: "fas fa-server"
+        items:
+          - name: "ArgoCD"
+            subtitle: "GitOps Deployments"
+            url: "http://192.168.0.245/argocd"
+            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/argocd.png"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homer
+  namespace: networking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homer
+  template:
+    metadata:
+      labels:
+        app: homer
+    spec:
+      containers:
+        - name: homer
+          image: b4bz/homer:latest
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: config
+              mountPath: /www/assets/config.yml
+              subPath: config.yml
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: homer-config
+---
+# Dashboard — accessible at http://192.168.0.248:80
+apiVersion: v1
+kind: Service
+metadata:
+  name: homer
+  namespace: networking
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.248"
+spec:
+  type: LoadBalancer
+  selector:
+    app: homer
+  ports:
+    - port: 80
+      targetPort: 8080
