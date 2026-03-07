@@ -226,7 +226,7 @@ metadata:
   name: portfolio
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/isaacwallace123/portfolio-frontend,infra=ghcr.io/isaacwallace123/portfolio-infra
+    argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/isaacwallace123/portfolio-frontend:latest,infra=ghcr.io/isaacwallace123/portfolio-infra:latest
     argocd-image-updater.argoproj.io/frontend.update-strategy: digest
     argocd-image-updater.argoproj.io/infra.update-strategy: digest
     argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/image-updater-git-creds
