@@ -370,7 +370,7 @@ spec:
   source:
     repoURL: https://argoproj.github.io/argo-helm
     chart: argocd-image-updater
-    targetRevision: "*"
+    targetRevision: "0.9.6"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
