@@ -313,7 +313,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`portfolio.isaacwallace.dev`)
+    - match: Host(`isaacwallace.dev`)
       kind: Rule
       services:
         - name: frontend
