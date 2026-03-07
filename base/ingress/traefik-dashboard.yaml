@@ -8,7 +8,7 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: Host(`traefik.isaacwallace.dev`)
+      match: Host(`traefik.lan`)
       middlewares:
         - name: default-headers
       services:

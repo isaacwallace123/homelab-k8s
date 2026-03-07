@@ -83,7 +83,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`isaacwallace.dev`) || Host(`www.isaacwallace.dev`)
+    - match: Host(`portfolio.isaacwallace.dev`)
       kind: Rule
       services:
         - name: portfolio

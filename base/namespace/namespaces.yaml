@@ -6,16 +6,6 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: identity
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: collab
----
-apiVersion: v1
-kind: Namespace
-metadata:
   name: monitoring
 ---
 apiVersion: v1

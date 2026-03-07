@@ -1,0 +1,14 @@
+# Pins the k3s built-in Traefik LoadBalancer to a specific LAN IP (192.168.0.245)
+# Dashboard accessible at http://192.168.0.245/dashboard/ (requires local DNS or /etc/hosts)
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    service:
+      spec:
+        loadBalancerIP: "192.168.0.245"
+    api:
+      dashboard: true
