@@ -325,6 +325,8 @@ spec:
           kubeSecretRef: "infisical-secrets"
         ingress:
           enabled: false
+        ingress-nginx:
+          enabled: false
         postgresql:
           enabled: true
           auth:
@@ -367,7 +369,7 @@ spec:
       values: |
         service:
           annotations:
-            metallb.universe.tf/loadBalancerIPs: "192.168.0.245"
+            metallb.io/loadBalancerIPs: "192.168.0.245"
         providers:
           kubernetesCRD:
             enabled: true

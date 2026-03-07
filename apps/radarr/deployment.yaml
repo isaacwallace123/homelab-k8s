@@ -61,7 +61,7 @@ metadata:
   name: radarr
   namespace: media
   annotations:
-    metallb.universe.tf/loadBalancerIPs: "192.168.0.243"
+    metallb.io/loadBalancerIPs: "192.168.0.243"
 spec:
   type: LoadBalancer
   selector:

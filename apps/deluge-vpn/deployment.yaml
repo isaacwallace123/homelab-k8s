@@ -89,7 +89,7 @@ metadata:
   name: deluge-vpn
   namespace: media
   annotations:
-    metallb.universe.tf/loadBalancerIPs: "192.168.0.241"
+    metallb.io/loadBalancerIPs: "192.168.0.241"
 spec:
   type: LoadBalancer
   selector:
