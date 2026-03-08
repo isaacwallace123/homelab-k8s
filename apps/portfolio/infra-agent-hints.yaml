@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infra-agent-hints
+  namespace: portfolio
+data:
+  deps: |
+    # Networking
+    cloudflared/networking -> frontend/portfolio
+
+    # Media arr stack
+    radarr/media -> prowlarr/media
+    sonarr/media -> prowlarr/media
+    prowlarr/media -> flaresolverr/media
+    prowlarr/media -> qbittorrent/media
+    radarr/media -> qbittorrent/media
+    sonarr/media -> qbittorrent/media
+
+    # Monitoring scrape targets (k8s service discovery - not detectable automatically)
+    prometheus/monitoring -> cadvisor/monitoring
+    prometheus/monitoring -> node-exporter/monitoring
+    grafana/monitoring -> prometheus/monitoring
+    grafana/monitoring -> loki/monitoring
+
+    # ArgoCD internal dependencies
+    argocd-server/argocd -> argocd-redis/argocd
+    argocd-application-controller/argocd -> argocd-repo-server/argocd
+    argocd-repo-server/argocd -> argocd-redis/argocd
+    argocd-server/argocd -> argocd-repo-server/argocd
+    argocd-notifications-controller/argocd -> argocd-redis/argocd
