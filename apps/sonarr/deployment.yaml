@@ -46,12 +46,11 @@ spec:
             path: /mnt/k3s-data/sonarr
             type: DirectoryOrCreate
         - name: tv
-          hostPath:
-            path: /mnt/media/tv
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-tv
         - name: downloads
           hostPath:
-            path: /mnt/media/downloads
+            path: /mnt/k3s-data/downloads
             type: DirectoryOrCreate
 ---
 # Web UI — accessible at http://192.168.0.241:8989
