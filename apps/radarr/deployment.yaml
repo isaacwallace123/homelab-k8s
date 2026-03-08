@@ -46,12 +46,11 @@ spec:
             path: /mnt/k3s-data/radarr
             type: DirectoryOrCreate
         - name: movies
-          hostPath:
-            path: /mnt/media/movies
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-movies
         - name: downloads
           hostPath:
-            path: /mnt/media/downloads
+            path: /mnt/k3s-data/downloads
             type: DirectoryOrCreate
 ---
 # Web UI — accessible at http://192.168.0.241:7878

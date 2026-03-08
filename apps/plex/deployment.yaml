@@ -48,13 +48,11 @@ spec:
             path: /mnt/k3s-data/plex
             type: DirectoryOrCreate
         - name: movies
-          hostPath:
-            path: /mnt/media/movies
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-movies
         - name: tv
-          hostPath:
-            path: /mnt/media/tv
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-tv
 ---
 # Web UI — accessible at http://192.168.0.241:32400/web
 apiVersion: v1
