@@ -483,6 +483,34 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
+# homelab-ai — Personal local AI/coder-agent platform
+# Sources from the separate agent-k8s repo (different from homelab-k8s).
+# Helm chart at charts/homelab-ai pins workloads to pve1/pve2 via proxmox-host node labels.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: homelab-ai
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/agent-k8s.git
+    targetRevision: main
+    path: charts/homelab-ai
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: homelab-ai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
 # MetalLB
 apiVersion: argoproj.io/v1alpha1
 kind: Application
