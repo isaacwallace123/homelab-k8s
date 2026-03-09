@@ -523,6 +523,60 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
+# Node Feature Discovery (NFD)
+# Required to detect the Intel GPU and label the nodes for the device plugin.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nfd
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+    targetRevision: 0.17.1
+    chart: node-feature-discovery
+    helm:
+      values: |
+        master:
+          extraLabelNs: ["intel.feature.node.kubernetes.io"]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: node-feature-discovery
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+---
+# Intel GPU Device Plugin
+# Advertises 'gpu.intel.com/xe' (for your B580) and 'gpu.intel.com/i915' to the scheduler.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: intel-gpu-plugin
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://intel.github.io/helm-charts/
+    targetRevision: 0.35.0
+    chart: intel-device-plugins-gpu
+    helm:
+      values: |
+        sharedDevNum: 1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
 # homelab-ai — Personal local AI/coder-agent platform
 # Sources from the separate agent-k8s repo (different from homelab-k8s).
 # Helm chart at charts/homelab-ai pins workloads to pve1/pve2 via proxmox-host node labels.
