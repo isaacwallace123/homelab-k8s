@@ -381,6 +381,46 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ---
+# ArgoCD — self-managed via Helm so node placement lives in Git
+# Pins all ArgoCD pods to the control plane node so they survive worker reboots.
+# On first sync ArgoCD takes over its own resources from the bootstrap install.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-install
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argo-cd
+    targetRevision: "7.*"
+    helm:
+      values: |
+        global:
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+        configs:
+          params:
+            server.insecure: "true"
+        crds:
+          install: true
+          keep: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
 # ArgoCD Image Updater
 apiVersion: argoproj.io/v1alpha1
 kind: Application
