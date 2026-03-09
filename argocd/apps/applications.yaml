@@ -524,7 +524,7 @@ spec:
       - CreateNamespace=true
 ---
 # Node Feature Discovery (NFD)
-# Required to detect the Intel GPU and label the nodes for the device plugin.
+# Scans your Proxmox nodes and adds labels like "intel.feature.node.kubernetes.io/gpu=true"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -534,7 +534,7 @@ spec:
   project: default
   source:
     repoURL: https://kubernetes-sigs.github.io/node-feature-discovery/charts
-    targetRevision: 0.17.1
+    targetRevision: 0.17.2
     chart: node-feature-discovery
     helm:
       values: |
@@ -552,7 +552,7 @@ spec:
 
 ---
 # Intel GPU Device Plugin
-# Advertises 'gpu.intel.com/xe' (for your B580) and 'gpu.intel.com/i915' to the scheduler.
+# Advertises 'gpu.intel.com/xe' for your B580 and 'gpu.intel.com/i915' for your A380.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
