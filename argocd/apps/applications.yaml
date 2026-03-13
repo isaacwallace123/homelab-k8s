@@ -576,6 +576,9 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # The GpuDevicePlugin CRD and its CR land in the same sync wave; skip dry-run
+      # validation so ArgoCD doesn't reject the CR before the CRD is registered.
+      - SkipDryRunOnMissingResource=true
 ---
 # homelab-ai — Personal local AI/coder-agent platform
 # Sources from the separate agent-k8s repo (different from homelab-k8s).
