@@ -193,6 +193,8 @@ spec:
               value: "http://prometheus.monitoring.svc.cluster.local:9090"
             - name: LOKI_URL
               value: "http://loki.monitoring.svc.cluster.local:3100"
+            - name: OVERWATCH_URL
+              value: "http://overwatch.homelab-ai.svc.cluster.local:8000"
           ports:
             - containerPort: 8080
           readinessProbe:
