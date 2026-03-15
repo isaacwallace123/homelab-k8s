@@ -1,4 +1,4 @@
 kustomize:
   images:
-  - ghcr.io/isaacwallace123/portfolio-frontend@sha256:d93c403541b6936cab26b23600bb21cadb7def22166f957fb33d657d2a3f1e92
+  - ghcr.io/isaacwallace123/portfolio-frontend@sha256:f3f3cf21c47e96c4144b3885e253c9219cda210ba208c4b3061aebdf24b10bf8
   - ghcr.io/isaacwallace123/portfolio-infra@sha256:bcfb28266a948c415c6184a86344014e652bdb9d18e66a0bf4038d8d7b539b1e
