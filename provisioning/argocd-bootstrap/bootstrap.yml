@@ -1,0 +1,80 @@
+---
+# =============================================================================
+# bootstrap.yml — Node-level prerequisites for the k3s cluster
+#
+# Run against all workers before syncing Longhorn:
+#   ansible-playbook playbooks/bootstrap.yml --limit agent
+#
+# Run against all nodes:
+#   ansible-playbook playbooks/bootstrap.yml
+# =============================================================================
+
+- name: Bootstrap k3s nodes
+  hosts: k3s_cluster
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # System packages
+    # -------------------------------------------------------------------------
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      apt:
+        name:
+          - open-iscsi       # Required by Longhorn for block storage volumes
+          - nfs-common       # NFS client — mounts /tank/media from 192.168.0.254
+          - curl
+          - jq
+        state: present
+
+    # -------------------------------------------------------------------------
+    # iSCSI — required by Longhorn
+    # -------------------------------------------------------------------------
+    - name: Enable and start iscsid
+      systemd:
+        name: iscsid
+        enabled: true
+        state: started
+
+    - name: Load iscsi_tcp kernel module
+      modprobe:
+        name: iscsi_tcp
+        state: present
+
+    - name: Persist iscsi_tcp across reboots
+      copy:
+        dest: /etc/modules-load.d/iscsi.conf
+        content: "iscsi_tcp\n"
+        mode: "0644"
+
+    # -------------------------------------------------------------------------
+    # NFS mount — /tank on 192.168.0.254 → /mnt/tank
+    # -------------------------------------------------------------------------
+    - name: Create NFS mount point
+      file:
+        path: /mnt/tank
+        state: directory
+        mode: "0755"
+
+    - name: Mount /tank/config from NFS server
+      mount:
+        path: /mnt/tank
+        src: 192.168.0.254:/tank
+        fstype: nfs
+        opts: defaults,_netdev,nofail
+        state: mounted
+
+    # -------------------------------------------------------------------------
+    # Longhorn data directory
+    # -------------------------------------------------------------------------
+    - name: Create Longhorn default data directory
+      file:
+        path: /var/lib/longhorn
+        state: directory
+        mode: "0750"

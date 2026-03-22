@@ -1,0 +1,30 @@
+# Portfolio is managed as a standalone Application (not via ApplicationSet)
+# because it requires argocd-image-updater annotations for auto-updating
+# container images from ghcr.io on every push.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: portfolio
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/isaacwallace123/portfolio-frontend:latest,infra=ghcr.io/isaacwallace123/portfolio-infra:latest
+    argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/infra.update-strategy: digest
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/image-updater-git-creds
+    argocd-image-updater.argoproj.io/git-branch: main
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: manifests/apps/portfolio
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: portfolio
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

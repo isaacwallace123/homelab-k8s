@@ -1,0 +1,91 @@
+# =============================================================================
+# Infrastructure ApplicationSets — sync-wave -5 (deploy before apps)
+#
+# Discovers all *-helm-app.yaml and *-git-app.yaml files under
+# argocd-apps/infrastructure/ and generates ArgoCD Applications from them.
+#
+# helm-app.yaml fields: name, namespace, syncWave, repoURL, chart, targetRevision, values
+# git-app.yaml  fields: name, namespace, syncWave, repoURL, targetRevision, appPath
+# =============================================================================
+
+# Helm-chart-based infrastructure (MetalLB, Traefik, Longhorn, ArgoCD, etc.)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: infrastructure-helm
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+        revision: main
+        files:
+          - path: argocd-apps/infrastructure/**/*-helm-app.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{syncWave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{repoURL}}'
+        chart: '{{chart}}'
+        targetRevision: '{{targetRevision}}'
+        helm:
+          values: |
+            {{values}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - SkipDryRunOnMissingResource=true
+---
+# Manifest-based infrastructure (MetalLB config, namespaces, storage, ingress, etc.)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: infrastructure-git
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+        revision: main
+        files:
+          - path: argocd-apps/infrastructure/**/*-git-app.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{syncWave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{repoURL}}'
+        targetRevision: '{{targetRevision}}'
+        path: '{{appPath}}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

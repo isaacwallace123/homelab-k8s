@@ -5,3 +5,10 @@
 kubeconfig
 *.yaml.secret
 .claude/
+
+# Terraform
+provisioning/terraform/.terraform/
+provisioning/terraform/.terraform.lock.hcl
+provisioning/terraform/terraform.tfvars
+provisioning/terraform/*.tfstate
+provisioning/terraform/*.tfstate.backup

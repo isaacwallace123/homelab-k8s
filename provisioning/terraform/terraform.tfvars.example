@@ -1,0 +1,23 @@
+# Copy this to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+proxmox_endpoint  = "https://192.168.0.254:8006"
+proxmox_api_token = "root@pam!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_ssh_user  = "root"
+
+# The VM ID of your Ubuntu 24.04 cloud-init template on Proxmox.
+# To create one:
+#   wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+#   qm create 9000 --name ubuntu-2404-template --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
+#   qm importdisk 9000 noble-server-cloudimg-amd64.img local-lvm
+#   qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
+#   qm set 9000 --ide2 local-lvm:cloudinit --boot c --bootdisk scsi0 --serial0 socket --vga serial0
+#   qm set 9000 --agent enabled=1
+#   qm template 9000
+vm_template_id = 9000
+
+# Your SSH public key — injected into VMs via cloud-init
+ssh_public_key = "ssh-ed25519 AAAA... isaac@homelab"
+
+# VM default password (for console access — SSH key is preferred)
+vm_password = "changeme"

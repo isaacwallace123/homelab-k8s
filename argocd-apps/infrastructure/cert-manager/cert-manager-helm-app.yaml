@@ -1,0 +1,9 @@
+name: cert-manager
+namespace: cert-manager
+syncWave: "-2"
+repoURL: https://charts.jetstack.io
+chart: cert-manager
+targetRevision: v1.17.*
+values: |
+  crds:
+    enabled: true

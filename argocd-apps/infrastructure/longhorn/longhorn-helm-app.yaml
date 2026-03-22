@@ -1,0 +1,27 @@
+name: longhorn
+namespace: longhorn-system
+syncWave: "0"
+repoURL: https://charts.longhorn.io
+chart: longhorn
+targetRevision: "1.*"
+values: |
+  defaultSettings:
+    defaultReplicaCount: 2
+    defaultDataPath: /var/lib/longhorn
+  longhornManager:
+    nodeSelector:
+      node-role.kubernetes.io/worker: "true"
+    tolerations: []
+  longhornDriver:
+    nodeSelector:
+      node-role.kubernetes.io/worker: "true"
+    tolerations: []
+  longhornUI:
+    nodeSelector:
+      proxmox-host: pve1
+    tolerations: []
+  persistence:
+    defaultClass: true
+    defaultClassReplicaCount: 2
+  ingress:
+    enabled: false

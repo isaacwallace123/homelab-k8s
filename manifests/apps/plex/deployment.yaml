@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+    spec:
+      containers:
+        - name: plex
+          image: lscr.io/linuxserver/plex:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+            - name: VERSION
+              value: docker
+          ports:
+            - containerPort: 32400
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: movies
+              mountPath: /movies
+            - name: tv
+              mountPath: /tv
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 4Gi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: tank-config-plex
+        - name: movies
+          persistentVolumeClaim:
+            claimName: tank-movies
+        - name: tv
+          persistentVolumeClaim:
+            claimName: tank-tv
+---
+# Web UI — accessible at http://192.168.0.241:32400/web
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
+spec:
+  type: LoadBalancer
+  selector:
+    app: plex
+  ports:
+    - port: 32400
+      targetPort: 32400

@@ -1,0 +1,89 @@
+# =============================================================================
+# Applications ApplicationSets — sync-wave 0 (deploy after infrastructure)
+#
+# Discovers all *-helm-app.yaml and *-git-app.yaml files under
+# argocd-apps/apps/ and generates ArgoCD Applications from them.
+#
+# helm-app.yaml fields: name, namespace, syncWave, repoURL, chart, targetRevision, values
+# git-app.yaml  fields: name, namespace, syncWave, repoURL, targetRevision, appPath
+# =============================================================================
+
+# Helm-chart-based apps
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: applications-helm
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+        revision: main
+        files:
+          - path: argocd-apps/apps/**/*-helm-app.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{syncWave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{repoURL}}'
+        chart: '{{chart}}'
+        targetRevision: '{{targetRevision}}'
+        helm:
+          values: |
+            {{values}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Manifest-based apps (Plex, Sonarr, Radarr, Homer, etc.)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: applications-git
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+        revision: main
+        files:
+          - path: argocd-apps/apps/**/*-git-app.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{syncWave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{repoURL}}'
+        targetRevision: '{{targetRevision}}'
+        path: '{{appPath}}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

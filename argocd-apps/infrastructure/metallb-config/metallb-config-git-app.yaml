@@ -1,0 +1,6 @@
+name: metallb-config
+namespace: networking
+syncWave: "-2"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/infra/metallb

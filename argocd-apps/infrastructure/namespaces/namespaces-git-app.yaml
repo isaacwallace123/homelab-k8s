@@ -1,0 +1,6 @@
+name: namespaces
+namespace: argocd
+syncWave: "-5"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/infra/namespaces

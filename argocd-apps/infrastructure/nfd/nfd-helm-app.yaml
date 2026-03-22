@@ -1,0 +1,9 @@
+name: nfd
+namespace: node-feature-discovery
+syncWave: "-2"
+repoURL: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+chart: node-feature-discovery
+targetRevision: "0.17.2"
+values: |
+  master:
+    extraLabelNs: ["intel.feature.node.kubernetes.io"]

@@ -1,0 +1,20 @@
+name: argocd
+namespace: argocd
+syncWave: "-3"
+repoURL: https://argoproj.github.io/argo-helm
+chart: argo-cd
+targetRevision: "7.*"
+values: |
+  global:
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+  configs:
+    params:
+      server.insecure: "true"
+  crds:
+    install: true
+    keep: true

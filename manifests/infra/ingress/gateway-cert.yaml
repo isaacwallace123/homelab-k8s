@@ -1,0 +1,15 @@
+# TLS certificate for *.lan HTTPS listener, issued by the homelab-ca ClusterIssuer.
+# To trust this cert in your browser/OS, export the homelab-ca secret and install it:
+#   kubectl get secret homelab-ca-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d > homelab-ca.crt
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lan-tls
+  namespace: networking
+spec:
+  secretName: lan-tls
+  issuerRef:
+    name: homelab-ca
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.lan"

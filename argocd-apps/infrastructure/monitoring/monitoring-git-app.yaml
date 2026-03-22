@@ -1,0 +1,6 @@
+name: monitoring
+namespace: monitoring
+syncWave: "1"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/infra/monitoring

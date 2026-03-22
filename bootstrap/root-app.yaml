@@ -1,0 +1,23 @@
+# Root Application — single entry point for the entire GitOps chain.
+# Apply this once manually after installing ArgoCD:
+#   kubectl apply -f bootstrap/root-app.yaml
+#
+# ArgoCD then discovers categories/ and deploys everything automatically.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+    targetRevision: main
+    path: categories
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

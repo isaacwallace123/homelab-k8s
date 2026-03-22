@@ -1,0 +1,6 @@
+name: argocd-config
+namespace: argocd
+syncWave: "-3"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/infra/argocd
