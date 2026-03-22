@@ -18,7 +18,7 @@ values: |
     tolerations: []
   longhornUI:
     nodeSelector:
-      proxmox-host: pve1
+      node-role.kubernetes.io/worker: "true"
     tolerations: []
   persistence:
     defaultClass: true
