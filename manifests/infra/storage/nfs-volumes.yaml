@@ -1,3 +1,101 @@
+# ── Portfolio ─────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-portfolio-postgres
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: portfolio
+    name: tank-portfolio-postgres
+  nfs:
+    server: 192.168.0.254
+    path: /tank/config/portfolio/postgres
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-portfolio-postgres
+  namespace: portfolio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: tank-portfolio-postgres
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-portfolio-redis
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: portfolio
+    name: tank-portfolio-redis
+  nfs:
+    server: 192.168.0.254
+    path: /tank/config/portfolio/redis
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-portfolio-redis
+  namespace: portfolio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: tank-portfolio-redis
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-portfolio-uploads
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: portfolio
+    name: tank-portfolio-uploads
+  nfs:
+    server: 192.168.0.254
+    path: /tank/config/portfolio/uploads
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-portfolio-uploads
+  namespace: portfolio
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: tank-portfolio-uploads
+  resources:
+    requests:
+      storage: 10Gi
+---
+# ── Media ─────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: PersistentVolume
 metadata:

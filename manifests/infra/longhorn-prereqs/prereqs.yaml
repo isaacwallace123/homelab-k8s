@@ -1,0 +1,71 @@
+# Deployed by longhorn-prereqs app (syncWave "-1") BEFORE the Longhorn Helm chart (syncWave "0").
+# The Longhorn pre-upgrade Job runs as a PreSync hook and requires longhorn-service-account
+# to exist and have RBAC — but the chart only creates these in the main sync phase.
+# This file breaks that chicken-and-egg problem on fresh installs.
+#
+# Uses distinct names (longhorn-prereqs-role / longhorn-prereqs-bind) to avoid
+# conflicting with the ClusterRole and ClusterRoleBinding the Helm chart creates.
+# After Longhorn deploys, the SA ends up bound to both roles — harmless.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: longhorn-service-account
+  namespace: longhorn-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: longhorn-prereqs-role
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods
+      - events
+      - persistentvolumes
+      - persistentvolumeclaims
+      - persistentvolumeclaims/status
+      - nodes
+      - endpoints
+      - serviceaccounts
+      - services
+      - secrets
+      - configmaps
+      - namespaces
+    verbs: ["*"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
+    verbs: ["*"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["*"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "volumeattachments", "csinodes", "csidrivers", "csistoragecapacities"]
+    verbs: ["*"]
+  - apiGroups: ["longhorn.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+    verbs: ["*"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["*"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: longhorn-prereqs-bind
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: longhorn-prereqs-role
+subjects:
+  - kind: ServiceAccount
+    name: longhorn-service-account
+    namespace: longhorn-system

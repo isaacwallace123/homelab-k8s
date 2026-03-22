@@ -78,3 +78,21 @@
         path: /var/lib/longhorn
         state: directory
         mode: "0750"
+
+# =============================================================================
+# Label worker nodes — runs on the control plane using kubectl.
+# k3s-worker-node-2 gets node-role.kubernetes.io/worker=true so Longhorn,
+# media apps, and monitoring all schedule there instead of the AI-only node.
+# =============================================================================
+- name: Label k3s worker nodes for workload scheduling
+  hosts: server
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Label k3s-worker-node-2 as general worker (non-AI workloads)
+      command: kubectl label node k3s-worker-node-2 node-role.kubernetes.io/worker=true --overwrite
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: result
+      changed_when: "'labeled' in result.stdout"

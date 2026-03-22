@@ -56,9 +56,8 @@ spec:
               memory: 512Mi
       volumes:
         - name: data
-          hostPath:
-            path: /mnt/k3s-data/portfolio/postgres
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-portfolio-postgres
 ---
 apiVersion: v1
 kind: Service
@@ -114,9 +113,8 @@ spec:
               memory: 128Mi
       volumes:
         - name: data
-          hostPath:
-            path: /mnt/k3s-data/portfolio/redis
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-portfolio-redis
 ---
 apiVersion: v1
 kind: Service
@@ -328,9 +326,8 @@ spec:
               memory: 1Gi
       volumes:
         - name: uploads
-          hostPath:
-            path: /mnt/k3s-data/portfolio/uploads
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-portfolio-uploads
 ---
 apiVersion: v1
 kind: Service
