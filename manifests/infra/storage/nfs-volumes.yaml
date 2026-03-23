@@ -166,7 +166,7 @@ metadata:
   name: tank-downloads
 spec:
   capacity:
-    storage: 500Gi
+    storage: 75Gi
   accessModes:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
@@ -176,7 +176,7 @@ spec:
     name: tank-downloads
   nfs:
     server: 192.168.0.254
-    path: /tank/downloads
+    path: /downloads
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -190,7 +190,7 @@ spec:
   volumeName: tank-downloads
   resources:
     requests:
-      storage: 500Gi
+      storage: 75Gi
 ---
 apiVersion: v1
 kind: PersistentVolume
