@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: oci://ghcr.io/envoyproxy
+    repoURL: ghcr.io/envoyproxy
     chart: gateway-helm
     targetRevision: v1.3.2
     helm:
