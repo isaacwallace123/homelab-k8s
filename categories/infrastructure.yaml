@@ -46,6 +46,8 @@ spec:
           kind: GpuDevicePlugin
           jqPathExpressions:
             - .spec
+            - .metadata.labels
+            - .metadata.annotations
       syncPolicy:
         automated:
           prune: true
