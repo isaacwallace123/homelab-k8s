@@ -63,7 +63,7 @@ spec:
         app: grafana
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/infra: "true"
       securityContext:
         fsGroup: 472
         runAsUser: 472

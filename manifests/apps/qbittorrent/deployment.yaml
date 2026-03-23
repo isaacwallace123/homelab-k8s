@@ -16,7 +16,7 @@ spec:
         app: qbittorrent
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       initContainers:
         - name: configure-proxy
           image: busybox:1.36

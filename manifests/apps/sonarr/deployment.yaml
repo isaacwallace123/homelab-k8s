@@ -16,7 +16,7 @@ spec:
         app: sonarr
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       containers:
         - name: sonarr
           image: lscr.io/linuxserver/sonarr:latest

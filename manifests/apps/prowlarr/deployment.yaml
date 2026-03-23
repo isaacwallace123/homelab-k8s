@@ -16,7 +16,7 @@ spec:
         app: prowlarr
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       containers:
         - name: prowlarr
           image: lscr.io/linuxserver/prowlarr:latest

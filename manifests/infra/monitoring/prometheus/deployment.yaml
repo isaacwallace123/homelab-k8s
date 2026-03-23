@@ -116,7 +116,7 @@ spec:
     spec:
       serviceAccountName: prometheus
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/infra: "true"
       securityContext:
         fsGroup: 65534
         runAsNonRoot: true

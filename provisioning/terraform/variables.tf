@@ -33,3 +33,15 @@ variable "vm_password" {
   type        = string
   sensitive   = true
 }
+
+variable "k3s_token" {
+  description = "k3s node join token (cat /var/lib/rancher/k3s/server/node-token on control plane)"
+  type        = string
+  sensitive   = true
+}
+
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key for remote-exec provisioners"
+  type        = string
+  default     = "~/.ssh/id_ed25519"
+}

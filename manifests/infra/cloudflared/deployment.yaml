@@ -13,6 +13,8 @@ spec:
       labels:
         app: cloudflared
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/infra: "true"
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:latest

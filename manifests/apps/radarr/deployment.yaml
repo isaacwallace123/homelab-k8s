@@ -16,7 +16,7 @@ spec:
         app: radarr
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       containers:
         - name: radarr
           image: lscr.io/linuxserver/radarr:latest

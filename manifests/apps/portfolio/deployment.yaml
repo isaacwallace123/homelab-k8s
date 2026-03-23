@@ -16,6 +16,8 @@ spec:
       labels:
         app: postgres
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/portfolio: "true"
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -89,6 +91,8 @@ spec:
       labels:
         app: redis
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/portfolio: "true"
       containers:
         - name: redis
           image: redis:7-alpine
@@ -177,6 +181,8 @@ spec:
         app: infra-agent
     spec:
       serviceAccountName: infra-agent
+      nodeSelector:
+        node-role.kubernetes.io/portfolio: "true"
       containers:
         - name: infra-agent
           image: ghcr.io/isaacwallace123/portfolio-infra:latest
@@ -239,6 +245,8 @@ spec:
       labels:
         app: frontend
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/portfolio: "true"
       initContainers:
         - name: wait-for-postgres
           image: busybox:1.36

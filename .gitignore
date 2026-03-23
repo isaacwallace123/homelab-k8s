@@ -9,6 +9,6 @@ kubeconfig
 # Terraform
 provisioning/terraform/.terraform/
 provisioning/terraform/.terraform.lock.hcl
+provisioning/terraform/.terraform.tfstate.lock.info
 provisioning/terraform/terraform.tfvars
-provisioning/terraform/*.tfstate
-provisioning/terraform/*.tfstate.backup
+provisioning/terraform/terraform.tfstate*

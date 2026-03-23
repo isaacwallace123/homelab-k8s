@@ -16,7 +16,7 @@ spec:
         app: gluetun
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       containers:
         - name: gluetun
           image: qmcgaw/gluetun:latest

@@ -16,7 +16,7 @@ spec:
         app: adguard-home
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       containers:
         - name: adguard
           image: adguard/adguardhome:latest

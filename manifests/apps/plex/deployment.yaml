@@ -16,7 +16,7 @@ spec:
         app: plex
     spec:
       nodeSelector:
-        node-role.kubernetes.io/worker: "true"
+        node-role.kubernetes.io/apps: "true"
       containers:
         - name: plex
           image: lscr.io/linuxserver/plex:latest
