@@ -29,6 +29,8 @@ spec:
               value: America/New_York
             - name: VERSION
               value: docker
+            - name: ADVERTISE_IP
+              value: "http://192.168.0.241:32400/"
           ports:
             - containerPort: 32400
           volumeMounts:
