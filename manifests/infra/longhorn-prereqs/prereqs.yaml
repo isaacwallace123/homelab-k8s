@@ -1,17 +1,14 @@
 # Deployed by longhorn-prereqs app (syncWave "-1") BEFORE the Longhorn Helm chart (syncWave "0").
 # The Longhorn pre-upgrade Job runs as a PreSync hook and requires longhorn-service-account
 # to exist and have RBAC — but the chart only creates these in the main sync phase.
-# This file breaks that chicken-and-egg problem on fresh installs.
+# This file breaks that chicken-and-egg problem on upgrades.
+#
+# NOTE: The SA itself is NOT created here — Longhorn's pre-upgrade hook only runs during
+# helm upgrade, so the SA already exists from the previous install. Creating it here
+# caused a SharedResourceWarning (SSA field ownership conflict with the Helm chart).
 #
 # Uses distinct names (longhorn-prereqs-role / longhorn-prereqs-bind) to avoid
 # conflicting with the ClusterRole and ClusterRoleBinding the Helm chart creates.
-# After Longhorn deploys, the SA ends up bound to both roles — harmless.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: longhorn-service-account
-  namespace: longhorn-system
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

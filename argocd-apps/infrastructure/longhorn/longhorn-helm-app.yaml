@@ -3,7 +3,7 @@ namespace: longhorn-system
 syncWave: "0"
 repoURL: https://charts.longhorn.io
 chart: longhorn
-targetRevision: "1.*"
+targetRevision: "1.11.1"
 values: |
   defaultSettings:
     defaultReplicaCount: 2
