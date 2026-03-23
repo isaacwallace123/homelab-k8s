@@ -8,12 +8,17 @@ metadata:
   namespace: argocd
 spec:
   parentRefs:
-    - name: envoy-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: envoy-gateway
       namespace: networking
       sectionName: argocd-passthrough
   hostnames:
     - argocd.lan
   rules:
     - backendRefs:
-        - name: argocd-server
+        - group: ""
+          kind: Service
+          name: argocd-server
           port: 443
+          weight: 1

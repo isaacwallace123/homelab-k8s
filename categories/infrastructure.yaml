@@ -44,13 +44,8 @@ spec:
       ignoreDifferences:
         - group: deviceplugin.intel.com
           kind: GpuDevicePlugin
-          jsonPointers:
-            - /spec/allowIDs
-            - /spec/denyIDs
-            - /spec/tolerations
-            - /spec/bypathMode
-            - /spec/logLevel
-            - /spec/preferredAllocationPolicy
+          jqPathExpressions:
+            - .spec
       syncPolicy:
         automated:
           prune: true
@@ -59,6 +54,7 @@ spec:
           - CreateNamespace=true
           - ServerSideApply=true
           - SkipDryRunOnMissingResource=true
+          - RespectIgnoreDifferences=true
 ---
 # Manifest-based infrastructure (MetalLB config, namespaces, storage, ingress, etc.)
 apiVersion: argoproj.io/v1alpha1

@@ -351,12 +351,17 @@ metadata:
   namespace: portfolio
 spec:
   parentRefs:
-    - name: envoy-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: envoy-gateway
       namespace: networking
       sectionName: http
   hostnames:
     - isaacwallace.dev
   rules:
     - backendRefs:
-        - name: frontend
+        - group: ""
+          kind: Service
+          name: frontend
           port: 3000
+          weight: 1
