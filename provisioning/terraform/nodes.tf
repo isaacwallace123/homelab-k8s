@@ -2,7 +2,7 @@
 # k3s Control Plane — pve2 (192.168.0.10)
 # VM 104: 2 vCPU, 6GB RAM, 80GB disk
 # =============================================================================
-resource "proxmox_virtual_machine" "control_plane" {
+resource "proxmox_virtual_environment_vm" "control_plane" {
   name        = "k3s-control-plane"
   node_name   = "pve2"
   vm_id       = 104
@@ -65,7 +65,7 @@ resource "proxmox_virtual_machine" "control_plane" {
 # 4 vCPU, 16GB RAM, 100GB disk
 # GPUs: Intel Arc B580 (12GB), Intel Arc B50 Pro (16GB) — passed through
 # =============================================================================
-resource "proxmox_virtual_machine" "worker_1" {
+resource "proxmox_virtual_environment_vm" "worker_1" {
   name        = "k3s-worker-node-1"
   node_name   = "pve"
   description = "k3s worker — LLM (Ollama), media stack, Longhorn storage"
