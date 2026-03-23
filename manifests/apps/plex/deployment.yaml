@@ -38,12 +38,16 @@ spec:
               mountPath: /movies
             - name: tv
               mountPath: /tv
+            - name: dri
+              mountPath: /dev/dri
           resources:
             requests:
               cpu: 500m
               memory: 1Gi
+              gpu.intel.com/i915: "1"
             limits:
               memory: 4Gi
+              gpu.intel.com/i915: "1"
       volumes:
         - name: config
           persistentVolumeClaim:
@@ -54,6 +58,9 @@ spec:
         - name: tv
           persistentVolumeClaim:
             claimName: tank-tv
+        - name: dri
+          hostPath:
+            path: /dev/dri
 ---
 # Web UI — accessible at http://192.168.0.241:32400/web
 apiVersion: v1
