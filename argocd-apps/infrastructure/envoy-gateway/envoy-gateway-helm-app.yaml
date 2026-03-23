@@ -1,7 +1,7 @@
 name: envoy-gateway
 namespace: envoy-gateway-system
 syncWave: "-2"
-repoURL: oci://docker.io/envoyproxy
+repoURL: oci://ghcr.io/envoyproxy
 chart: gateway-helm
 targetRevision: v1.3.2
 values: |
