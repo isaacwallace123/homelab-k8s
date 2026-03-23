@@ -51,6 +51,8 @@ spec:
       labels:
         app: loki
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
       securityContext:
         fsGroup: 10001
         runAsUser: 10001

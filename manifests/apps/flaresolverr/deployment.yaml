@@ -13,6 +13,8 @@ spec:
       labels:
         app: flaresolverr
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
       containers:
         - name: flaresolverr
           image: ghcr.io/flaresolverr/flaresolverr:latest

@@ -62,6 +62,8 @@ spec:
       labels:
         app: grafana
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
       securityContext:
         fsGroup: 472
         runAsUser: 472
