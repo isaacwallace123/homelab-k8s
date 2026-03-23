@@ -1,7 +1,7 @@
 # TLS passthrough route — SNI routes argocd.lan directly to argocd-server:443
 # ArgoCD keeps its own self-signed cert; gRPC streams work without re-encryption
 # Add DNS override in AdGuard: argocd.lan → 192.168.0.245
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1alpha3
 kind: TLSRoute
 metadata:
   name: argocd

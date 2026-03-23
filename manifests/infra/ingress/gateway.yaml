@@ -27,7 +27,9 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
-          - name: lan-tls
+          - group: ""
+            kind: Secret
+            name: lan-tls
             namespace: networking
       allowedRoutes:
         namespaces:

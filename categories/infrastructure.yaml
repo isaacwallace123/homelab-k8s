@@ -41,6 +41,16 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
+      ignoreDifferences:
+        - group: deviceplugin.intel.com
+          kind: GpuDevicePlugin
+          jsonPointers:
+            - /spec/allowIDs
+            - /spec/denyIDs
+            - /spec/tolerations
+            - /spec/bypathMode
+            - /spec/logLevel
+            - /spec/preferredAllocationPolicy
       syncPolicy:
         automated:
           prune: true
