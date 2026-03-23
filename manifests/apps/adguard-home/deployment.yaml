@@ -44,13 +44,11 @@ spec:
               memory: 512Mi
       volumes:
         - name: work
-          hostPath:
-            path: /mnt/k3s-data/adguard/work
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-config-adguard-work
         - name: config
-          hostPath:
-            path: /mnt/k3s-data/adguard/conf
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: tank-config-adguard-conf
 ---
 # Web UI — accessible at http://192.168.0.240:3000
 apiVersion: v1

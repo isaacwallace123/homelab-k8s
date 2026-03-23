@@ -351,3 +351,68 @@ spec:
   resources:
     requests:
       storage: 1Gi
+---
+# ── AdGuard Home ──────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-config-adguard-work
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: networking
+    name: tank-config-adguard-work
+  nfs:
+    server: 192.168.0.254
+    path: /tank/config/adguard/work
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-config-adguard-work
+  namespace: networking
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: tank-config-adguard-work
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-config-adguard-conf
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: networking
+    name: tank-config-adguard-conf
+  nfs:
+    server: 192.168.0.254
+    path: /tank/config/adguard/conf
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-config-adguard-conf
+  namespace: networking
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: tank-config-adguard-conf
+  resources:
+    requests:
+      storage: 1Gi
