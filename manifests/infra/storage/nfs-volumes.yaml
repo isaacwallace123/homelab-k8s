@@ -176,7 +176,7 @@ spec:
     name: tank-downloads
   nfs:
     server: 192.168.0.254
-    path: /tank/media/downloads
+    path: /tank/downloads
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
