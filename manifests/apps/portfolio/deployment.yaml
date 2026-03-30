@@ -1,3 +1,32 @@
+# ── Longhorn PVCs ─────────────────────────────────────────────────────────────
+# postgres and redis use Longhorn instead of NFS to prevent data loss on pod
+# restarts (NFS file locking / UID 999 permission issues cause reinit).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: portfolio-postgres-data
+  namespace: portfolio
+spec:
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: portfolio-redis-data
+  namespace: portfolio
+spec:
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
@@ -59,7 +88,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: tank-portfolio-postgres
+            claimName: portfolio-postgres-data
 ---
 apiVersion: v1
 kind: Service
@@ -118,7 +147,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: tank-portfolio-redis
+            claimName: portfolio-redis-data
 ---
 apiVersion: v1
 kind: Service
@@ -248,6 +277,21 @@ spec:
       nodeSelector:
         node-role.kubernetes.io/portfolio: "true"
       initContainers:
+        - name: seed-uploads
+          image: ghcr.io/isaacwallace123/portfolio-frontend:latest
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -f /uploads/icons/placeholder.png ]; then
+                mkdir -p /uploads/icons
+                cp -rn /app/public/uploads/. /uploads/
+                echo "Seeded uploads from image"
+              fi
+          volumeMounts:
+            - name: uploads
+              mountPath: /uploads
         - name: wait-for-postgres
           image: busybox:1.36
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']

@@ -1,68 +1,6 @@
 # ── Portfolio ─────────────────────────────────────────────────────────────────
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tank-portfolio-postgres
-spec:
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  claimRef:
-    namespace: portfolio
-    name: tank-portfolio-postgres
-  nfs:
-    server: 192.168.0.254
-    path: /tank/config/portfolio/postgres
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tank-portfolio-postgres
-  namespace: portfolio
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ""
-  volumeName: tank-portfolio-postgres
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tank-portfolio-redis
-spec:
-  capacity:
-    storage: 1Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  claimRef:
-    namespace: portfolio
-    name: tank-portfolio-redis
-  nfs:
-    server: 192.168.0.254
-    path: /tank/config/portfolio/redis
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tank-portfolio-redis
-  namespace: portfolio
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ""
-  volumeName: tank-portfolio-redis
-  resources:
-    requests:
-      storage: 1Gi
----
+# postgres and redis use Longhorn (provisioned dynamically in deployment.yaml).
+# Only uploads stays on NFS because it needs ReadWriteMany.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -416,3 +354,36 @@ spec:
   resources:
     requests:
       storage: 1Gi
+---
+# ── Images (MinIO) ────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-images-minio
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: images
+    name: tank-images-minio
+  nfs:
+    server: 192.168.0.254
+    path: /tank/config/images/minio
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-images-minio
+  namespace: images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: tank-images-minio
+  resources:
+    requests:
+      storage: 50Gi

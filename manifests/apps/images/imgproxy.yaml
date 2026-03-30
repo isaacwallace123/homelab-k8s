@@ -1,0 +1,104 @@
+# ── Imgproxy ──────────────────────────────────────────────────────────────────
+# On-the-fly image resizing from MinIO.
+# Public URL:  https://images.isaacwallace.dev/plain/s3://portfolio-images/photo.jpg
+# Resize:      https://images.isaacwallace.dev/rs:fill:400:400/plain/s3://portfolio-images/photo.jpg
+# Add Cloudflare Tunnel public hostname → http://imgproxy.images.svc.cluster.local:8080
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imgproxy
+  namespace: images
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imgproxy
+  template:
+    metadata:
+      labels:
+        app: imgproxy
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/portfolio: "true"
+      containers:
+        - name: imgproxy
+          image: darthsim/imgproxy:latest
+          env:
+            # S3 / MinIO source
+            - name: IMGPROXY_USE_S3
+              value: "true"
+            - name: IMGPROXY_S3_ENDPOINT
+              value: "http://minio.images.svc.cluster.local:9000"
+            - name: IMGPROXY_S3_REGION
+              value: "us-east-1"
+            - name: IMGPROXY_S3_FORCE_PATH_STYLE
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: images-secrets
+                  key: MINIO_ROOT_USER
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: images-secrets
+                  key: MINIO_ROOT_PASSWORD
+            # Imgproxy behaviour
+            - name: IMGPROXY_BIND
+              value: ":8080"
+            - name: IMGPROXY_LOG_LEVEL
+              value: "warn"
+            - name: IMGPROXY_MAX_SRC_RESOLUTION
+              value: "50"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imgproxy
+  namespace: images
+spec:
+  selector:
+    app: imgproxy
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+# Public route: images.isaacwallace.dev via Cloudflare Tunnel → Envoy Gateway
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: imgproxy
+  namespace: images
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: envoy-gateway
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - images.isaacwallace.dev
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: imgproxy
+          port: 8080
+          weight: 1

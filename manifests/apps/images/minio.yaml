@@ -1,0 +1,119 @@
+# ── MinIO ─────────────────────────────────────────────────────────────────────
+# S3-compatible object storage. Internal-only — not exposed publicly.
+# Access from imgproxy:  http://minio.images.svc.cluster.local:9000
+# Admin console (LAN):   https://minio.lan
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: images
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/portfolio: "true"
+      containers:
+        - name: minio
+          image: minio/minio:latest
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: images-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: images-secrets
+                  key: MINIO_ROOT_PASSWORD
+          ports:
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: tank-images-minio
+---
+# S3 API — internal only
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: images
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+---
+# Console — exposed via LAN HTTPS (minio.lan)
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-console
+  namespace: images
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: console
+      port: 9001
+      targetPort: 9001
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: minio-console
+  namespace: images
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: envoy-gateway
+      namespace: networking
+      sectionName: https-lan
+  hostnames:
+    - minio.lan
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: minio-console
+          port: 9001
+          weight: 1
