@@ -5,3 +5,5 @@ resources:
   - sealed-secret.yaml
   - portfolio-minio-secret.yaml
   - infra-agent-hints.yaml
+  - minio.yaml
+  - imgproxy.yaml

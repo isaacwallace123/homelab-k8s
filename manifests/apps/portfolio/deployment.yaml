@@ -358,7 +358,7 @@ spec:
                   name: portfolio-secrets
                   key: DEEPL_API_KEY
             - name: MINIO_ENDPOINT
-              value: "http://minio.images.svc.cluster.local:9000"
+              value: "http://minio.portfolio.svc.cluster.local:9000"
             - name: MINIO_BUCKET
               value: "portfolio-images"
             - name: MINIO_ACCESS_KEY

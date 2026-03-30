@@ -36,9 +36,4 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: images
----
-apiVersion: v1
-kind: Namespace
-metadata:
   name: secrets
