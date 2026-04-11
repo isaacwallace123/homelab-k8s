@@ -1,0 +1,30 @@
+# Cortex is deployed as a standalone Application (not via ApplicationSet)
+# so we can point it at the cortex repo directly.
+# The CI pipeline stamps image.tag in deploy/helm/cortex/values.yaml on every
+# push to main, which ArgoCD detects and auto-syncs.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cortex
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/isaacwallace123/cortex.git
+    targetRevision: main
+    path: deploy/helm/cortex
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cortex
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
