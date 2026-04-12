@@ -21,6 +21,19 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: cortex
+  ignoreDifferences:
+    # Kubernetes converts stringData -> data (base64) on apply, causing a
+    # perpetual diff on every reconcile even after a successful sync.
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data
+    # Kubernetes injects type: "" into hostPath volumes that omit the field.
+    - group: apps
+      kind: Deployment
+      name: crucible
+      jsonPointers:
+        - /spec/template/spec/volumes/0/hostPath/type
   syncPolicy:
     automated:
       prune: true
