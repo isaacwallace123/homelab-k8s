@@ -53,7 +53,7 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: tank-config-plex
+            claimName: config-plex
         - name: movies
           persistentVolumeClaim:
             claimName: tank-movies

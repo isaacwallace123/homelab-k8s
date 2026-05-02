@@ -1,6 +1,6 @@
-name: flaresolverr
+name: media-stack
 namespace: media
-syncWave: "0"
+syncWave: "1"
 repoURL: https://github.com/isaacwallace123/homelab-k8s.git
 targetRevision: main
-appPath: manifests/apps/flaresolverr
+appPath: manifests/apps/media-stack

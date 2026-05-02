@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
+spec:
+  type: LoadBalancer
+  selector:
+    app: media-stack
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: webui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radarr
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
+spec:
+  type: LoadBalancer
+  selector:
+    app: media-stack
+  ports:
+    - port: 7878
+      targetPort: 7878
+      name: webui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
+spec:
+  type: LoadBalancer
+  selector:
+    app: media-stack
+  ports:
+    - port: 8989
+      targetPort: 8989
+      name: webui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
+spec:
+  type: LoadBalancer
+  selector:
+    app: media-stack
+  ports:
+    - port: 9696
+      targetPort: 9696
+      name: webui

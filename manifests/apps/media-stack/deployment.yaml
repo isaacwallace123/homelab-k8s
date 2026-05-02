@@ -1,0 +1,293 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-stack
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: media-stack
+  template:
+    metadata:
+      labels:
+        app: media-stack
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/apps: "true"
+
+      # Runs before all app containers. Sets qBittorrent WebUI password (once,
+      # idempotent) and strips the old proxy settings that are no longer needed
+      # now that all containers share gluetun's network namespace.
+      initContainers:
+        - name: qbittorrent-init
+          image: python:3-slim
+          command: [python3, "-c"]
+          args:
+            - |
+              import hashlib, base64, os
+
+              config_dir = '/data/qBittorrent'
+              config_file = os.path.join(config_dir, 'qBittorrent.conf')
+              password = os.environ.get('WEBUI_PASSWORD', '')
+
+              os.makedirs(config_dir, exist_ok=True)
+
+              lines = []
+              if os.path.exists(config_file):
+                  with open(config_file) as f:
+                      lines = f.readlines()
+
+              # Strip proxy keys — no longer needed with VPN sidecar pattern
+              remove_prefixes = (
+                  'Connection\\ProxyType=',
+                  'Connection\\ProxyIp=',
+                  'Connection\\ProxyPort=',
+                  'Connection\\ProxyPeerConnections=',
+                  'Proxy\\Type=',
+                  'Proxy\\Ip=',
+                  'Proxy\\Port=',
+                  'Proxy\\PeerConnections=',
+                  'Proxy\\HostnameLookupEnabled=',
+                  'Proxy\\Profiles\\',
+              )
+              has_password = any('Password_PBKDF2' in l for l in lines)
+              filtered = [l for l in lines if not any(l.lstrip().startswith(p) for p in remove_prefixes)]
+
+              if password and not has_password:
+                  salt = os.urandom(16)
+                  key = hashlib.pbkdf2_hmac('sha512', password.encode(), salt, 100000, dklen=64)
+                  pw_hash = '@ByteArray({}:{})'.format(
+                      base64.b64encode(salt).decode(),
+                      base64.b64encode(key).decode()
+                  )
+                  prefs_idx = next((i for i, l in enumerate(filtered) if l.strip() == '[Preferences]'), None)
+                  if prefs_idx is None:
+                      filtered.append('\n[Preferences]\n')
+                      prefs_idx = len(filtered) - 1
+                  filtered.insert(prefs_idx + 1, 'WebUI\\Username=admin\n')
+                  filtered.insert(prefs_idx + 2, 'WebUI\\Password_PBKDF2="{}"\n'.format(pw_hash))
+                  print('Password written to config')
+              elif has_password:
+                  print('Password already set, keeping existing')
+              else:
+                  print('WARNING: WEBUI_PASSWORD secret not found')
+
+              with open(config_file, 'w') as f:
+                  f.writelines(filtered)
+              print('qBittorrent init complete')
+          env:
+            - name: WEBUI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qbittorrent-auth
+                  key: WEBUI_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: config-qbittorrent
+              mountPath: /data
+
+      containers:
+
+        # ── gluetun ──────────────────────────────────────────────────────────
+        # All other containers share this pod's network namespace.
+        # Their outbound traffic is automatically routed through the VPN tunnel.
+        - name: gluetun
+          image: qmcgaw/gluetun:latest
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+          env:
+            - name: VPN_SERVICE_PROVIDER
+              value: nordvpn
+            - name: VPN_TYPE
+              value: openvpn
+            - name: OPENVPN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-nordvpn
+                  key: OPENVPN_USER
+            - name: OPENVPN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-nordvpn
+                  key: OPENVPN_PASSWORD
+            - name: SERVER_COUNTRIES
+              value: Canada
+            - name: UPDATER_PERIOD
+              value: 24h
+            - name: HEALTH_SERVER_ADDRESS
+              value: ":9999"
+          ports:
+            - containerPort: 9999
+              name: health
+          livenessProbe:
+            httpGet:
+              path: /v1/vpnstatus
+              port: 9999
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+
+        # ── qbittorrent ───────────────────────────────────────────────────────
+        # Downloads to /downloads (fast HDD via NFS).
+        # Radarr/Sonarr import finished downloads to /movies and /tv (8TB NFS).
+        # No proxy config needed — traffic goes through gluetun automatically.
+        - name: qbittorrent
+          image: lscr.io/linuxserver/qbittorrent:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+            - name: WEBUI_PORT
+              value: "8080"
+          ports:
+            - containerPort: 8080
+              name: qbit-ui
+            - containerPort: 6881
+              name: torrent-tcp
+            - containerPort: 6881
+              protocol: UDP
+              name: torrent-udp
+          volumeMounts:
+            - name: config-qbittorrent
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+        # ── radarr ────────────────────────────────────────────────────────────
+        - name: radarr
+          image: lscr.io/linuxserver/radarr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 7878
+              name: radarr-ui
+          volumeMounts:
+            - name: config-radarr
+              mountPath: /config
+            - name: movies
+              mountPath: /movies
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+        # ── sonarr ────────────────────────────────────────────────────────────
+        - name: sonarr
+          image: lscr.io/linuxserver/sonarr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 8989
+              name: sonarr-ui
+          volumeMounts:
+            - name: config-sonarr
+              mountPath: /config
+            - name: tv
+              mountPath: /tv
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+        # ── prowlarr ──────────────────────────────────────────────────────────
+        # After deploying, set FlareSolverr URL in Prowlarr UI to:
+        #   http://localhost:8191
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 9696
+              name: prowlarr-ui
+          volumeMounts:
+            - name: config-prowlarr
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+
+        # ── flaresolverr ──────────────────────────────────────────────────────
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:latest
+          env:
+            - name: LOG_LEVEL
+              value: info
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 8191
+              name: flare-ui
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+      volumes:
+        - name: config-qbittorrent
+          persistentVolumeClaim:
+            claimName: config-qbittorrent
+        - name: config-radarr
+          persistentVolumeClaim:
+            claimName: config-radarr
+        - name: config-sonarr
+          persistentVolumeClaim:
+            claimName: config-sonarr
+        - name: config-prowlarr
+          persistentVolumeClaim:
+            claimName: config-prowlarr
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: tank-downloads
+        - name: movies
+          persistentVolumeClaim:
+            claimName: tank-movies
+        - name: tv
+          persistentVolumeClaim:
+            claimName: tank-tv
