@@ -124,8 +124,7 @@ spec:
             - containerPort: 8000
               name: health
           livenessProbe:
-            httpGet:
-              path: /v1/vpn/status
+            tcpSocket:
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 30
