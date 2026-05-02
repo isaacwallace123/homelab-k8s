@@ -2,17 +2,21 @@
 # Creates sealed secrets for the media-stack.
 # Run this script, then commit the generated sealed-secret-*.yaml files.
 #
-# Requirements: kubectl, kubeseal (kubeseal must be able to reach the cluster)
+# Requirements: kubectl, kubeseal
+#
+# NordVPN service credentials (NOT your account password):
+#   https://my.nordaccount.com/dashboard/nordvpn/
+#   Services → NordVPN → Manual setup → Service credentials
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KUBESEAL="kubeseal --controller-name sealed-secrets-controller --controller-namespace secrets --format yaml"
 
 # ── 1. NordVPN OpenVPN service credentials ────────────────────────────────────
-# Get these from: https://my.nordaccount.com/dashboard/nordvpn/
-# Go to: Services → NordVPN → Manual setup → Service credentials
 echo "=== NordVPN credentials ==="
 read -rp "OpenVPN username: " NORDVPN_USER
-read -rsp "OpenVPN password: " NORDVPN_PASS
+printf "OpenVPN password: "
+read -rs NORDVPN_PASS
 echo
 
 kubectl create secret generic gluetun-nordvpn \
@@ -20,7 +24,7 @@ kubectl create secret generic gluetun-nordvpn \
   --from-literal=OPENVPN_USER="$NORDVPN_USER" \
   --from-literal=OPENVPN_PASSWORD="$NORDVPN_PASS" \
   --dry-run=client -o yaml \
-  | kubeseal --controller-namespace kube-system --format yaml \
+  | $KUBESEAL \
   > "$SCRIPT_DIR/sealed-secret-gluetun.yaml"
 
 echo "Written: sealed-secret-gluetun.yaml"
@@ -28,16 +32,20 @@ echo "Written: sealed-secret-gluetun.yaml"
 # ── 2. qBittorrent WebUI password ─────────────────────────────────────────────
 echo
 echo "=== qBittorrent WebUI password ==="
-read -rsp "WebUI password (will be stored as a sealed secret): " QB_PASS
+printf "WebUI password: "
+read -rs QB_PASS
 echo
 
 kubectl create secret generic qbittorrent-auth \
   --namespace media \
   --from-literal=WEBUI_PASSWORD="$QB_PASS" \
   --dry-run=client -o yaml \
-  | kubeseal --controller-namespace kube-system --format yaml \
+  | $KUBESEAL \
   > "$SCRIPT_DIR/sealed-secret-qbittorrent.yaml"
 
 echo "Written: sealed-secret-qbittorrent.yaml"
 echo
-echo "Done. Commit both sealed-secret-*.yaml files."
+echo "Done. Run:"
+echo "  git add manifests/apps/media-stack/sealed-secret-gluetun.yaml manifests/apps/media-stack/sealed-secret-qbittorrent.yaml"
+echo "  git commit -m 'Seal NordVPN and qBittorrent credentials'"
+echo "  git push"
