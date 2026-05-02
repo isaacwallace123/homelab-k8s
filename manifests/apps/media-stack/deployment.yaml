@@ -125,7 +125,7 @@ spec:
               name: health
           livenessProbe:
             httpGet:
-              path: /v1/vpnstatus
+              path: /v1/vpn/status
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 30
