@@ -118,15 +118,15 @@ spec:
               value: Canada
             - name: UPDATER_PERIOD
               value: 24h
-            - name: HEALTH_SERVER_ADDRESS
-              value: ":9999"
+            - name: HTTP_CONTROL_SERVER_ADDRESS
+              value: ":8000"
           ports:
-            - containerPort: 9999
+            - containerPort: 8000
               name: health
           livenessProbe:
             httpGet:
               path: /v1/vpnstatus
-              port: 9999
+              port: 8000
             initialDelaySeconds: 30
             periodSeconds: 30
             failureThreshold: 3
