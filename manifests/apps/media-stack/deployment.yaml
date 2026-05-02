@@ -120,6 +120,8 @@ spec:
               value: 24h
             - name: HTTP_CONTROL_SERVER_ADDRESS
               value: ":8000"
+            - name: FIREWALL_INPUT_PORTS
+              value: "8000,8080,7878,8989,9696,8191"
           ports:
             - containerPort: 8000
               name: health
