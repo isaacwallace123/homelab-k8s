@@ -59,11 +59,11 @@ data:
         jar = http.cookiejar.CookieJar()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
-        # Wait for qBittorrent to be ready
+        # Wait for qBittorrent WebUI to be ready (root returns 200 without auth)
         print("Waiting for qBittorrent...", flush=True)
         for _ in range(120):
             try:
-                opener.open(f"{QB_URL}/api/v2/app/version", timeout=5)
+                urllib.request.urlopen(f"{QB_URL}/", timeout=5)
                 break
             except Exception:
                 time.sleep(5)
