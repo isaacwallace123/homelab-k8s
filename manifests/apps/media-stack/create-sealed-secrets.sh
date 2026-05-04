@@ -4,25 +4,29 @@
 #
 # Requirements: kubectl, kubeseal
 #
-# NordVPN service credentials (NOT your account password):
-#   https://my.nordaccount.com/dashboard/nordvpn/
-#   Services → NordVPN → Manual setup → Service credentials
+# NordVPN WireGuard private key — get it once with:
+#   1. Create a no-expiry access token at:
+#      https://my.nordaccount.com/dashboard/nordvpn/
+#      Services → NordVPN → Manual setup → Access tokens → Generate (No expiry)
+#   2. Run:
+#      curl -s -u "token:YOUR_ACCESS_TOKEN" \
+#        https://api.nordvpn.com/v1/users/services/credentials \
+#        | python3 -c "import sys,json; print(json.load(sys.stdin)['nordlynx_private_key'])"
+#   The key never expires unless you explicitly revoke it.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KUBESEAL="kubeseal --controller-name sealed-secrets-controller --controller-namespace secrets --format yaml"
 
-# ── 1. NordVPN OpenVPN service credentials ────────────────────────────────────
-echo "=== NordVPN credentials ==="
-read -rp "OpenVPN username: " NORDVPN_USER
-printf "OpenVPN password: "
-read -rs NORDVPN_PASS
+# ── 1. NordVPN WireGuard private key ─────────────────────────────────────────
+echo "=== NordVPN WireGuard private key ==="
+printf "Private key: "
+read -rs WG_KEY
 echo
 
 kubectl create secret generic gluetun-nordvpn \
   --namespace media \
-  --from-literal=OPENVPN_USER="$NORDVPN_USER" \
-  --from-literal=OPENVPN_PASSWORD="$NORDVPN_PASS" \
+  --from-literal=WIREGUARD_PRIVATE_KEY="$WG_KEY" \
   --dry-run=client -o yaml \
   | $KUBESEAL \
   > "$SCRIPT_DIR/sealed-secret-gluetun.yaml"
@@ -47,5 +51,5 @@ echo "Written: sealed-secret-qbittorrent.yaml"
 echo
 echo "Done. Run:"
 echo "  git add manifests/apps/media-stack/sealed-secret-gluetun.yaml manifests/apps/media-stack/sealed-secret-qbittorrent.yaml"
-echo "  git commit -m 'Seal NordVPN and qBittorrent credentials'"
+echo "  git commit -m 'Switch gluetun to WireGuard — no-expiry credentials'"
 echo "  git push"
