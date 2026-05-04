@@ -17,6 +17,26 @@ spec:
     spec:
       nodeSelector:
         node-role.kubernetes.io/apps: "true"
+      initContainers:
+        # AdGuard stores the pod IP as bind_host. On reschedule the old IP is
+        # gone and the process panics. Reset it to 0.0.0.0 every start.
+        - name: fix-bind-host
+          image: busybox:latest
+          command:
+            - sh
+            - -c
+            - |
+              cfg=/conf/AdGuardHome.yaml
+              if [ -f "$cfg" ]; then
+                sed -i 's/bind_host: .*/bind_host: 0.0.0.0/' "$cfg"
+                echo "bind_host reset to 0.0.0.0"
+              else
+                echo "No config yet — first boot, skipping"
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+
       containers:
         - name: adguard
           image: adguard/adguardhome:latest

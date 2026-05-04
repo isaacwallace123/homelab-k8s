@@ -104,30 +104,21 @@ spec:
               mountPath: /data
 
         - name: sabnzbd-init
-          image: python:3-slim
-          command: [python3, "-c"]
+          image: busybox:latest
+          command: [sh, -c]
           args:
             - |
-              import configparser, os
-
-              config_dir = '/config'
-              config_file = os.path.join(config_dir, 'sabnzbd.ini')
-              os.makedirs(config_dir, exist_ok=True)
-
-              cfg = configparser.RawConfigParser()
-              if os.path.exists(config_file):
-                  cfg.read(config_file)
-
-              if not cfg.has_section('misc'):
-                  cfg.add_section('misc')
-
-              cfg.set('misc', 'port', '8090')
-              cfg.set('misc', 'host', '0.0.0.0')
-              cfg.set('misc', 'complete_dir', '/downloads')
-
-              with open(config_file, 'w') as f:
-                  cfg.write(f)
-              print('SABnzbd init complete')
+              cfg=/config/sabnzbd.ini
+              if [ -f "$cfg" ]; then
+                sed -i 's/^port = .*/port = 8090/' "$cfg"
+                sed -i 's/^host = .*/host = 0.0.0.0/' "$cfg"
+                sed -i 's/^complete_dir = .*/complete_dir = \/downloads/' "$cfg"
+                echo "SABnzbd config updated"
+              else
+                mkdir -p /config
+                printf '[misc]\nport = 8090\nhost = 0.0.0.0\ncomplete_dir = /downloads\n' > "$cfg"
+                echo "SABnzbd config created"
+              fi
           volumeMounts:
             - name: config-sabnzbd
               mountPath: /config
