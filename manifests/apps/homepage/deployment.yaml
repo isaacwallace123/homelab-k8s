@@ -385,6 +385,41 @@ spec:
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
               value: "192.168.0.248"
+            - name: HOMEPAGE_VAR_QB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: QB_PASS
+            - name: HOMEPAGE_VAR_GRAFANA_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: GRAFANA_PASS
+            - name: HOMEPAGE_VAR_OVERSEERR_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: OVERSEERR_KEY
+            - name: HOMEPAGE_VAR_RADARR_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: RADARR_KEY
+            - name: HOMEPAGE_VAR_SONARR_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: SONARR_KEY
+            - name: HOMEPAGE_VAR_PROWLARR_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: PROWLARR_KEY
+            - name: HOMEPAGE_VAR_SAB_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: SAB_KEY
           ports:
             - containerPort: 3000
           volumeMounts:
