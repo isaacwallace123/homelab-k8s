@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overseerr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: overseerr
+  template:
+    metadata:
+      labels:
+        app: overseerr
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/apps: "true"
+      containers:
+        - name: overseerr
+          image: lscr.io/linuxserver/overseerr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 5055
+              name: webui
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: config-overseerr
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: overseerr
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/allow-shared-ip: "media-stack"
+spec:
+  type: LoadBalancer
+  selector:
+    app: overseerr
+  ports:
+    - port: 5055
+      targetPort: 5055
+      name: webui
