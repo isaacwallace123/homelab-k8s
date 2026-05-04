@@ -91,10 +91,14 @@ data:
             try:
                 opener.open(f"{QB_URL}/api/v2/torrents/createCategory", form)
                 print(f"qBittorrent: category '{cat}' → {path}", flush=True)
-            except urllib.error.HTTPError:
-                # Already exists — update it instead
-                opener.open(f"{QB_URL}/api/v2/torrents/editCategory", form)
-                print(f"qBittorrent: category '{cat}' updated → {path}", flush=True)
+            except urllib.error.HTTPError as e:
+                if e.code != 409:
+                    raise
+                try:
+                    opener.open(f"{QB_URL}/api/v2/torrents/editCategory", form)
+                    print(f"qBittorrent: category '{cat}' updated → {path}", flush=True)
+                except urllib.error.HTTPError:
+                    print(f"qBittorrent: category '{cat}' already set", flush=True)
 
     def delete(url, api_key):
         req = urllib.request.Request(url, method="DELETE",
