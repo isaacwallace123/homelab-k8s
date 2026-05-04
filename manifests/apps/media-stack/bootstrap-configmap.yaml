@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-stack-bootstrap
+  namespace: media
+data:
+  bootstrap.py: |
+    #!/usr/bin/env python3
+    """
+    Wires up the media-stack apps after they start.
+    Runs as a sidecar in the same pod so all URLs are localhost.
+    Idempotent — skips anything already configured.
+    """
+    import json, os, time, urllib.request, urllib.error, xml.etree.ElementTree as ET
+
+    RADARR_URL   = "http://localhost:7878"
+    SONARR_URL   = "http://localhost:8989"
+    PROWLARR_URL = "http://localhost:9696"
+
+    def read_api_key(path, max_wait=600):
+        deadline = time.time() + max_wait
+        while time.time() < deadline:
+            try:
+                key = ET.parse(path).getroot().findtext("ApiKey")
+                if key:
+                    return key
+            except Exception:
+                pass
+            time.sleep(5)
+        raise RuntimeError(f"API key not found in {path} after {max_wait}s")
+
+    def get(url, api_key):
+        req = urllib.request.Request(url, headers={"X-Api-Key": api_key})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read())
+
+    def post(url, api_key, payload):
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data, method="POST",
+            headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            content = r.read()
+            return json.loads(content) if content else {}
+
+    def wait_ready(base_url, api_key, name, ver="v3"):
+        print(f"Waiting for {name}...", flush=True)
+        for _ in range(120):
+            try:
+                get(f"{base_url}/api/{ver}/system/status", api_key)
+                print(f"{name} ready", flush=True)
+                return
+            except Exception:
+                pass
+            time.sleep(5)
+        raise RuntimeError(f"{name} not ready after 10 minutes")
+
+    def add_qbittorrent_client(base_url, api_key, app, qb_user, qb_pass):
+        clients = get(f"{base_url}/api/v3/downloadclient", api_key)
+        if any(c.get("name") == "qBittorrent" for c in clients):
+            print(f"{app}: qBittorrent already configured", flush=True)
+            return
+        is_radarr = "7878" in base_url
+        payload = {
+            "name": "qBittorrent",
+            "enable": True,
+            "protocol": "torrent",
+            "priority": 1,
+            "removeCompletedDownloads": True,
+            "removeFailedDownloads": True,
+            "fields": [
+                {"name": "host",     "value": "localhost"},
+                {"name": "port",     "value": 8080},
+                {"name": "useSsl",   "value": False},
+                {"name": "urlBase",  "value": "/"},
+                {"name": "username", "value": qb_user},
+                {"name": "password", "value": qb_pass},
+                {"name": "movieCategory" if is_radarr else "tvCategory",
+                 "value": "radarr" if is_radarr else "sonarr"},
+            ],
+            "implementationName": "qBittorrent",
+            "implementation":     "QBittorrent",
+            "configContract":     "QBittorrentSettings",
+            "tags": [],
+        }
+        post(f"{base_url}/api/v3/downloadclient", api_key, payload)
+        print(f"{app}: qBittorrent download client added", flush=True)
+
+    def add_flaresolverr(prowlarr_key):
+        proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)
+        if any(p.get("name") == "FlareSolverr" for p in proxies):
+            print("Prowlarr: FlareSolverr already configured", flush=True)
+            return
+        post(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key, {
+            "name": "FlareSolverr",
+            "implementation":  "FlareSolverr",
+            "configContract":  "FlareSolverrSettings",
+            "fields": [
+                {"name": "host",           "value": "http://localhost:8191"},
+                {"name": "requestTimeout", "value": 60},
+            ],
+            "tags": [],
+        })
+        print("Prowlarr: FlareSolverr proxy added", flush=True)
+
+    def add_prowlarr_app(prowlarr_key, app_name, app_url, app_key):
+        apps = get(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key)
+        if any(a.get("name") == app_name for a in apps):
+            print(f"Prowlarr: {app_name} already configured", flush=True)
+            return
+        is_radarr = app_name == "Radarr"
+        cats = ([2000,2010,2020,2030,2040,2045,2050,2060]
+                if is_radarr else
+                [5000,5010,5020,5030,5040,5045,5050,5060,5070])
+        post(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key, {
+            "name":           app_name,
+            "implementation": app_name,
+            "configContract": f"{app_name}Settings",
+            "fields": [
+                {"name": "prowlarrUrl",    "value": "http://localhost:9696"},
+                {"name": "baseUrl",        "value": app_url},
+                {"name": "apiKey",         "value": app_key},
+                {"name": "syncCategories", "value": cats},
+            ],
+            "tags": [],
+        })
+        print(f"Prowlarr: {app_name} app added", flush=True)
+
+    print("Bootstrap starting...", flush=True)
+
+    radarr_key   = read_api_key("/config/radarr/config.xml")
+    sonarr_key   = read_api_key("/config/sonarr/config.xml")
+    prowlarr_key = read_api_key("/config/prowlarr/config.xml")
+    qb_user = os.environ.get("QB_USER", "admin")
+    qb_pass = os.environ.get("QB_PASS", "")
+
+    wait_ready(RADARR_URL,   radarr_key,   "Radarr",   "v3")
+    wait_ready(SONARR_URL,   sonarr_key,   "Sonarr",   "v3")
+    wait_ready(PROWLARR_URL, prowlarr_key, "Prowlarr", "v1")
+
+    add_qbittorrent_client(RADARR_URL,   radarr_key,   "Radarr",   qb_user, qb_pass)
+    add_qbittorrent_client(SONARR_URL,   sonarr_key,   "Sonarr",   qb_user, qb_pass)
+    add_flaresolverr(prowlarr_key)
+    add_prowlarr_app(prowlarr_key, "Radarr", RADARR_URL, radarr_key)
+    add_prowlarr_app(prowlarr_key, "Sonarr", SONARR_URL, sonarr_key)
+
+    print("Bootstrap complete!", flush=True)
+    while True:
+        time.sleep(86400)

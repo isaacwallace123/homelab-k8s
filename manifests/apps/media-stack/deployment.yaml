@@ -228,8 +228,6 @@ spec:
               memory: 1Gi
 
         # ── prowlarr ──────────────────────────────────────────────────────────
-        # After deploying, set FlareSolverr URL in Prowlarr UI to:
-        #   http://localhost:8191
         - name: prowlarr
           image: lscr.io/linuxserver/prowlarr:latest
           env:
@@ -270,6 +268,41 @@ spec:
             limits:
               memory: 1Gi
 
+        # ── bootstrap ─────────────────────────────────────────────────────────
+        # Reads each app's API key from its config.xml, waits for all apps to
+        # start, then wires up qBittorrent download clients, FlareSolverr proxy,
+        # and Prowlarr→Radarr/Sonarr app sync. Idempotent — safe to restart.
+        - name: bootstrap
+          image: python:3-slim
+          command: [python3, /scripts/bootstrap.py]
+          env:
+            - name: QB_USER
+              value: admin
+            - name: QB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: qbittorrent-auth
+                  key: WEBUI_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: config-radarr
+              mountPath: /config/radarr
+              readOnly: true
+            - name: config-sonarr
+              mountPath: /config/sonarr
+              readOnly: true
+            - name: config-prowlarr
+              mountPath: /config/prowlarr
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+
       volumes:
         - name: config-qbittorrent
           persistentVolumeClaim:
@@ -292,3 +325,7 @@ spec:
         - name: tv
           persistentVolumeClaim:
             claimName: tank-tv
+        - name: scripts
+          configMap:
+            name: media-stack-bootstrap
+            defaultMode: 0755
