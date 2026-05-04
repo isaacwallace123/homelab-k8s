@@ -96,11 +96,17 @@ data:
                 opener.open(f"{QB_URL}/api/v2/torrents/editCategory", form)
                 print(f"qBittorrent: category '{cat}' updated → {path}", flush=True)
 
+    def put(url, api_key, payload):
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data, method="PUT",
+            headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            content = r.read()
+            return json.loads(content) if content else {}
+
     def add_qbittorrent_client(base_url, api_key, app, qb_user, qb_pass):
         clients = get(f"{base_url}/api/v3/downloadclient", api_key)
-        if any(c.get("name") == "qBittorrent" for c in clients):
-            print(f"{app}: qBittorrent already configured", flush=True)
-            return
+        existing = next((c for c in clients if c.get("name") == "qBittorrent"), None)
         is_radarr = "7878" in base_url
         payload = {
             "name": "qBittorrent",
@@ -124,8 +130,13 @@ data:
             "configContract":     "QBittorrentSettings",
             "tags": [],
         }
-        post(f"{base_url}/api/v3/downloadclient", api_key, payload)
-        print(f"{app}: qBittorrent download client added", flush=True)
+        if existing:
+            payload["id"] = existing["id"]
+            put(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key, payload)
+            print(f"{app}: qBittorrent download client updated", flush=True)
+        else:
+            post(f"{base_url}/api/v3/downloadclient", api_key, payload)
+            print(f"{app}: qBittorrent download client added", flush=True)
 
     def add_flaresolverr(prowlarr_key):
         proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)
