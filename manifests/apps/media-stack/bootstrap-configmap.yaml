@@ -90,6 +90,11 @@ data:
                     urllib.parse.urlencode({"json": prefs}).encode())
         print("qBittorrent: save path set to /downloads", flush=True)
 
+        # Pre-create category subdirs so Radarr/Sonarr health checks pass
+        for subdir in ["/downloads/radarr", "/downloads/sonarr"]:
+            os.makedirs(subdir, exist_ok=True)
+            print(f"Created {subdir}", flush=True)
+
         # Create per-app categories so downloads land in tidy subdirectories
         for cat, path in [("radarr", "/downloads/radarr"), ("sonarr", "/downloads/sonarr")]:
             form = urllib.parse.urlencode({"category": cat, "savePath": path}).encode()

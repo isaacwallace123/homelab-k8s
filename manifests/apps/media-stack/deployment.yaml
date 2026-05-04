@@ -292,6 +292,8 @@ spec:
             - name: config-prowlarr
               mountPath: /config/prowlarr
               readOnly: true
+            - name: downloads
+              mountPath: /downloads
           resources:
             requests:
               cpu: 10m
