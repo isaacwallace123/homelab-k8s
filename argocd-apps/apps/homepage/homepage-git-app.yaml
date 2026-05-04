@@ -1,6 +1,6 @@
-name: homer
+name: homepage
 namespace: networking
 syncWave: "1"
 repoURL: https://github.com/isaacwallace123/homelab-k8s.git
 targetRevision: main
-appPath: manifests/apps/homer
+appPath: manifests/apps/homepage
