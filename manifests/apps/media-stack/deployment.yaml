@@ -324,14 +324,10 @@ spec:
             limits:
               memory: 1Gi
 
-        # ── overseerr ─────────────────────────────────────────────────────────
+        # ── seerr ─────────────────────────────────────────────────────────────
         - name: overseerr
-          image: lscr.io/linuxserver/overseerr:latest
+          image: ghcr.io/seerr-team/seerr:latest
           env:
-            - name: PUID
-              value: "1000"
-            - name: PGID
-              value: "1000"
             - name: TZ
               value: America/New_York
           ports:
