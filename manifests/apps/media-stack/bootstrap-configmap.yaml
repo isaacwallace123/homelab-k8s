@@ -288,7 +288,7 @@ data:
             "configContract": "PlexServerSettings",
             "tags": [],
             "fields": [
-                {"name": "host",           "value": "plex.media.svc.cluster.local"},
+                {"name": "host",           "value": "192.168.0.241"},
                 {"name": "port",           "value": 32400},
                 {"name": "useSsl",         "value": False},
                 {"name": "authToken",      "value": plex_token},
@@ -304,8 +304,9 @@ data:
             post(f"{base_url}/api/v3/notification", api_key, payload)
             print(f"{app}: Plex notification added", flush=True)
         except urllib.error.HTTPError as e:
-            if e.code == 409:
-                print(f"{app}: Plex notification already exists (skipping)", flush=True)
+            if e.code in (400, 409):
+                body = e.read().decode(errors="replace")
+                print(f"{app}: Plex notification skipped (HTTP {e.code}): {body[:200]}", flush=True)
             else:
                 raise
 
