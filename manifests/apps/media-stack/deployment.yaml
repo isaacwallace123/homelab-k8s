@@ -378,6 +378,9 @@ spec:
             - name: config-sabnzbd
               mountPath: /config/sabnzbd
               readOnly: true
+            - name: config-overseerr
+              mountPath: /config/overseerr
+              readOnly: true
             - name: downloads
               mountPath: /downloads
           resources:
