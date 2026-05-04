@@ -1,122 +1,171 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: homer-config
+  name: homepage-config
   namespace: networking
 data:
-  config.yml: |
-    title: "Homelab"
-    subtitle: "Service Dashboard"
-    logo: "logo.png"
+  settings.yaml: |
+    title: Homelab
+    theme: dark
+    color: slate
+    cardBlur: sm
+    headerStyle: clean
+    hideVersion: true
 
-    header: true
-    footer: false
+  services.yaml: |
+    - Media:
+        - Plex:
+            href: http://192.168.0.241:32400/web
+            icon: plex.png
+            description: Media Server
+        - Overseerr:
+            href: http://192.168.0.241:5055
+            icon: overseerr.png
+            description: Media Requests
+            widget:
+              type: overseerr
+              url: http://192.168.0.241:5055
+              key: "{{HOMEPAGE_VAR_OVERSEERR_KEY}}"
+        - Radarr:
+            href: http://192.168.0.241:7878
+            icon: radarr.png
+            description: Movies
+            widget:
+              type: radarr
+              url: http://192.168.0.241:7878
+              key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
+        - Sonarr:
+            href: http://192.168.0.241:8989
+            icon: sonarr.png
+            description: TV Shows
+            widget:
+              type: sonarr
+              url: http://192.168.0.241:8989
+              key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
+        - Prowlarr:
+            href: http://192.168.0.241:9696
+            icon: prowlarr.png
+            description: Indexers
+            widget:
+              type: prowlarr
+              url: http://192.168.0.241:9696
+              key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
+        - qBittorrent:
+            href: http://192.168.0.241:8080
+            icon: qbittorrent.png
+            description: Torrent Client (VPN)
+            widget:
+              type: qbittorrent
+              url: http://192.168.0.241:8080
+              username: admin
+              password: "{{HOMEPAGE_VAR_QB_PASS}}"
+        - SABnzbd:
+            href: http://192.168.0.241:8090
+            icon: sabnzbd.png
+            description: Usenet Client
+            widget:
+              type: sabnzbd
+              url: http://192.168.0.241:8090
+              key: "{{HOMEPAGE_VAR_SAB_KEY}}"
 
-    columns: 3
-    connectivityCheck: true
+    - Networking:
+        - AdGuard Home:
+            href: http://192.168.0.240
+            icon: adguard-home.png
+            description: DNS & Ad Blocker
+        - Envoy Gateway:
+            href: http://192.168.0.245
+            icon: envoy.png
+            description: Reverse Proxy
 
-    services:
-      - name: "Media"
-        icon: "fas fa-film"
-        items:
-          - name: "Plex"
-            subtitle: "Media Server"
-            url: "http://192.168.0.241:32400/web"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/plex.png"
-          - name: "Radarr"
-            subtitle: "Movie Management"
-            url: "http://192.168.0.241:7878"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/radarr.png"
-          - name: "Sonarr"
-            subtitle: "TV Management"
-            url: "http://192.168.0.241:8989"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/sonarr.png"
-          - name: "Prowlarr"
-            subtitle: "Indexer Manager"
-            url: "http://192.168.0.241:9696"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/prowlarr.png"
-          - name: "qBittorrent"
-            subtitle: "Torrent Client (VPN)"
-            url: "http://192.168.0.241:8080"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/qbittorrent.png"
+    - Monitoring:
+        - Grafana:
+            href: http://192.168.0.247:3000
+            icon: grafana.png
+            description: Metrics & Dashboards
 
-      - name: "Networking"
-        icon: "fas fa-network-wired"
-        items:
-          - name: "AdGuard Home"
-            subtitle: "DNS / Ad Blocker"
-            url: "http://192.168.0.240"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/adguard-home.png"
-          - name: "Envoy Gateway"
-            subtitle: "Reverse Proxy"
-            url: "http://192.168.0.245"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/envoy.png"
+    - Infrastructure:
+        - ArgoCD:
+            href: https://argocd.lan
+            icon: argocd.png
+            description: GitOps Deployments
+        - TrueNAS:
+            href: http://192.168.0.252
+            icon: truenas.png
+            description: NAS Storage
+        - Portfolio:
+            href: https://isaacwallace.dev
+            icon: nextjs.png
+            description: Personal Website
 
-      - name: "Monitoring"
-        icon: "fas fa-chart-line"
-        items:
-          - name: "Grafana"
-            subtitle: "Metrics & Dashboards"
-            url: "http://192.168.0.247:3000"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/grafana.png"
+  widgets.yaml: |
+    - search:
+        provider: google
+        target: _blank
+    - datetime:
+        text_size: xl
+        format:
+          dateStyle: long
+          timeStyle: short
+          hour12: true
 
-      - name: "Infrastructure"
-        icon: "fas fa-server"
-        items:
-          - name: "ArgoCD"
-            subtitle: "GitOps Deployments"
-            url: "https://argocd.lan"
-            logo: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/argocd.png"
+  bookmarks.yaml: |
+    []
+
+  docker.yaml: |
+    {}
+
+  kubernetes.yaml: |
+    mode: disable
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: homer
+  name: homepage
   namespace: networking
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: homer
+      app: homepage
   template:
     metadata:
       labels:
-        app: homer
+        app: homepage
     spec:
       nodeSelector:
         node-role.kubernetes.io/apps: "true"
       containers:
-        - name: homer
-          image: b4bz/homer:latest
+        - name: homepage
+          image: ghcr.io/gethomepage/homepage:latest
           ports:
-            - containerPort: 8080
+            - containerPort: 3000
           volumeMounts:
             - name: config
-              mountPath: /www/assets/config.yml
-              subPath: config.yml
+              mountPath: /app/config
           resources:
             requests:
               cpu: 10m
-              memory: 32Mi
-            limits:
               memory: 64Mi
+            limits:
+              memory: 256Mi
       volumes:
         - name: config
           configMap:
-            name: homer-config
+            name: homepage-config
 ---
-# Dashboard — accessible at http://192.168.0.248:80
+# Dashboard — replaces Homer at http://192.168.0.248
 apiVersion: v1
 kind: Service
 metadata:
-  name: homer
+  name: homepage
   namespace: networking
   annotations:
     metallb.io/loadBalancerIPs: "192.168.0.248"
 spec:
   type: LoadBalancer
   selector:
-    app: homer
+    app: homepage
   ports:
     - port: 80
-      targetPort: 8080
+      targetPort: 3000
