@@ -16,8 +16,8 @@ spec:
     namespace: portfolio
     name: tank-portfolio-uploads
   nfs:
-    server: 192.168.0.254
-    path: /tank/config/portfolio/uploads
+    server: 192.168.0.252
+    path: /mnt/tank/configs/portfolio/uploads
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -152,8 +152,8 @@ spec:
     namespace: networking
     name: tank-config-adguard-work
   nfs:
-    server: 192.168.0.254
-    path: /tank/config/adguard/work
+    server: 192.168.0.252
+    path: /mnt/tank/configs/adguard/work
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -184,8 +184,8 @@ spec:
     namespace: networking
     name: tank-config-adguard-conf
   nfs:
-    server: 192.168.0.254
-    path: /tank/config/adguard/conf
+    server: 192.168.0.252
+    path: /mnt/tank/configs/adguard/conf
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -217,8 +217,8 @@ spec:
     namespace: portfolio
     name: tank-images-minio
   nfs:
-    server: 192.168.0.254
-    path: /tank/config/images/minio
+    server: 192.168.0.252
+    path: /mnt/tank/configs/images/minio
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
