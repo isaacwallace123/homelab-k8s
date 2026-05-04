@@ -301,6 +301,11 @@ spec:
         - name: frontend
           image: ghcr.io/isaacwallace123/portfolio-frontend:latest
           imagePullPolicy: Always
+          command: ["sh", "-c"]
+          args:
+            - |
+              sed -i '/chown -R nextjs:nodejs/s/$/ 2>\/dev\/null || true/' ./docker-entrypoint.sh
+              exec ./docker-entrypoint.sh
           env:
             - name: DATABASE_URL
               valueFrom:
