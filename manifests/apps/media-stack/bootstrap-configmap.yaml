@@ -11,7 +11,7 @@ data:
     Runs as a sidecar in the same pod so all URLs are localhost.
     Idempotent — skips anything already configured.
     """
-    import configparser, http.cookiejar, json, os, time, urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
+    import configparser, http.cookiejar, json, os, re, time, urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 
     RADARR_URL   = "http://localhost:7878"
     SONARR_URL   = "http://localhost:8989"
@@ -23,11 +23,11 @@ data:
         deadline = time.time() + max_wait
         while time.time() < deadline:
             try:
-                cfg = configparser.RawConfigParser()
-                cfg.read(path)
-                key = cfg.get("misc", "api_key", fallback=None)
-                if key and len(key) > 8:
-                    return key
+                with open(path) as f:
+                    content = f.read()
+                m = re.search(r'^api_key\s*=\s*(\S+)', content, re.MULTILINE)
+                if m and len(m.group(1)) > 8:
+                    return m.group(1)
             except Exception:
                 pass
             time.sleep(5)
