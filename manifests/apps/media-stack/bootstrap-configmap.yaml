@@ -84,6 +84,17 @@ data:
             print(f"qBittorrent login failed: {result} — skipping QB config", flush=True)
             return
 
+        # Sync WebUI credentials from the secret — localhost auth bypass means
+        # bootstrap always gets "Ok." on login, so we must explicitly push the
+        # correct password so external browser logins work.
+        creds = json.dumps({
+            "web_ui_username": qb_user,
+            "web_ui_password": qb_pass,
+        })
+        opener.open(f"{QB_URL}/api/v2/app/setPreferences",
+                    urllib.parse.urlencode({"json": creds}).encode())
+        print("qBittorrent: WebUI credentials synced", flush=True)
+
         # Set default save path and disable temp path
         prefs = json.dumps({"save_path": "/downloads", "temp_path_enabled": False})
         opener.open(f"{QB_URL}/api/v2/app/setPreferences",
