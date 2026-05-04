@@ -62,8 +62,8 @@ data:
         post(f"{ADGUARD_URL}/control/install/configure", payload)
         print("AdGuard Home: credentials configured", flush=True)
     except urllib.error.HTTPError as e:
-        if e.code == 403:
-            # Already configured — verify our credentials work
+        if e.code in (403, 404):
+            # Already configured — install endpoints are disabled; verify our credentials work
             try:
                 get(f"{ADGUARD_URL}/control/status", user, password)
                 print("AdGuard Home: credentials verified OK", flush=True)
