@@ -296,9 +296,13 @@ data:
 
     print("Bootstrap starting...", flush=True)
 
+    print("Reading Radarr API key...", flush=True)
     radarr_key   = read_api_key("/config/radarr/config.xml")
+    print("Reading Sonarr API key...", flush=True)
     sonarr_key   = read_api_key("/config/sonarr/config.xml")
+    print("Reading Prowlarr API key...", flush=True)
     prowlarr_key = read_api_key("/config/prowlarr/config.xml")
+    print("Reading SABnzbd API key...", flush=True)
     sabnzbd_key  = read_sabnzbd_key("/config/sabnzbd/sabnzbd.ini")
     qb_user = os.environ.get("QB_USER", "admin")
     qb_pass = os.environ.get("QB_PASS", "")
