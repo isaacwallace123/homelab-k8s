@@ -242,6 +242,19 @@ data:
         except urllib.error.HTTPError as e:
             print(f"WARNING: {app}: root folder {path} failed (HTTP {e.code}) — check permissions", flush=True)
 
+    def create_sabnzbd_categories(api_key):
+        for cat, path in [("radarr", "/downloads/radarr"), ("sonarr", "/downloads/sonarr")]:
+            os.makedirs(path, exist_ok=True)
+            params = urllib.parse.urlencode({
+                "mode": "set_cat", "name": cat, "dir": path,
+                "pp": "3", "script": "None", "priority": "-100",
+                "output": "json", "apikey": api_key,
+            })
+            req = urllib.request.Request(f"{SAB_URL}/api?{params}")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                json.loads(r.read())
+            print(f"SABnzbd: category '{cat}' → {path}", flush=True)
+
     def add_flaresolverr(prowlarr_key):
         proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)
         if any(p.get("name") == "FlareSolverr" for p in proxies):
@@ -317,6 +330,7 @@ data:
     add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")
     add_qbittorrent_client(RADARR_URL,   radarr_key,   "Radarr",   qb_user, qb_pass)
     add_qbittorrent_client(SONARR_URL,   sonarr_key,   "Sonarr",   qb_user, qb_pass)
+    create_sabnzbd_categories(sabnzbd_key)
     add_sabnzbd_client(RADARR_URL,   radarr_key,   "Radarr",   sabnzbd_key)
     add_sabnzbd_client(SONARR_URL,   sonarr_key,   "Sonarr",   sabnzbd_key)
     add_flaresolverr(prowlarr_key)
