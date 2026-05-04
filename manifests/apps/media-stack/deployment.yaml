@@ -113,10 +113,12 @@ spec:
                 sed -i 's/^port = .*/port = 8090/' "$cfg"
                 sed -i 's/^host = .*/host = 0.0.0.0/' "$cfg"
                 sed -i 's/^complete_dir = .*/complete_dir = \/downloads/' "$cfg"
+                sed -i 's/^download_dir = .*/download_dir = \/downloads\/incomplete/' "$cfg"
+                grep -q '^download_dir' "$cfg" || sed -i '/^\[misc\]/a download_dir = /downloads/incomplete' "$cfg"
                 echo "SABnzbd config updated"
               else
                 mkdir -p /config
-                printf '[misc]\nport = 8090\nhost = 0.0.0.0\ncomplete_dir = /downloads\n' > "$cfg"
+                printf '[misc]\nport = 8090\nhost = 0.0.0.0\ncomplete_dir = /downloads\ndownload_dir = /downloads/incomplete\n' > "$cfg"
                 echo "SABnzbd config created"
               fi
           volumeMounts:
