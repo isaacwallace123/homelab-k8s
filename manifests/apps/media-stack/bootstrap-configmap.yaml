@@ -108,33 +108,39 @@ data:
         clients = get(f"{base_url}/api/v3/downloadclient", api_key)
         existing = next((c for c in clients if c.get("name") == "qBittorrent"), None)
         is_radarr = "7878" in base_url
-        payload = {
-            "name": "qBittorrent",
-            "enable": True,
-            "protocol": "torrent",
-            "priority": 1,
-            "removeCompletedDownloads": True,
-            "removeFailedDownloads": True,
-            "fields": [
-                {"name": "host",     "value": "localhost"},
-                {"name": "port",     "value": 8080},
-                {"name": "useSsl",   "value": False},
-                {"name": "urlBase",  "value": "/"},
-                {"name": "username", "value": qb_user},
-                {"name": "password", "value": qb_pass},
-                {"name": "movieCategory" if is_radarr else "tvCategory",
-                 "value": "radarr" if is_radarr else "sonarr"},
-            ],
-            "implementationName": "qBittorrent",
-            "implementation":     "QBittorrent",
-            "configContract":     "QBittorrentSettings",
-            "tags": [],
-        }
         if existing:
-            payload["id"] = existing["id"]
-            put(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key, payload)
+            # Patch credentials into the full existing payload so Radarr/Sonarr
+            # doesn't reject a partial PUT (it requires all fields back).
+            for field in existing.get("fields", []):
+                if field["name"] == "username":
+                    field["value"] = qb_user
+                elif field["name"] == "password":
+                    field["value"] = qb_pass
+            put(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key, existing)
             print(f"{app}: qBittorrent download client updated", flush=True)
         else:
+            payload = {
+                "name": "qBittorrent",
+                "enable": True,
+                "protocol": "torrent",
+                "priority": 1,
+                "removeCompletedDownloads": True,
+                "removeFailedDownloads": True,
+                "fields": [
+                    {"name": "host",     "value": "localhost"},
+                    {"name": "port",     "value": 8080},
+                    {"name": "useSsl",   "value": False},
+                    {"name": "urlBase",  "value": "/"},
+                    {"name": "username", "value": qb_user},
+                    {"name": "password", "value": qb_pass},
+                    {"name": "movieCategory" if is_radarr else "tvCategory",
+                     "value": "radarr" if is_radarr else "sonarr"},
+                ],
+                "implementationName": "qBittorrent",
+                "implementation":     "QBittorrent",
+                "configContract":     "QBittorrentSettings",
+                "tags": [],
+            }
             post(f"{base_url}/api/v3/downloadclient", api_key, payload)
             print(f"{app}: qBittorrent download client added", flush=True)
 
