@@ -18,7 +18,6 @@ data:
     PROWLARR_URL  = "http://localhost:9696"
     QB_URL        = "http://localhost:8080"
     SAB_URL       = "http://localhost:8090"
-    OVERSEERR_URL = "http://localhost:5055"
 
     def read_sabnzbd_key(path, max_wait=600):
         deadline = time.time() + max_wait
@@ -295,80 +294,6 @@ data:
             else:
                 raise
 
-    def wait_overseerr_initialized(max_wait=3600):
-        print("Waiting for Overseerr to be initialized...", flush=True)
-        deadline = time.time() + max_wait
-        while time.time() < deadline:
-            try:
-                req = urllib.request.Request(f"{OVERSEERR_URL}/api/v1/settings/public")
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    if json.loads(r.read()).get("initialized"):
-                        print("Overseerr initialized", flush=True)
-                        return True
-            except Exception:
-                pass
-            time.sleep(10)
-        print("WARNING: Overseerr not initialized after timeout — skipping", flush=True)
-        return False
-
-    def read_overseerr_api_key(max_wait=120):
-        path = "/config/overseerr/settings.json"
-        deadline = time.time() + max_wait
-        while time.time() < deadline:
-            try:
-                with open(path) as f:
-                    key = json.load(f).get("apiKey", "")
-                if key:
-                    return key
-            except Exception:
-                pass
-            time.sleep(5)
-        raise RuntimeError(f"Overseerr API key not found in {path}")
-
-    def configure_overseerr(radarr_key, sonarr_key):
-        if not wait_overseerr_initialized():
-            return
-        try:
-            api_key = read_overseerr_api_key()
-        except RuntimeError as e:
-            print(f"WARNING: {e} — skipping Overseerr config", flush=True)
-            return
-        try:
-            existing = get(f"{OVERSEERR_URL}/api/v1/settings/radarr", api_key)
-            if any(s.get("hostname") == "localhost" and s.get("port") == 7878 for s in existing):
-                print("Overseerr: Radarr already configured", flush=True)
-            else:
-                profiles = post(f"{OVERSEERR_URL}/api/v1/settings/radarr/test", api_key,
-                    {"hostname": "localhost", "port": 7878, "apiKey": radarr_key, "useSsl": False, "baseUrl": ""})
-                profile_id = profiles[0]["id"] if isinstance(profiles, list) and profiles else 1
-                post(f"{OVERSEERR_URL}/api/v1/settings/radarr", api_key, {
-                    "name": "Radarr", "hostname": "localhost", "port": 7878,
-                    "apiKey": radarr_key, "useSsl": False, "baseUrl": "",
-                    "activeProfileId": profile_id, "activeDirectory": "/movies",
-                    "is4k": False, "isDefault": True, "enableScan": False,
-                    "minimumAvailability": "released", "tags": [],
-                })
-                print("Overseerr: Radarr added", flush=True)
-
-            existing = get(f"{OVERSEERR_URL}/api/v1/settings/sonarr", api_key)
-            if any(s.get("hostname") == "localhost" and s.get("port") == 8989 for s in existing):
-                print("Overseerr: Sonarr already configured", flush=True)
-            else:
-                profiles = post(f"{OVERSEERR_URL}/api/v1/settings/sonarr/test", api_key,
-                    {"hostname": "localhost", "port": 8989, "apiKey": sonarr_key, "useSsl": False, "baseUrl": ""})
-                profile_id = profiles[0]["id"] if isinstance(profiles, list) and profiles else 1
-                post(f"{OVERSEERR_URL}/api/v1/settings/sonarr", api_key, {
-                    "name": "Sonarr", "hostname": "localhost", "port": 8989,
-                    "apiKey": sonarr_key, "useSsl": False, "baseUrl": "",
-                    "activeProfileId": profile_id, "activeDirectory": "/tv",
-                    "activeAnimeProfileId": profile_id, "activeAnimeDirectory": "/tv",
-                    "is4k": False, "isDefault": True, "enableScan": False,
-                    "tags": [], "animeTags": [],
-                })
-                print("Overseerr: Sonarr added", flush=True)
-        except Exception as e:
-            print(f"WARNING: Overseerr config failed: {e} — skipping", flush=True)
-
     print("Bootstrap starting...", flush=True)
 
     print("Reading Radarr API key...", flush=True)
@@ -399,6 +324,5 @@ data:
     add_prowlarr_app(prowlarr_key, "Sonarr", SONARR_URL, sonarr_key)
 
     print("Bootstrap complete!", flush=True)
-    configure_overseerr(radarr_key, sonarr_key)
     while True:
         time.sleep(86400)

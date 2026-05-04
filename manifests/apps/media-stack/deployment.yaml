@@ -322,7 +322,7 @@ spec:
               name: overseerr-ui
           volumeMounts:
             - name: config-overseerr
-              mountPath: /config
+              mountPath: /app/config
           resources:
             requests:
               cpu: 100m
@@ -360,9 +360,6 @@ spec:
               readOnly: true
             - name: config-sabnzbd
               mountPath: /config/sabnzbd
-              readOnly: true
-            - name: config-overseerr
-              mountPath: /config/overseerr
               readOnly: true
             - name: downloads
               mountPath: /downloads
