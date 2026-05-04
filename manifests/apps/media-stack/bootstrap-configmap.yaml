@@ -265,6 +265,50 @@ data:
             else:
                 raise
 
+    def add_plex_notification(base_url, api_key, app, plex_token):
+        if not plex_token:
+            print(f"{app}: PLEX_TOKEN not set — skipping Plex notification", flush=True)
+            return
+        notifications = get(f"{base_url}/api/v3/notification", api_key)
+        existing = next((n for n in notifications if n.get("name") == "Plex Media Server"), None)
+        if existing:
+            print(f"{app}: Plex notification already configured", flush=True)
+            return
+        is_radarr = "7878" in base_url
+        payload = {
+            "name": "Plex Media Server",
+            "enable": True,
+            "onGrab": False,
+            "onDownload": True,
+            "onUpgrade": True,
+            "onRename": True,
+            "onHealthIssue": False,
+            "onApplicationUpdate": False,
+            "implementation": "PlexServer",
+            "configContract": "PlexServerSettings",
+            "tags": [],
+            "fields": [
+                {"name": "host",           "value": "plex.media.svc.cluster.local"},
+                {"name": "port",           "value": 32400},
+                {"name": "useSsl",         "value": False},
+                {"name": "authToken",      "value": plex_token},
+                {"name": "updateLibrary",  "value": True},
+                {"name": "isHomeUser",     "value": True},
+            ],
+        }
+        if is_radarr:
+            payload.update({"onMovieDelete": False, "onMovieFileDelete": False, "onMovieFileDeleteForUpgrade": True})
+        else:
+            payload.update({"onSeriesDelete": False, "onEpisodeFileDelete": False, "onEpisodeFileDeleteForUpgrade": True})
+        try:
+            post(f"{base_url}/api/v3/notification", api_key, payload)
+            print(f"{app}: Plex notification added", flush=True)
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                print(f"{app}: Plex notification already exists (skipping)", flush=True)
+            else:
+                raise
+
     def add_prowlarr_app(prowlarr_key, app_name, app_url, app_key):
         apps = get(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key)
         if any(a.get("name") == app_name for a in apps):
@@ -304,8 +348,9 @@ data:
     prowlarr_key = read_api_key("/config/prowlarr/config.xml")
     print("Reading SABnzbd API key...", flush=True)
     sabnzbd_key  = read_sabnzbd_key("/config/sabnzbd/sabnzbd.ini")
-    qb_user = os.environ.get("QB_USER", "admin")
-    qb_pass = os.environ.get("QB_PASS", "")
+    qb_user   = os.environ.get("QB_USER", "admin")
+    qb_pass   = os.environ.get("QB_PASS", "")
+    plex_token = os.environ.get("PLEX_TOKEN", "")
 
     wait_ready(RADARR_URL,   radarr_key,   "Radarr",   "v3")
     wait_ready(SONARR_URL,   sonarr_key,   "Sonarr",   "v3")
@@ -322,6 +367,8 @@ data:
     add_flaresolverr(prowlarr_key)
     add_prowlarr_app(prowlarr_key, "Radarr", RADARR_URL, radarr_key)
     add_prowlarr_app(prowlarr_key, "Sonarr", SONARR_URL, sonarr_key)
+    add_plex_notification(RADARR_URL, radarr_key, "Radarr", plex_token)
+    add_plex_notification(SONARR_URL, sonarr_key, "Sonarr", plex_token)
 
     print("Bootstrap complete!", flush=True)
     while True:

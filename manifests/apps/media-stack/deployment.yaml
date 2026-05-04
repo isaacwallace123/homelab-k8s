@@ -325,6 +325,12 @@ spec:
                   name: qbittorrent-auth
                   key: WEBUI_PASSWORD
                   optional: true
+            - name: PLEX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: plex-auth
+                  key: PLEX_TOKEN
+                  optional: true
           volumeMounts:
             - name: scripts
               mountPath: /scripts

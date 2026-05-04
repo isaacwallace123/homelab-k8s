@@ -19,6 +19,10 @@ data:
             href: http://192.168.0.241:32400/web
             icon: plex.png
             description: Media Server
+            widget:
+              type: plex
+              url: http://192.168.0.241:32400
+              key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
         - Overseerr:
             href: http://192.168.0.241:5055
             icon: overseerr.png
@@ -74,6 +78,9 @@ data:
             href: http://192.168.0.240
             icon: adguard-home.png
             description: DNS & Ad Blocker
+            widget:
+              type: adguard
+              url: http://192.168.0.240
         - Cudy Router:
             href: http://192.168.0.1
             icon: router.png
@@ -93,45 +100,86 @@ data:
               url: http://192.168.0.247:3000
               username: admin
               password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
-        - CPU:
+        - Cluster:
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
-            description: Cluster Average
+            description: CPU · RAM · Network
             widget:
               type: prometheusmetric
               url: http://prometheus.monitoring.svc.cluster.local:9090
-              query: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-              refreshInterval: 15000
-              format:
-                type: number
-                scale: 1
-                suffix: "%"
-                maximumFractionDigits: 1
-        - Memory:
+              refreshInterval: 10000
+              metrics:
+                - label: CPU
+                  query: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+                  format:
+                    type: number
+                    scale: 1
+                    suffix: "%"
+                    options:
+                      maximumFractionDigits: 1
+                - label: Memory
+                  query: (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))) * 100
+                  format:
+                    type: number
+                    scale: 1
+                    suffix: "%"
+                    options:
+                      maximumFractionDigits: 1
+                - label: Net In
+                  query: sum(rate(node_network_receive_bytes_total{device!~"lo|cni.*|veth.*|tunl.*|flannel.*"}[5m]))
+                  format:
+                    type: number
+                    scale: 0.000001
+                    suffix: " MB/s"
+                    options:
+                      maximumFractionDigits: 1
+                - label: Net Out
+                  query: sum(rate(node_network_transmit_bytes_total{device!~"lo|cni.*|veth.*|tunl.*|flannel.*"}[5m]))
+                  format:
+                    type: number
+                    scale: 0.000001
+                    suffix: " MB/s"
+                    options:
+                      maximumFractionDigits: 1
+        - Disk I/O:
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
-            description: Cluster Average
+            description: Storage Throughput
             widget:
               type: prometheusmetric
               url: http://prometheus.monitoring.svc.cluster.local:9090
-              query: (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))) * 100
-              refreshInterval: 15000
-              format:
-                type: number
-                scale: 1
-                suffix: "%"
-                maximumFractionDigits: 1
-        - Network In:
-            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
-            description: Cluster Total
-            widget:
-              type: prometheusmetric
-              url: http://prometheus.monitoring.svc.cluster.local:9090
-              query: sum(rate(node_network_receive_bytes_total{device!~"lo|cni.*|veth.*|tunl.*|flannel.*"}[5m]))
-              refreshInterval: 15000
-              format:
-                type: number
-                scale: 0.000001
-                suffix: " MB/s"
-                maximumFractionDigits: 2
+              refreshInterval: 10000
+              metrics:
+                - label: Read
+                  query: sum(rate(node_disk_read_bytes_total[5m]))
+                  format:
+                    type: number
+                    scale: 0.000001
+                    suffix: " MB/s"
+                    options:
+                      maximumFractionDigits: 1
+                - label: Write
+                  query: sum(rate(node_disk_written_bytes_total[5m]))
+                  format:
+                    type: number
+                    scale: 0.000001
+                    suffix: " MB/s"
+                    options:
+                      maximumFractionDigits: 1
+                - label: IOPS R
+                  query: sum(rate(node_disk_reads_completed_total[5m]))
+                  format:
+                    type: number
+                    scale: 1
+                    suffix: "/s"
+                    options:
+                      maximumFractionDigits: 0
+                - label: IOPS W
+                  query: sum(rate(node_disk_writes_completed_total[5m]))
+                  format:
+                    type: number
+                    scale: 1
+                    suffix: "/s"
+                    options:
+                      maximumFractionDigits: 0
 
     - Infrastructure:
         - ArgoCD:
@@ -172,24 +220,25 @@ data:
     mode: disable
 
   custom.css: |
-    /* ── Kleff: dark · sandy-gold · glass · depth ──────────────────────── */
-    /* Class names verified from live DOM inspection                        */
+    /* ── Kleff: dark · sandy-gold · glass · Apple-widget depth ─────────── */
 
     :root {
       --gold:         #c9a84c;
-      --gold-bright:  #e2c06a;
-      --gold-glow:    rgba(201,168,76,0.22);
-      --gold-border:  rgba(201,168,76,0.20);
-      --gold-subtle:  rgba(201,168,76,0.08);
-      --glass:        rgba(12,10,6,0.65);
-      --text-hi:      rgba(245,232,205,0.93);
-      --text-lo:      rgba(190,168,118,0.55);
+      --gold-bright:  #e8ca72;
+      --gold-dim:     #a8883a;
+      --gold-glow:    rgba(201,168,76,0.25);
+      --gold-border:  rgba(201,168,76,0.18);
+      --glass:        rgba(14,11,6,0.72);
+      --glass-hover:  rgba(24,19,9,0.85);
+      --text-hi:      rgba(250,238,210,0.95);
+      --text-lo:      rgba(185,160,105,0.52);
+      --radius:       20px;
     }
 
-    /* ── Page background with depth blobs ── */
-    body { background: #090805 !important; }
+    /* ── Page background ── */
+    body { background: #080703 !important; }
     #page_wrapper {
-      background: #090805 !important;
+      background: #080703 !important;
       position: relative;
     }
     #page_wrapper::before {
@@ -199,15 +248,15 @@ data:
       pointer-events: none;
       z-index: 0;
       background:
-        radial-gradient(circle 800px at  8% 55%, rgba(201,168,76,0.07) 0%, transparent 60%),
-        radial-gradient(circle 600px at 92% 18%, rgba(201,168,76,0.05) 0%, transparent 55%),
-        radial-gradient(circle 500px at 50% 95%, rgba(201,168,76,0.04) 0%, transparent 50%);
+        radial-gradient(ellipse 900px 600px at  5% 60%, rgba(201,168,76,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 700px 500px at 95% 15%, rgba(201,168,76,0.06) 0%, transparent 55%),
+        radial-gradient(ellipse 600px 400px at 55% 98%, rgba(201,168,76,0.04) 0%, transparent 50%);
     }
 
     /* ── Animations ── */
     @keyframes kleff-in {
-      from { opacity: 0; transform: translateY(16px) scale(0.985); }
-      to   { opacity: 1; transform: translateY(0)    scale(1);     }
+      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      to   { opacity: 1; transform: none; }
     }
     @keyframes kleff-fade {
       from { opacity: 0; }
@@ -216,150 +265,170 @@ data:
 
     /* ── Header bar ── */
     #information-widgets {
-      border-color: rgba(201,168,76,0.15) !important;
+      border-color: rgba(201,168,76,0.12) !important;
       animation: kleff-fade 0.5s ease-out both;
     }
 
     /* ── Search input ── */
     input.overflow-hidden {
-      background: rgba(14,11,6,0.80) !important;
-      border-color: rgba(201,168,76,0.22) !important;
-      border-radius: 10px !important;
+      background: rgba(16,12,6,0.85) !important;
+      border-color: rgba(201,168,76,0.20) !important;
+      border-radius: 12px !important;
       color: var(--text-hi) !important;
-      transition: border-color 0.22s, box-shadow 0.22s !important;
+      transition: border-color 0.2s, box-shadow 0.2s !important;
     }
     input.overflow-hidden:focus {
       border-color: var(--gold) !important;
-      box-shadow: 0 0 0 3px rgba(201,168,76,0.14) !important;
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.12) !important;
     }
-    input.overflow-hidden::placeholder { color: rgba(190,168,118,0.38) !important; }
+    input.overflow-hidden::placeholder { color: rgba(185,160,105,0.32) !important; }
 
-    /* Search submit button */
     #information-widgets button {
-      background: rgba(201,168,76,0.12) !important;
+      background: rgba(201,168,76,0.10) !important;
       transition: background 0.2s !important;
     }
-    #information-widgets button:hover { background: rgba(201,168,76,0.22) !important; }
+    #information-widgets button:hover { background: rgba(201,168,76,0.20) !important; }
 
     /* ── Datetime ── */
     .information-widget-datetime span {
       color: var(--gold) !important;
       font-weight: 500 !important;
-      text-shadow: 0 0 20px rgba(201,168,76,0.35);
+      text-shadow: 0 0 24px rgba(201,168,76,0.30);
     }
 
     /* ── Category group header ── */
     .service-group-name {
-      color: var(--gold) !important;
-      font-size: 0.60rem !important;
-      font-weight: 700 !important;
-      letter-spacing: 0.18em !important;
+      color: var(--gold-dim) !important;
+      font-size: 0.58rem !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.20em !important;
       text-transform: uppercase !important;
-      text-shadow: 0 0 20px rgba(201,168,76,0.40) !important;
     }
 
-    /* ── Service card (actual glass tile) ── */
+    /* ── Service card — Apple widget shape ── */
     .service-card {
       background: var(--glass) !important;
-      backdrop-filter: blur(26px) saturate(120%) !important;
-      -webkit-backdrop-filter: blur(26px) saturate(120%) !important;
+      backdrop-filter: blur(32px) saturate(130%) !important;
+      -webkit-backdrop-filter: blur(32px) saturate(130%) !important;
       border: 1px solid var(--gold-border) !important;
-      border-radius: 13px !important;
+      border-radius: var(--radius) !important;
       box-shadow:
-        0 2px 18px rgba(0,0,0,0.55),
-        inset 0 1px 0 rgba(255,255,255,0.04) !important;
+        0 4px 24px rgba(0,0,0,0.60),
+        0 1px  0  rgba(255,255,255,0.04) inset,
+        0 -1px 0  rgba(0,0,0,0.30) inset !important;
       transition:
-        background     0.28s ease,
-        border-color   0.28s ease,
-        box-shadow     0.28s ease,
-        transform      0.28s cubic-bezier(0.22,1,0.36,1) !important;
+        background   0.25s ease,
+        border-color 0.25s ease,
+        box-shadow   0.25s ease,
+        transform    0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
       overflow: hidden !important;
+      position: relative !important;
     }
 
-    /* Top-left gold sheen on every card */
-    .service-card::after {
+    /* Diagonal sheen stripe */
+    .service-card::before {
       content: '';
       position: absolute;
       inset: 0;
       pointer-events: none;
-      border-radius: 13px;
-      background: linear-gradient(135deg, rgba(201,168,76,0.06) 0%, transparent 40%);
+      border-radius: var(--radius);
+      background: linear-gradient(
+        135deg,
+        rgba(201,168,76,0.07) 0%,
+        transparent 45%,
+        rgba(201,168,76,0.02) 100%
+      );
     }
 
     .service-card:hover {
-      background: rgba(22,18,9,0.82) !important;
-      border-color: rgba(201,168,76,0.45) !important;
-      transform: translateY(-4px) !important;
+      background: var(--glass-hover) !important;
+      border-color: rgba(201,168,76,0.40) !important;
+      transform: translateY(-3px) scale(1.005) !important;
       box-shadow:
-        0 14px 44px rgba(0,0,0,0.58),
-        0 0   28px var(--gold-glow),
-        inset 0 1px 0 rgba(255,255,255,0.07) !important;
+        0 16px 48px rgba(0,0,0,0.65),
+        0  0   32px var(--gold-glow),
+        0  1px  0  rgba(255,255,255,0.06) inset !important;
     }
 
-    /* Staggered card entrance per group */
-    .service:nth-child(1)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.04s both; }
-    .service:nth-child(2)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.08s both; }
-    .service:nth-child(3)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.12s both; }
-    .service:nth-child(4)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.16s both; }
-    .service:nth-child(5)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.20s both; }
-    .service:nth-child(6)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.24s both; }
-    .service:nth-child(7)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.28s both; }
-    .service:nth-child(8)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.32s both; }
-    .service:nth-child(9)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.36s both; }
-    .service:nth-child(10) .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.40s both; }
+    /* Staggered entrance */
+    .service:nth-child(1)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.03s both; }
+    .service:nth-child(2)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.07s both; }
+    .service:nth-child(3)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.11s both; }
+    .service:nth-child(4)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.15s both; }
+    .service:nth-child(5)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.19s both; }
+    .service:nth-child(6)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.23s both; }
+    .service:nth-child(7)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.27s both; }
+    .service:nth-child(8)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.31s both; }
+    .service:nth-child(9)  .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.35s both; }
+    .service:nth-child(10) .service-card { animation: kleff-in 0.50s cubic-bezier(0.34,1.56,0.64,1) 0.39s both; }
 
     /* ── Service name & description ── */
     .service-name {
       color: var(--text-hi) !important;
+      font-size: 0.95rem !important;
       font-weight: 600 !important;
+      letter-spacing: -0.01em !important;
     }
     .service-description {
       color: var(--text-lo) !important;
+      font-size: 0.72rem !important;
     }
 
-    /* ── Icon — glow on hover ── */
+    /* ── Icon ── */
     .service-card:hover .service-icon img,
     .service-card:hover .service-icon svg {
-      filter: drop-shadow(0 0 8px rgba(201,168,76,0.55)) brightness(1.08) !important;
-      transition: filter 0.28s ease !important;
+      filter: drop-shadow(0 0 10px rgba(201,168,76,0.60)) brightness(1.10) !important;
+      transition: filter 0.25s ease !important;
     }
 
-    /* ── Widget stat cells (dl/dt/dd rows) ── */
+    /* ── Widget stat cells — Apple number-first layout ── */
     .service-card dl {
-      gap: 0.35rem !important;
+      gap: 0.30rem !important;
     }
     .service-card dl > div {
-      background: rgba(201,168,76,0.06) !important;
-      border: 1px solid rgba(201,168,76,0.12) !important;
-      border-radius: 8px !important;
-      transition: background 0.22s !important;
+      background: rgba(201,168,76,0.055) !important;
+      border: 1px solid rgba(201,168,76,0.10) !important;
+      border-radius: 12px !important;
+      padding: 0.55rem 0.65rem !important;
+      transition: background 0.20s !important;
+      flex-direction: column-reverse !important;
+      align-items: flex-start !important;
+      gap: 0 !important;
     }
     .service-card:hover dl > div {
-      background: rgba(201,168,76,0.10) !important;
+      background: rgba(201,168,76,0.09) !important;
     }
-    /* Stat value — gold */
+
+    /* Stat value — big, gold, Apple-weight */
     .service-card dl dt {
       color: var(--gold-bright) !important;
-      font-weight: 700 !important;
+      font-size: 1.30rem !important;
+      font-weight: 800 !important;
+      line-height: 1.1 !important;
+      letter-spacing: -0.02em !important;
     }
-    /* Stat label — dim */
+    /* Stat label — tiny, secondary */
     .service-card dl dd {
       color: var(--text-lo) !important;
-      font-weight: 500 !important;
+      font-size: 0.60rem !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.06em !important;
+      text-transform: uppercase !important;
+      line-height: 1.2 !important;
     }
 
     /* ── Scrollbar ── */
-    ::-webkit-scrollbar       { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: rgba(12,10,6,0.5); }
-    ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.28); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.50); }
+    ::-webkit-scrollbar       { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: rgba(10,8,4,0.4); }
+    ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.25); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.45); }
 
     /* ── Error state ── */
     [class*="bg-red-500"] {
-      background: rgba(140,25,25,0.35) !important;
-      border: 1px solid rgba(220,60,60,0.22) !important;
+      background: rgba(130,20,20,0.35) !important;
+      border: 1px solid rgba(210,55,55,0.20) !important;
       backdrop-filter: blur(10px) !important;
-      border-radius: 8px !important;
+      border-radius: 12px !important;
     }
 ---
 apiVersion: apps/v1
@@ -420,6 +489,11 @@ spec:
                 secretKeyRef:
                   name: homepage-secrets
                   key: SAB_KEY
+            - name: HOMEPAGE_VAR_PLEX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: homepage-secrets
+                  key: PLEX_TOKEN
           ports:
             - containerPort: 3000
           volumeMounts:
