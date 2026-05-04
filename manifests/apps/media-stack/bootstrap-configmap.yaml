@@ -39,9 +39,14 @@ data:
         data = json.dumps(payload).encode()
         req = urllib.request.Request(url, data=data, method="POST",
             headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            content = r.read()
-            return json.loads(content) if content else {}
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                content = r.read()
+                return json.loads(content) if content else {}
+        except urllib.error.HTTPError as e:
+            body = e.read().decode(errors="replace")
+            print(f"POST {url} → HTTP {e.code}: {body[:500]}", flush=True)
+            raise
 
     def wait_ready(base_url, api_key, name, ver="v3"):
         print(f"Waiting for {name}...", flush=True)
@@ -110,6 +115,9 @@ data:
         clients = get(f"{base_url}/api/v3/downloadclient", api_key)
         existing = next((c for c in clients if c.get("name") == "qBittorrent"), None)
         is_radarr = "7878" in base_url
+        cat_field = "movieCategory" if is_radarr else "tvCategory"
+        prio_field = "recentMoviePriority" if is_radarr else "recentTvPriority"
+        prio_field2 = "olderMoviePriority" if is_radarr else "olderTvPriority"
         payload = {
             "name": "qBittorrent",
             "enable": True,
@@ -118,14 +126,18 @@ data:
             "removeCompletedDownloads": True,
             "removeFailedDownloads": True,
             "fields": [
-                {"name": "host",     "value": "localhost"},
-                {"name": "port",     "value": 8080},
-                {"name": "useSsl",   "value": False},
-                {"name": "urlBase",  "value": "/"},
-                {"name": "username", "value": qb_user},
-                {"name": "password", "value": qb_pass},
-                {"name": "movieCategory" if is_radarr else "tvCategory",
-                 "value": "radarr" if is_radarr else "sonarr"},
+                {"name": "host",          "value": "localhost"},
+                {"name": "port",          "value": 8080},
+                {"name": "useSsl",        "value": False},
+                {"name": "urlBase",       "value": ""},
+                {"name": "username",      "value": qb_user},
+                {"name": "password",      "value": qb_pass},
+                {"name": cat_field,       "value": "radarr" if is_radarr else "sonarr"},
+                {"name": prio_field,      "value": 0},
+                {"name": prio_field2,     "value": 0},
+                {"name": "initialState",  "value": 0},
+                {"name": "sequentialOrder", "value": False},
+                {"name": "firstAndLast",  "value": False},
             ],
             "implementationName": "qBittorrent",
             "implementation":     "QBittorrent",
