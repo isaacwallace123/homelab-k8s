@@ -301,14 +301,18 @@ data:
         else:
             payload.update({"onSeriesDelete": False, "onEpisodeFileDelete": False, "onEpisodeFileDeleteForUpgrade": True})
         try:
-            post(f"{base_url}/api/v3/notification", api_key, payload)
+            data = json.dumps(payload).encode()
+            req = urllib.request.Request(
+                f"{base_url}/api/v3/notification", data=data, method="POST",
+                headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=90) as r:
+                pass
             print(f"{app}: Plex notification added", flush=True)
         except urllib.error.HTTPError as e:
-            if e.code in (400, 409):
-                body = e.read().decode(errors="replace")
-                print(f"{app}: Plex notification skipped (HTTP {e.code}): {body[:200]}", flush=True)
-            else:
-                raise
+            body = e.read().decode(errors="replace")
+            print(f"{app}: Plex notification skipped (HTTP {e.code}): {body[:200]}", flush=True)
+        except Exception as e:
+            print(f"{app}: Plex notification failed ({type(e).__name__}: {e}) — configure manually if needed", flush=True)
 
     def add_prowlarr_app(prowlarr_key, app_name, app_url, app_key):
         apps = get(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key)
