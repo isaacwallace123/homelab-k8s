@@ -53,10 +53,13 @@ spec:
                   'Proxy\\HostnameLookupEnabled=',
                   'Proxy\\Profiles\\',
               )
-              has_password = any('Password_PBKDF2' in l for l in lines)
               filtered = [l for l in lines if not any(l.lstrip().startswith(p) for p in remove_prefixes)]
 
-              if password and not has_password:
+              if password:
+                  # Always overwrite — sealed secret is the source of truth.
+                  # Strip any existing username/password lines first.
+                  filtered = [l for l in filtered
+                              if 'Password_PBKDF2' not in l and not l.lstrip().startswith('WebUI\\Username=')]
                   salt = os.urandom(16)
                   key = hashlib.pbkdf2_hmac('sha512', password.encode(), salt, 100000, dklen=64)
                   pw_hash = '@ByteArray({}:{})'.format(
@@ -69,11 +72,9 @@ spec:
                       prefs_idx = len(filtered) - 1
                   filtered.insert(prefs_idx + 1, 'WebUI\\Username=admin\n')
                   filtered.insert(prefs_idx + 2, 'WebUI\\Password_PBKDF2="{}"\n'.format(pw_hash))
-                  print('Password written to config')
-              elif has_password:
-                  print('Password already set, keeping existing')
+                  print('Password set from secret')
               else:
-                  print('WARNING: WEBUI_PASSWORD secret not found')
+                  print('WARNING: WEBUI_PASSWORD secret not found, leaving config unchanged')
 
               with open(config_file, 'w') as f:
                   f.writelines(filtered)
