@@ -88,6 +88,50 @@ data:
             href: http://192.168.0.247:3000
             icon: grafana.png
             description: Metrics & Dashboards
+            widget:
+              type: grafana
+              url: http://192.168.0.247:3000
+              username: admin
+              password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
+        - CPU:
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
+            description: Cluster Average
+            widget:
+              type: prometheusmetric
+              url: http://prometheus.monitoring.svc.cluster.local:9090
+              query: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+              refreshInterval: 15000
+              format:
+                type: number
+                scale: 1
+                suffix: "%"
+                maximumFractionDigits: 1
+        - Memory:
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
+            description: Cluster Average
+            widget:
+              type: prometheusmetric
+              url: http://prometheus.monitoring.svc.cluster.local:9090
+              query: (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))) * 100
+              refreshInterval: 15000
+              format:
+                type: number
+                scale: 1
+                suffix: "%"
+                maximumFractionDigits: 1
+        - Network In:
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
+            description: Cluster Total
+            widget:
+              type: prometheusmetric
+              url: http://prometheus.monitoring.svc.cluster.local:9090
+              query: sum(rate(node_network_receive_bytes_total{device!~"lo|cni.*|veth.*|tunl.*|flannel.*"}[5m]))
+              refreshInterval: 15000
+              format:
+                type: number
+                scale: 0.000001
+                suffix: " MB/s"
+                maximumFractionDigits: 2
 
     - Infrastructure:
         - ArgoCD:
@@ -128,193 +172,194 @@ data:
     mode: disable
 
   custom.css: |
-    /* ── Kleff-inspired: dark · sandy gold · glass · depth ─────────────── */
+    /* ── Kleff: dark · sandy-gold · glass · depth ──────────────────────── */
+    /* Class names verified from live DOM inspection                        */
 
     :root {
-      --gold:          #c9a84c;
-      --gold-bright:   #e8c96a;
-      --gold-dim:      rgba(201, 168, 76, 0.55);
-      --gold-subtle:   rgba(201, 168, 76, 0.10);
-      --gold-glow:     rgba(201, 168, 76, 0.22);
-      --glass-bg:      rgba(14, 12, 8, 0.62);
-      --glass-border:  rgba(201, 168, 76, 0.18);
-      --text-hi:       rgba(245, 232, 205, 0.93);
-      --text-lo:       rgba(190, 170, 125, 0.55);
+      --gold:         #c9a84c;
+      --gold-bright:  #e2c06a;
+      --gold-glow:    rgba(201,168,76,0.22);
+      --gold-border:  rgba(201,168,76,0.20);
+      --gold-subtle:  rgba(201,168,76,0.08);
+      --glass:        rgba(12,10,6,0.65);
+      --text-hi:      rgba(245,232,205,0.93);
+      --text-lo:      rgba(190,168,118,0.55);
     }
 
-    /* ── Background ── */
-    body, #page_wrapper {
+    /* ── Page background with depth blobs ── */
+    body { background: #090805 !important; }
+    #page_wrapper {
+      background: #090805 !important;
+      position: relative;
+    }
+    #page_wrapper::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
       background:
-        radial-gradient(ellipse 70% 55% at 8%  65%, rgba(201,168,76,0.045) 0%, transparent 65%),
-        radial-gradient(ellipse 45% 35% at 92% 15%, rgba(201,168,76,0.030) 0%, transparent 55%),
-        #090805 !important;
+        radial-gradient(circle 800px at  8% 55%, rgba(201,168,76,0.07) 0%, transparent 60%),
+        radial-gradient(circle 600px at 92% 18%, rgba(201,168,76,0.05) 0%, transparent 55%),
+        radial-gradient(circle 500px at 50% 95%, rgba(201,168,76,0.04) 0%, transparent 50%);
     }
 
-    /* ── Keyframes ── */
+    /* ── Animations ── */
     @keyframes kleff-in {
-      from { opacity: 0; transform: translateY(18px) scale(0.98); }
-      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+      from { opacity: 0; transform: translateY(16px) scale(0.985); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);     }
     }
     @keyframes kleff-fade {
       from { opacity: 0; }
       to   { opacity: 1; }
     }
-    @keyframes gold-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
-      50%       { box-shadow: 0 0 18px 2px rgba(201,168,76,0.18); }
+
+    /* ── Header bar ── */
+    #information-widgets {
+      border-color: rgba(201,168,76,0.15) !important;
+      animation: kleff-fade 0.5s ease-out both;
     }
 
-    /* ── Category headers ── */
-    h2 {
+    /* ── Search input ── */
+    input.overflow-hidden {
+      background: rgba(14,11,6,0.80) !important;
+      border-color: rgba(201,168,76,0.22) !important;
+      border-radius: 10px !important;
+      color: var(--text-hi) !important;
+      transition: border-color 0.22s, box-shadow 0.22s !important;
+    }
+    input.overflow-hidden:focus {
+      border-color: var(--gold) !important;
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.14) !important;
+    }
+    input.overflow-hidden::placeholder { color: rgba(190,168,118,0.38) !important; }
+
+    /* Search submit button */
+    #information-widgets button {
+      background: rgba(201,168,76,0.12) !important;
+      transition: background 0.2s !important;
+    }
+    #information-widgets button:hover { background: rgba(201,168,76,0.22) !important; }
+
+    /* ── Datetime ── */
+    .information-widget-datetime span {
       color: var(--gold) !important;
+      font-weight: 500 !important;
+      text-shadow: 0 0 20px rgba(201,168,76,0.35);
+    }
+
+    /* ── Category group header ── */
+    .service-group-name {
+      color: var(--gold) !important;
+      font-size: 0.60rem !important;
       font-weight: 700 !important;
-      font-size: 0.62rem !important;
       letter-spacing: 0.18em !important;
       text-transform: uppercase !important;
-      text-shadow: 0 0 22px rgba(201,168,76,0.45) !important;
-      animation: kleff-fade 0.5s ease-out both !important;
+      text-shadow: 0 0 20px rgba(201,168,76,0.40) !important;
     }
 
-    /* ── Dividers ── */
-    hr { border-color: rgba(201,168,76,0.12) !important; }
-
-    /* ── Service tiles ── */
-    .service {
-      animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) both !important;
-      background: var(--glass-bg) !important;
-      backdrop-filter: blur(22px) saturate(130%) !important;
-      -webkit-backdrop-filter: blur(22px) saturate(130%) !important;
-      border: 1px solid var(--glass-border) !important;
-      border-radius: 14px !important;
+    /* ── Service card (actual glass tile) ── */
+    .service-card {
+      background: var(--glass) !important;
+      backdrop-filter: blur(26px) saturate(120%) !important;
+      -webkit-backdrop-filter: blur(26px) saturate(120%) !important;
+      border: 1px solid var(--gold-border) !important;
+      border-radius: 13px !important;
       box-shadow:
-        0 2px 12px rgba(0,0,0,0.55),
-        0 1px 0 rgba(255,255,255,0.03) inset !important;
+        0 2px 18px rgba(0,0,0,0.55),
+        inset 0 1px 0 rgba(255,255,255,0.04) !important;
       transition:
-        transform      0.28s cubic-bezier(0.22,1,0.36,1),
-        box-shadow     0.28s ease,
+        background     0.28s ease,
         border-color   0.28s ease,
-        background     0.28s ease !important;
+        box-shadow     0.28s ease,
+        transform      0.28s cubic-bezier(0.22,1,0.36,1) !important;
       overflow: hidden !important;
     }
 
-    /* Staggered entrance */
-    .service:nth-child(1)  { animation-delay: 0.04s !important; }
-    .service:nth-child(2)  { animation-delay: 0.08s !important; }
-    .service:nth-child(3)  { animation-delay: 0.12s !important; }
-    .service:nth-child(4)  { animation-delay: 0.16s !important; }
-    .service:nth-child(5)  { animation-delay: 0.20s !important; }
-    .service:nth-child(6)  { animation-delay: 0.24s !important; }
-    .service:nth-child(7)  { animation-delay: 0.28s !important; }
-    .service:nth-child(8)  { animation-delay: 0.32s !important; }
-
-    /* Subtle top-edge gold sheen on each card */
-    .service::before {
+    /* Top-left gold sheen on every card */
+    .service-card::after {
       content: '';
       position: absolute;
       inset: 0;
-      border-radius: 14px;
-      background: linear-gradient(160deg, rgba(201,168,76,0.07) 0%, transparent 45%);
       pointer-events: none;
+      border-radius: 13px;
+      background: linear-gradient(135deg, rgba(201,168,76,0.06) 0%, transparent 40%);
     }
 
-    .service:hover {
-      background: rgba(22, 19, 10, 0.82) !important;
-      border-color: rgba(201,168,76,0.42) !important;
+    .service-card:hover {
+      background: rgba(22,18,9,0.82) !important;
+      border-color: rgba(201,168,76,0.45) !important;
       transform: translateY(-4px) !important;
       box-shadow:
-        0 16px 44px rgba(0,0,0,0.6),
-        0 0   26px var(--gold-glow),
-        0 1px 0 rgba(255,255,255,0.06) inset !important;
+        0 14px 44px rgba(0,0,0,0.58),
+        0 0   28px var(--gold-glow),
+        inset 0 1px 0 rgba(255,255,255,0.07) !important;
     }
 
-    /* Icon glow on hover */
-    .service:hover img,
-    .service:hover svg {
-      filter: drop-shadow(0 0 8px rgba(201,168,76,0.5)) brightness(1.1) !important;
-      transition: filter 0.28s ease !important;
-    }
+    /* Staggered card entrance per group */
+    .service:nth-child(1)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.04s both; }
+    .service:nth-child(2)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.08s both; }
+    .service:nth-child(3)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.12s both; }
+    .service:nth-child(4)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.16s both; }
+    .service:nth-child(5)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.20s both; }
+    .service:nth-child(6)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.24s both; }
+    .service:nth-child(7)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.28s both; }
+    .service:nth-child(8)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.32s both; }
+    .service:nth-child(9)  .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.36s both; }
+    .service:nth-child(10) .service-card { animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.40s both; }
 
-    /* ── Widget stat rows ── */
-    .service > div > div > div[class*="flex"][class*="gap"] > div,
-    dl > div {
-      background: rgba(201,168,76,0.055) !important;
-      border-color: rgba(201,168,76,0.13) !important;
-      border-radius: 8px !important;
-      transition: background 0.2s ease !important;
+    /* ── Service name & description ── */
+    .service-name {
+      color: var(--text-hi) !important;
+      font-weight: 600 !important;
     }
-    .service:hover dl > div,
-    .service:hover > div > div > div[class*="flex"][class*="gap"] > div {
-      background: rgba(201,168,76,0.09) !important;
-    }
-
-    /* Stat numbers — gold */
-    dl dt, .stat-label ~ *,
-    div[class*="text-xs"][class*="font-bold"],
-    div[class*="font-semibold"] {
-      color: var(--gold-bright) !important;
-    }
-
-    /* Stat labels — dimmed */
-    dl dd, div[class*="text-xs"][class*="uppercase"] {
+    .service-description {
       color: var(--text-lo) !important;
     }
 
-    /* ── Search bar ── */
-    input[type="text"],
-    input[type="search"],
-    input:not([type]) {
-      background: rgba(14,12,8,0.75) !important;
-      border: 1px solid rgba(201,168,76,0.22) !important;
-      border-radius: 10px !important;
-      color: var(--text-hi) !important;
-      transition: border-color 0.22s ease, box-shadow 0.22s ease !important;
-    }
-    input:focus {
-      border-color: var(--gold) !important;
-      box-shadow: 0 0 0 3px rgba(201,168,76,0.13) !important;
-      outline: none !important;
-    }
-    input::placeholder {
-      color: rgba(190,170,125,0.35) !important;
+    /* ── Icon — glow on hover ── */
+    .service-card:hover .service-icon img,
+    .service-card:hover .service-icon svg {
+      filter: drop-shadow(0 0 8px rgba(201,168,76,0.55)) brightness(1.08) !important;
+      transition: filter 0.28s ease !important;
     }
 
-    /* ── Datetime widget ── */
-    #information-widgets,
-    #information-widgets * {
-      animation: kleff-fade 0.6s ease-out both !important;
+    /* ── Widget stat cells (dl/dt/dd rows) ── */
+    .service-card dl {
+      gap: 0.35rem !important;
     }
-    #information-widgets [class*="text-"] {
-      color: var(--gold) !important;
-    }
-
-    /* ── Search icon / button ── */
-    button[type="submit"],
-    form button {
-      color: var(--gold-dim) !important;
-      transition: color 0.2s ease !important;
-    }
-    button[type="submit"]:hover,
-    form button:hover {
-      color: var(--gold) !important;
-    }
-
-    /* ── Error widget ── */
-    [class*="bg-red"] {
-      background: rgba(160,30,30,0.30) !important;
-      border: 1px solid rgba(220,60,60,0.25) !important;
-      backdrop-filter: blur(12px) !important;
+    .service-card dl > div {
+      background: rgba(201,168,76,0.06) !important;
+      border: 1px solid rgba(201,168,76,0.12) !important;
       border-radius: 8px !important;
+      transition: background 0.22s !important;
+    }
+    .service-card:hover dl > div {
+      background: rgba(201,168,76,0.10) !important;
+    }
+    /* Stat value — gold */
+    .service-card dl dt {
+      color: var(--gold-bright) !important;
+      font-weight: 700 !important;
+    }
+    /* Stat label — dim */
+    .service-card dl dd {
+      color: var(--text-lo) !important;
+      font-weight: 500 !important;
     }
 
-    /* ── Scrollbar (webkit) ── */
-    ::-webkit-scrollbar       { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: rgba(14,12,8,0.6); }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(201,168,76,0.30);
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(201,168,76,0.55);
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar       { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(12,10,6,0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.28); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.50); }
+
+    /* ── Error state ── */
+    [class*="bg-red-500"] {
+      background: rgba(140,25,25,0.35) !important;
+      border: 1px solid rgba(220,60,60,0.22) !important;
+      backdrop-filter: blur(10px) !important;
+      border-radius: 8px !important;
     }
 ---
 apiVersion: apps/v1
