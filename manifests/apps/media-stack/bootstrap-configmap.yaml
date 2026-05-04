@@ -96,70 +96,66 @@ data:
                 opener.open(f"{QB_URL}/api/v2/torrents/editCategory", form)
                 print(f"qBittorrent: category '{cat}' updated → {path}", flush=True)
 
-    def put(url, api_key, payload):
-        data = json.dumps(payload).encode()
-        req = urllib.request.Request(url, data=data, method="PUT",
-            headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
+    def delete(url, api_key):
+        req = urllib.request.Request(url, method="DELETE",
+            headers={"X-Api-Key": api_key})
         with urllib.request.urlopen(req, timeout=10) as r:
-            content = r.read()
-            return json.loads(content) if content else {}
+            pass
 
     def add_qbittorrent_client(base_url, api_key, app, qb_user, qb_pass):
         clients = get(f"{base_url}/api/v3/downloadclient", api_key)
         existing = next((c for c in clients if c.get("name") == "qBittorrent"), None)
         is_radarr = "7878" in base_url
+        payload = {
+            "name": "qBittorrent",
+            "enable": True,
+            "protocol": "torrent",
+            "priority": 1,
+            "removeCompletedDownloads": True,
+            "removeFailedDownloads": True,
+            "fields": [
+                {"name": "host",     "value": "localhost"},
+                {"name": "port",     "value": 8080},
+                {"name": "useSsl",   "value": False},
+                {"name": "urlBase",  "value": "/"},
+                {"name": "username", "value": qb_user},
+                {"name": "password", "value": qb_pass},
+                {"name": "movieCategory" if is_radarr else "tvCategory",
+                 "value": "radarr" if is_radarr else "sonarr"},
+            ],
+            "implementationName": "qBittorrent",
+            "implementation":     "QBittorrent",
+            "configContract":     "QBittorrentSettings",
+            "tags": [],
+        }
         if existing:
-            # Patch credentials into the full existing payload so Radarr/Sonarr
-            # doesn't reject a partial PUT (it requires all fields back).
-            for field in existing.get("fields", []):
-                if field["name"] == "username":
-                    field["value"] = qb_user
-                elif field["name"] == "password":
-                    field["value"] = qb_pass
-            put(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key, existing)
-            print(f"{app}: qBittorrent download client updated", flush=True)
-        else:
-            payload = {
-                "name": "qBittorrent",
-                "enable": True,
-                "protocol": "torrent",
-                "priority": 1,
-                "removeCompletedDownloads": True,
-                "removeFailedDownloads": True,
-                "fields": [
-                    {"name": "host",     "value": "localhost"},
-                    {"name": "port",     "value": 8080},
-                    {"name": "useSsl",   "value": False},
-                    {"name": "urlBase",  "value": "/"},
-                    {"name": "username", "value": qb_user},
-                    {"name": "password", "value": qb_pass},
-                    {"name": "movieCategory" if is_radarr else "tvCategory",
-                     "value": "radarr" if is_radarr else "sonarr"},
-                ],
-                "implementationName": "qBittorrent",
-                "implementation":     "QBittorrent",
-                "configContract":     "QBittorrentSettings",
-                "tags": [],
-            }
-            post(f"{base_url}/api/v3/downloadclient", api_key, payload)
-            print(f"{app}: qBittorrent download client added", flush=True)
+            delete(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key)
+        post(f"{base_url}/api/v3/downloadclient", api_key, payload)
+        action = "updated" if existing else "added"
+        print(f"{app}: qBittorrent download client {action}", flush=True)
 
     def add_flaresolverr(prowlarr_key):
         proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)
         if any(p.get("name") == "FlareSolverr" for p in proxies):
             print("Prowlarr: FlareSolverr already configured", flush=True)
             return
-        post(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key, {
-            "name": "FlareSolverr",
-            "implementation":  "FlareSolverr",
-            "configContract":  "FlareSolverrSettings",
-            "fields": [
-                {"name": "host",           "value": "http://localhost:8191"},
-                {"name": "requestTimeout", "value": 60},
-            ],
-            "tags": [],
-        })
-        print("Prowlarr: FlareSolverr proxy added", flush=True)
+        try:
+            post(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key, {
+                "name": "FlareSolverr",
+                "implementation":  "FlareSolverr",
+                "configContract":  "FlareSolverrSettings",
+                "fields": [
+                    {"name": "host",           "value": "http://localhost:8191"},
+                    {"name": "requestTimeout", "value": 60},
+                ],
+                "tags": [],
+            })
+            print("Prowlarr: FlareSolverr proxy added", flush=True)
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                print("Prowlarr: FlareSolverr already exists (skipping)", flush=True)
+            else:
+                raise
 
     def add_prowlarr_app(prowlarr_key, app_name, app_url, app_key):
         apps = get(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key)
@@ -170,19 +166,25 @@ data:
         cats = ([2000,2010,2020,2030,2040,2045,2050,2060]
                 if is_radarr else
                 [5000,5010,5020,5030,5040,5045,5050,5060,5070])
-        post(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key, {
-            "name":           app_name,
-            "implementation": app_name,
-            "configContract": f"{app_name}Settings",
-            "fields": [
-                {"name": "prowlarrUrl",    "value": "http://localhost:9696"},
-                {"name": "baseUrl",        "value": app_url},
-                {"name": "apiKey",         "value": app_key},
-                {"name": "syncCategories", "value": cats},
-            ],
-            "tags": [],
-        })
-        print(f"Prowlarr: {app_name} app added", flush=True)
+        try:
+            post(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key, {
+                "name":           app_name,
+                "implementation": app_name,
+                "configContract": f"{app_name}Settings",
+                "fields": [
+                    {"name": "prowlarrUrl",    "value": "http://localhost:9696"},
+                    {"name": "baseUrl",        "value": app_url},
+                    {"name": "apiKey",         "value": app_key},
+                    {"name": "syncCategories", "value": cats},
+                ],
+                "tags": [],
+            })
+            print(f"Prowlarr: {app_name} app added", flush=True)
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                print(f"Prowlarr: {app_name} already exists (skipping)", flush=True)
+            else:
+                raise
 
     print("Bootstrap starting...", flush=True)
 
