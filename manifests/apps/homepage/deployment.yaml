@@ -7,10 +7,11 @@ data:
   settings.yaml: |
     title: Homelab
     theme: dark
-    color: slate
-    cardBlur: sm
+    color: zinc
+    cardBlur: md
     headerStyle: clean
     hideVersion: true
+    useEqualHeights: true
 
   services.yaml: |
     - Media:
@@ -73,6 +74,10 @@ data:
             href: http://192.168.0.240
             icon: adguard-home.png
             description: DNS & Ad Blocker
+        - Cudy Router:
+            href: http://192.168.0.1
+            icon: router.png
+            description: Home Router
         - Envoy Gateway:
             href: http://192.168.0.245
             icon: envoy.png
@@ -89,6 +94,10 @@ data:
             href: https://argocd.lan
             icon: argocd.png
             description: GitOps Deployments
+        - Proxmox:
+            href: https://192.168.0.254:8006
+            icon: proxmox.png
+            description: Hypervisor
         - TrueNAS:
             href: http://192.168.0.252
             icon: truenas.png
@@ -117,6 +126,196 @@ data:
 
   kubernetes.yaml: |
     mode: disable
+
+  custom.css: |
+    /* ── Kleff-inspired: dark · sandy gold · glass · depth ─────────────── */
+
+    :root {
+      --gold:          #c9a84c;
+      --gold-bright:   #e8c96a;
+      --gold-dim:      rgba(201, 168, 76, 0.55);
+      --gold-subtle:   rgba(201, 168, 76, 0.10);
+      --gold-glow:     rgba(201, 168, 76, 0.22);
+      --glass-bg:      rgba(14, 12, 8, 0.62);
+      --glass-border:  rgba(201, 168, 76, 0.18);
+      --text-hi:       rgba(245, 232, 205, 0.93);
+      --text-lo:       rgba(190, 170, 125, 0.55);
+    }
+
+    /* ── Background ── */
+    body, #page_wrapper {
+      background:
+        radial-gradient(ellipse 70% 55% at 8%  65%, rgba(201,168,76,0.045) 0%, transparent 65%),
+        radial-gradient(ellipse 45% 35% at 92% 15%, rgba(201,168,76,0.030) 0%, transparent 55%),
+        #090805 !important;
+    }
+
+    /* ── Keyframes ── */
+    @keyframes kleff-in {
+      from { opacity: 0; transform: translateY(18px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+    @keyframes kleff-fade {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes gold-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+      50%       { box-shadow: 0 0 18px 2px rgba(201,168,76,0.18); }
+    }
+
+    /* ── Category headers ── */
+    h2 {
+      color: var(--gold) !important;
+      font-weight: 700 !important;
+      font-size: 0.62rem !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+      text-shadow: 0 0 22px rgba(201,168,76,0.45) !important;
+      animation: kleff-fade 0.5s ease-out both !important;
+    }
+
+    /* ── Dividers ── */
+    hr { border-color: rgba(201,168,76,0.12) !important; }
+
+    /* ── Service tiles ── */
+    .service {
+      animation: kleff-in 0.45s cubic-bezier(0.22,1,0.36,1) both !important;
+      background: var(--glass-bg) !important;
+      backdrop-filter: blur(22px) saturate(130%) !important;
+      -webkit-backdrop-filter: blur(22px) saturate(130%) !important;
+      border: 1px solid var(--glass-border) !important;
+      border-radius: 14px !important;
+      box-shadow:
+        0 2px 12px rgba(0,0,0,0.55),
+        0 1px 0 rgba(255,255,255,0.03) inset !important;
+      transition:
+        transform      0.28s cubic-bezier(0.22,1,0.36,1),
+        box-shadow     0.28s ease,
+        border-color   0.28s ease,
+        background     0.28s ease !important;
+      overflow: hidden !important;
+    }
+
+    /* Staggered entrance */
+    .service:nth-child(1)  { animation-delay: 0.04s !important; }
+    .service:nth-child(2)  { animation-delay: 0.08s !important; }
+    .service:nth-child(3)  { animation-delay: 0.12s !important; }
+    .service:nth-child(4)  { animation-delay: 0.16s !important; }
+    .service:nth-child(5)  { animation-delay: 0.20s !important; }
+    .service:nth-child(6)  { animation-delay: 0.24s !important; }
+    .service:nth-child(7)  { animation-delay: 0.28s !important; }
+    .service:nth-child(8)  { animation-delay: 0.32s !important; }
+
+    /* Subtle top-edge gold sheen on each card */
+    .service::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      background: linear-gradient(160deg, rgba(201,168,76,0.07) 0%, transparent 45%);
+      pointer-events: none;
+    }
+
+    .service:hover {
+      background: rgba(22, 19, 10, 0.82) !important;
+      border-color: rgba(201,168,76,0.42) !important;
+      transform: translateY(-4px) !important;
+      box-shadow:
+        0 16px 44px rgba(0,0,0,0.6),
+        0 0   26px var(--gold-glow),
+        0 1px 0 rgba(255,255,255,0.06) inset !important;
+    }
+
+    /* Icon glow on hover */
+    .service:hover img,
+    .service:hover svg {
+      filter: drop-shadow(0 0 8px rgba(201,168,76,0.5)) brightness(1.1) !important;
+      transition: filter 0.28s ease !important;
+    }
+
+    /* ── Widget stat rows ── */
+    .service > div > div > div[class*="flex"][class*="gap"] > div,
+    dl > div {
+      background: rgba(201,168,76,0.055) !important;
+      border-color: rgba(201,168,76,0.13) !important;
+      border-radius: 8px !important;
+      transition: background 0.2s ease !important;
+    }
+    .service:hover dl > div,
+    .service:hover > div > div > div[class*="flex"][class*="gap"] > div {
+      background: rgba(201,168,76,0.09) !important;
+    }
+
+    /* Stat numbers — gold */
+    dl dt, .stat-label ~ *,
+    div[class*="text-xs"][class*="font-bold"],
+    div[class*="font-semibold"] {
+      color: var(--gold-bright) !important;
+    }
+
+    /* Stat labels — dimmed */
+    dl dd, div[class*="text-xs"][class*="uppercase"] {
+      color: var(--text-lo) !important;
+    }
+
+    /* ── Search bar ── */
+    input[type="text"],
+    input[type="search"],
+    input:not([type]) {
+      background: rgba(14,12,8,0.75) !important;
+      border: 1px solid rgba(201,168,76,0.22) !important;
+      border-radius: 10px !important;
+      color: var(--text-hi) !important;
+      transition: border-color 0.22s ease, box-shadow 0.22s ease !important;
+    }
+    input:focus {
+      border-color: var(--gold) !important;
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.13) !important;
+      outline: none !important;
+    }
+    input::placeholder {
+      color: rgba(190,170,125,0.35) !important;
+    }
+
+    /* ── Datetime widget ── */
+    #information-widgets,
+    #information-widgets * {
+      animation: kleff-fade 0.6s ease-out both !important;
+    }
+    #information-widgets [class*="text-"] {
+      color: var(--gold) !important;
+    }
+
+    /* ── Search icon / button ── */
+    button[type="submit"],
+    form button {
+      color: var(--gold-dim) !important;
+      transition: color 0.2s ease !important;
+    }
+    button[type="submit"]:hover,
+    form button:hover {
+      color: var(--gold) !important;
+    }
+
+    /* ── Error widget ── */
+    [class*="bg-red"] {
+      background: rgba(160,30,30,0.30) !important;
+      border: 1px solid rgba(220,60,60,0.25) !important;
+      backdrop-filter: blur(12px) !important;
+      border-radius: 8px !important;
+    }
+
+    /* ── Scrollbar (webkit) ── */
+    ::-webkit-scrollbar       { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(14,12,8,0.6); }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(201,168,76,0.30);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(201,168,76,0.55);
+    }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -162,6 +361,9 @@ spec:
             - name: config
               mountPath: /app/config/kubernetes.yaml
               subPath: kubernetes.yaml
+            - name: config
+              mountPath: /app/config/custom.css
+              subPath: custom.css
           resources:
             requests:
               cpu: 10m
