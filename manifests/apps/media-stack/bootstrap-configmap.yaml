@@ -11,11 +11,12 @@ data:
     Runs as a sidecar in the same pod so all URLs are localhost.
     Idempotent — skips anything already configured.
     """
-    import json, os, time, urllib.request, urllib.error, xml.etree.ElementTree as ET
+    import http.cookiejar, json, os, time, urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 
     RADARR_URL   = "http://localhost:7878"
     SONARR_URL   = "http://localhost:8989"
     PROWLARR_URL = "http://localhost:9696"
+    QB_URL       = "http://localhost:8080"
 
     def read_api_key(path, max_wait=600):
         deadline = time.time() + max_wait
@@ -53,6 +54,47 @@ data:
                 pass
             time.sleep(5)
         raise RuntimeError(f"{name} not ready after 10 minutes")
+
+    def configure_qbittorrent(qb_user, qb_pass):
+        jar = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+        # Wait for qBittorrent to be ready
+        print("Waiting for qBittorrent...", flush=True)
+        for _ in range(120):
+            try:
+                opener.open(f"{QB_URL}/api/v2/app/version", timeout=5)
+                break
+            except Exception:
+                time.sleep(5)
+        else:
+            raise RuntimeError("qBittorrent not ready")
+        print("qBittorrent ready", flush=True)
+
+        # Login
+        data = urllib.parse.urlencode({"username": qb_user, "password": qb_pass}).encode()
+        resp = opener.open(f"{QB_URL}/api/v2/auth/login", data)
+        result = resp.read().decode().strip()
+        if result != "Ok.":
+            print(f"qBittorrent login failed: {result} — skipping QB config", flush=True)
+            return
+
+        # Set default save path and disable temp path
+        prefs = json.dumps({"save_path": "/downloads", "temp_path_enabled": False})
+        opener.open(f"{QB_URL}/api/v2/app/setPreferences",
+                    urllib.parse.urlencode({"json": prefs}).encode())
+        print("qBittorrent: save path set to /downloads", flush=True)
+
+        # Create per-app categories so downloads land in tidy subdirectories
+        for cat, path in [("radarr", "/downloads/radarr"), ("sonarr", "/downloads/sonarr")]:
+            form = urllib.parse.urlencode({"category": cat, "savePath": path}).encode()
+            try:
+                opener.open(f"{QB_URL}/api/v2/torrents/createCategory", form)
+                print(f"qBittorrent: category '{cat}' → {path}", flush=True)
+            except urllib.error.HTTPError:
+                # Already exists — update it instead
+                opener.open(f"{QB_URL}/api/v2/torrents/editCategory", form)
+                print(f"qBittorrent: category '{cat}' updated → {path}", flush=True)
 
     def add_qbittorrent_client(base_url, api_key, app, qb_user, qb_pass):
         clients = get(f"{base_url}/api/v3/downloadclient", api_key)
@@ -137,6 +179,7 @@ data:
     wait_ready(SONARR_URL,   sonarr_key,   "Sonarr",   "v3")
     wait_ready(PROWLARR_URL, prowlarr_key, "Prowlarr", "v1")
 
+    configure_qbittorrent(qb_user, qb_pass)
     add_qbittorrent_client(RADARR_URL,   radarr_key,   "Radarr",   qb_user, qb_pass)
     add_qbittorrent_client(SONARR_URL,   sonarr_key,   "Sonarr",   qb_user, qb_pass)
     add_flaresolverr(prowlarr_key)
