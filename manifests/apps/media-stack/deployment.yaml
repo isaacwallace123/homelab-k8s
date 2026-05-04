@@ -90,32 +90,6 @@ spec:
             - name: config-qbittorrent
               mountPath: /data
 
-        - name: sabnzbd-init
-          image: busybox:latest
-          command: [sh, -c]
-          args:
-            - |
-              cfg=/config/sabnzbd.ini
-              if [ -f "$cfg" ]; then
-                # Only patch settings inside [misc] to avoid clobbering [servers] entries
-                awk '
-                  /^\[/ { section=$0 }
-                  section=="[misc]" && /^port = /      { $0="port = 8090" }
-                  section=="[misc]" && /^host = /      { $0="host = 0.0.0.0" }
-                  section=="[misc]" && /^complete_dir = / { $0="complete_dir = /downloads" }
-                  section=="[misc]" && /^download_dir = / { $0="download_dir = /downloads/incomplete" }
-                  { print }
-                ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
-                grep -q '^download_dir' "$cfg" || sed -i '/^\[misc\]/a download_dir = /downloads/incomplete' "$cfg"
-                echo "SABnzbd config updated"
-              else
-                mkdir -p /config
-                printf '[misc]\nport = 8090\nhost = 0.0.0.0\ncomplete_dir = /downloads\ndownload_dir = /downloads/incomplete\n' > "$cfg"
-                echo "SABnzbd config created"
-              fi
-          volumeMounts:
-            - name: config-sabnzbd
-              mountPath: /config
 
       containers:
 
