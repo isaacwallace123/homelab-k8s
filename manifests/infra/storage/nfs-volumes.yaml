@@ -38,6 +38,8 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: tank-movies
+  annotations:
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   capacity:
     storage: 4Ti
@@ -49,8 +51,8 @@ spec:
     namespace: media
     name: tank-movies
   nfs:
-    server: 192.168.0.254
-    path: /tank/media/movies
+    server: 192.168.0.252
+    path: /mnt/tank/movies
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -70,6 +72,8 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: tank-tv
+  annotations:
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   capacity:
     storage: 4Ti
@@ -81,8 +85,8 @@ spec:
     namespace: media
     name: tank-tv
   nfs:
-    server: 192.168.0.254
-    path: /tank/media/tv
+    server: 192.168.0.252
+    path: /mnt/tank/tv
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -102,6 +106,8 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: tank-downloads
+  annotations:
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   capacity:
     storage: 75Gi
@@ -113,8 +119,8 @@ spec:
     namespace: media
     name: tank-downloads
   nfs:
-    server: 192.168.0.254
-    path: /downloads
+    server: 192.168.0.252
+    path: /mnt/tank/downloads
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
