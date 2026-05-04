@@ -78,9 +78,6 @@ data:
             href: http://192.168.0.240
             icon: adguard-home.png
             description: DNS & Ad Blocker
-            widget:
-              type: adguard
-              url: http://192.168.0.240
         - Cudy Router:
             href: http://192.168.0.1
             icon: router.png
