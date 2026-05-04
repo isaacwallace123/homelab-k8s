@@ -81,7 +81,7 @@ data:
             widget:
               type: adguard
               url: http://192.168.0.240
-              username: isaac
+              username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
               password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
         - Cudy Router:
             href: http://192.168.0.1
@@ -496,10 +496,15 @@ spec:
                 secretKeyRef:
                   name: homepage-secrets
                   key: PLEX_TOKEN
+            - name: HOMEPAGE_VAR_ADGUARD_USER
+              valueFrom:
+                secretKeyRef:
+                  name: adguard-auth
+                  key: ADGUARD_USER
             - name: HOMEPAGE_VAR_ADGUARD_PASS
               valueFrom:
                 secretKeyRef:
-                  name: homepage-secrets
+                  name: adguard-auth
                   key: ADGUARD_PASS
           ports:
             - containerPort: 3000

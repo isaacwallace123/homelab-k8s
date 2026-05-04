@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adguard-bootstrap
+  namespace: networking
+data:
+  bootstrap.py: |
+    #!/usr/bin/env python3
+    """
+    Configures AdGuard Home admin credentials from env vars.
+    Idempotent — handles first-time setup and verifies on subsequent runs.
+    """
+    import base64, json, os, time, urllib.request, urllib.error
+
+    ADGUARD_URL = "http://localhost:80"
+
+    def wait_ready():
+        print("Waiting for AdGuard Home...", flush=True)
+        for _ in range(120):
+            try:
+                urllib.request.urlopen(f"{ADGUARD_URL}/", timeout=3)
+                print("AdGuard Home ready", flush=True)
+                return
+            except Exception:
+                time.sleep(3)
+        raise RuntimeError("AdGuard Home not ready after 6 minutes")
+
+    def get(url, user=None, password=None):
+        req = urllib.request.Request(url)
+        if user:
+            creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+            req.add_header("Authorization", f"Basic {creds}")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read())
+
+    def post(url, data, user=None, password=None):
+        body = json.dumps(data).encode()
+        req = urllib.request.Request(url, data=body, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        if user:
+            creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+            req.add_header("Authorization", f"Basic {creds}")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.read()
+
+    user     = os.environ["ADGUARD_USER"]
+    password = os.environ["ADGUARD_PASS"]
+
+    wait_ready()
+
+    # Check if AdGuard is still in initial setup mode
+    try:
+        get(f"{ADGUARD_URL}/control/install/get_addresses")
+        # Endpoint worked — AdGuard needs first-time setup
+        print("AdGuard Home: running initial setup...", flush=True)
+        payload = {
+            "web":      {"ip": "0.0.0.0", "port": 80,  "status": "", "can_autofix": False},
+            "dns":      {"ip": "0.0.0.0", "port": 53,  "status": "", "can_autofix": False},
+            "username": user,
+            "password": password,
+        }
+        post(f"{ADGUARD_URL}/control/install/configure", payload)
+        print("AdGuard Home: credentials configured", flush=True)
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            # Already configured — verify our credentials work
+            try:
+                get(f"{ADGUARD_URL}/control/status", user, password)
+                print("AdGuard Home: credentials verified OK", flush=True)
+            except urllib.error.HTTPError as auth_err:
+                if auth_err.code == 401:
+                    print("AdGuard Home: WARNING — credentials mismatch. "
+                          "Update adguard-auth SealedSecret or reconfigure manually.", flush=True)
+                else:
+                    raise
+        else:
+            raise
+    except Exception as e:
+        print(f"AdGuard Home: setup error ({type(e).__name__}: {e})", flush=True)
+
+    print("AdGuard bootstrap complete!", flush=True)
+    while True:
+        time.sleep(86400)
