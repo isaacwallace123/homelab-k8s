@@ -152,7 +152,7 @@ spec:
             - name: HTTP_CONTROL_SERVER_ADDRESS
               value: ":8000"
             - name: FIREWALL_INPUT_PORTS
-              value: "8000,8080,8090,7878,8989,9696,8191"
+              value: "8000,8080,8090,7878,8989,9696,8191,5055"
           ports:
             - containerPort: 8000
               name: health
@@ -324,6 +324,29 @@ spec:
             limits:
               memory: 1Gi
 
+        # ── overseerr ─────────────────────────────────────────────────────────
+        - name: overseerr
+          image: lscr.io/linuxserver/overseerr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 5055
+              name: overseerr-ui
+          volumeMounts:
+            - name: config-overseerr
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
         # ── bootstrap ─────────────────────────────────────────────────────────
         # Reads each app's API key from its config.xml, waits for all apps to
         # start, then wires up qBittorrent download clients, FlareSolverr proxy,
@@ -389,6 +412,9 @@ spec:
         - name: tv
           persistentVolumeClaim:
             claimName: tank-tv
+        - name: config-overseerr
+          persistentVolumeClaim:
+            claimName: config-overseerr
         - name: scripts
           configMap:
             name: media-stack-bootstrap
