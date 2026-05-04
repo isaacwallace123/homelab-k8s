@@ -155,6 +155,20 @@ data:
         action = "updated" if existing else "added"
         print(f"{app}: qBittorrent download client {action}", flush=True)
 
+    def add_root_folder(base_url, api_key, app, path):
+        folders = get(f"{base_url}/api/v3/rootfolder", api_key)
+        if any(f.get("path") == path for f in folders):
+            print(f"{app}: root folder {path} already configured", flush=True)
+            return
+        try:
+            post(f"{base_url}/api/v3/rootfolder", api_key, {"path": path})
+            print(f"{app}: root folder {path} added", flush=True)
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                print(f"{app}: root folder {path} already exists", flush=True)
+            else:
+                raise
+
     def add_flaresolverr(prowlarr_key):
         proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)
         if any(p.get("name") == "FlareSolverr" for p in proxies):
@@ -220,6 +234,8 @@ data:
     wait_ready(PROWLARR_URL, prowlarr_key, "Prowlarr", "v1")
 
     configure_qbittorrent(qb_user, qb_pass)
+    add_root_folder(RADARR_URL, radarr_key, "Radarr", "/movies")
+    add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")
     add_qbittorrent_client(RADARR_URL,   radarr_key,   "Radarr",   qb_user, qb_pass)
     add_qbittorrent_client(SONARR_URL,   sonarr_key,   "Sonarr",   qb_user, qb_pass)
     add_flaresolverr(prowlarr_key)
