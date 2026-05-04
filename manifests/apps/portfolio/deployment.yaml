@@ -391,10 +391,10 @@ spec:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 15
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 15
+            failureThreshold: 6
           volumeMounts:
             - name: uploads
               mountPath: /app/public/uploads
