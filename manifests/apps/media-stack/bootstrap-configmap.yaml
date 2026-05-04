@@ -68,7 +68,7 @@ data:
                 {"name": "useSsl",     "value": False},
                 {"name": "urlBase",    "value": ""},
                 {"name": "apiKey",     "value": sab_key},
-                {"name": cat_field,    "value": "radarr" if is_radarr else "sonarr"},
+                {"name": cat_field,    "value": "movies" if is_radarr else "tv"},
                 {"name": prio_field,   "value": 0},
                 {"name": prio_field2,  "value": 0},
             ],
@@ -242,25 +242,6 @@ data:
         except urllib.error.HTTPError as e:
             print(f"WARNING: {app}: root folder {path} failed (HTTP {e.code}) — check permissions", flush=True)
 
-    def create_sabnzbd_categories(api_key):
-        for cat in ["radarr", "sonarr"]:
-            os.makedirs(f"/downloads/{cat}", exist_ok=True)
-            params = urllib.parse.urlencode({
-                "mode": "set_cat", "name": cat, "dir": cat,
-                "pp": "3", "script": "None", "priority": "-100",
-                "output": "json", "apikey": api_key,
-            })
-            req = urllib.request.Request(f"{SAB_URL}/api?{params}")
-            with urllib.request.urlopen(req, timeout=10) as r:
-                result = json.loads(r.read())
-            print(f"SABnzbd: set_cat '{cat}': {result}", flush=True)
-        # Verify what SABnzbd actually has
-        params = urllib.parse.urlencode({"mode": "get_cats", "output": "json", "apikey": api_key})
-        req = urllib.request.Request(f"{SAB_URL}/api?{params}")
-        with urllib.request.urlopen(req, timeout=10) as r:
-            cats = json.loads(r.read())
-        print(f"SABnzbd categories: {cats}", flush=True)
-
     def add_flaresolverr(prowlarr_key):
         proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)
         if any(p.get("name") == "FlareSolverr" for p in proxies):
@@ -336,7 +317,6 @@ data:
     add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")
     add_qbittorrent_client(RADARR_URL,   radarr_key,   "Radarr",   qb_user, qb_pass)
     add_qbittorrent_client(SONARR_URL,   sonarr_key,   "Sonarr",   qb_user, qb_pass)
-    create_sabnzbd_categories(sabnzbd_key)
     add_sabnzbd_client(RADARR_URL,   radarr_key,   "Radarr",   sabnzbd_key)
     add_sabnzbd_client(SONARR_URL,   sonarr_key,   "Sonarr",   sabnzbd_key)
     add_flaresolverr(prowlarr_key)
