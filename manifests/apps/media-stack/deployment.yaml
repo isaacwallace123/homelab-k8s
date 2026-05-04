@@ -103,6 +103,35 @@ spec:
             - name: config-qbittorrent
               mountPath: /data
 
+        - name: sabnzbd-init
+          image: python:3-slim
+          command: [python3, "-c"]
+          args:
+            - |
+              import configparser, os
+
+              config_dir = '/config'
+              config_file = os.path.join(config_dir, 'sabnzbd.ini')
+              os.makedirs(config_dir, exist_ok=True)
+
+              cfg = configparser.RawConfigParser()
+              if os.path.exists(config_file):
+                  cfg.read(config_file)
+
+              if not cfg.has_section('misc'):
+                  cfg.add_section('misc')
+
+              cfg.set('misc', 'port', '8090')
+              cfg.set('misc', 'host', '0.0.0.0')
+              cfg.set('misc', 'complete_dir', '/downloads')
+
+              with open(config_file, 'w') as f:
+                  cfg.write(f)
+              print('SABnzbd init complete')
+          volumeMounts:
+            - name: config-sabnzbd
+              mountPath: /config
+
       containers:
 
         # ── gluetun ──────────────────────────────────────────────────────────
@@ -130,7 +159,7 @@ spec:
             - name: HTTP_CONTROL_SERVER_ADDRESS
               value: ":8000"
             - name: FIREWALL_INPUT_PORTS
-              value: "8000,8080,7878,8989,9696,8191"
+              value: "8000,8080,8090,7878,8989,9696,8191"
           ports:
             - containerPort: 8000
               name: health
@@ -277,6 +306,31 @@ spec:
             limits:
               memory: 1Gi
 
+        # ── sabnzbd ───────────────────────────────────────────────────────────
+        - name: sabnzbd
+          image: lscr.io/linuxserver/sabnzbd:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 8090
+              name: sabnzbd-ui
+          volumeMounts:
+            - name: config-sabnzbd
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
         # ── bootstrap ─────────────────────────────────────────────────────────
         # Reads each app's API key from its config.xml, waits for all apps to
         # start, then wires up qBittorrent download clients, FlareSolverr proxy,
@@ -305,6 +359,9 @@ spec:
             - name: config-prowlarr
               mountPath: /config/prowlarr
               readOnly: true
+            - name: config-sabnzbd
+              mountPath: /config/sabnzbd
+              readOnly: true
             - name: downloads
               mountPath: /downloads
           resources:
@@ -327,6 +384,9 @@ spec:
         - name: config-prowlarr
           persistentVolumeClaim:
             claimName: config-prowlarr
+        - name: config-sabnzbd
+          persistentVolumeClaim:
+            claimName: config-sabnzbd
         - name: downloads
           persistentVolumeClaim:
             claimName: tank-downloads

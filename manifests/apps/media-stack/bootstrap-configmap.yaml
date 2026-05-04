@@ -11,12 +11,77 @@ data:
     Runs as a sidecar in the same pod so all URLs are localhost.
     Idempotent — skips anything already configured.
     """
-    import http.cookiejar, json, os, time, urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
+    import configparser, http.cookiejar, json, os, time, urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 
     RADARR_URL   = "http://localhost:7878"
     SONARR_URL   = "http://localhost:8989"
     PROWLARR_URL = "http://localhost:9696"
     QB_URL       = "http://localhost:8080"
+    SAB_URL      = "http://localhost:8090"
+
+    def read_sabnzbd_key(path, max_wait=600):
+        deadline = time.time() + max_wait
+        while time.time() < deadline:
+            try:
+                cfg = configparser.RawConfigParser()
+                cfg.read(path)
+                key = cfg.get("misc", "api_key", fallback=None)
+                if key and len(key) > 8:
+                    return key
+            except Exception:
+                pass
+            time.sleep(5)
+        raise RuntimeError(f"SABnzbd API key not found in {path} after {max_wait}s")
+
+    def wait_ready_sabnzbd(api_key):
+        print("Waiting for SABnzbd...", flush=True)
+        for _ in range(120):
+            try:
+                url = f"{SAB_URL}/api?mode=version&output=json&apikey={api_key}"
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    json.loads(r.read())
+                    print("SABnzbd ready", flush=True)
+                    return
+            except Exception:
+                pass
+            time.sleep(5)
+        raise RuntimeError("SABnzbd not ready after 10 minutes")
+
+    def add_sabnzbd_client(base_url, api_key, app, sab_key):
+        clients = get(f"{base_url}/api/v3/downloadclient", api_key)
+        existing = next((c for c in clients if c.get("name") == "SABnzbd"), None)
+        is_radarr = "7878" in base_url
+        cat_field  = "movieCategory"  if is_radarr else "tvCategory"
+        prio_field  = "recentMoviePriority" if is_radarr else "recentTvPriority"
+        prio_field2 = "olderMoviePriority"  if is_radarr else "olderTvPriority"
+        payload = {
+            "name": "SABnzbd",
+            "enable": True,
+            "protocol": "usenet",
+            "priority": 1,
+            "removeCompletedDownloads": True,
+            "removeFailedDownloads": True,
+            "fields": [
+                {"name": "host",       "value": "localhost"},
+                {"name": "port",       "value": 8090},
+                {"name": "useSsl",     "value": False},
+                {"name": "urlBase",    "value": ""},
+                {"name": "apiKey",     "value": sab_key},
+                {"name": cat_field,    "value": "radarr" if is_radarr else "sonarr"},
+                {"name": prio_field,   "value": 0},
+                {"name": prio_field2,  "value": 0},
+            ],
+            "implementationName": "SABnzbd",
+            "implementation":     "Sabnzbd",
+            "configContract":     "SabnzbdSettings",
+            "tags": [],
+        }
+        if existing:
+            delete(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key)
+        post(f"{base_url}/api/v3/downloadclient", api_key, payload)
+        action = "updated" if existing else "added"
+        print(f"{app}: SABnzbd download client {action}", flush=True)
 
     def read_api_key(path, max_wait=600):
         deadline = time.time() + max_wait
@@ -234,18 +299,22 @@ data:
     radarr_key   = read_api_key("/config/radarr/config.xml")
     sonarr_key   = read_api_key("/config/sonarr/config.xml")
     prowlarr_key = read_api_key("/config/prowlarr/config.xml")
+    sabnzbd_key  = read_sabnzbd_key("/config/sabnzbd/sabnzbd.ini")
     qb_user = os.environ.get("QB_USER", "admin")
     qb_pass = os.environ.get("QB_PASS", "")
 
     wait_ready(RADARR_URL,   radarr_key,   "Radarr",   "v3")
     wait_ready(SONARR_URL,   sonarr_key,   "Sonarr",   "v3")
     wait_ready(PROWLARR_URL, prowlarr_key, "Prowlarr", "v1")
+    wait_ready_sabnzbd(sabnzbd_key)
 
     configure_qbittorrent(qb_user, qb_pass)
     add_root_folder(RADARR_URL, radarr_key, "Radarr", "/movies")
     add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")
     add_qbittorrent_client(RADARR_URL,   radarr_key,   "Radarr",   qb_user, qb_pass)
     add_qbittorrent_client(SONARR_URL,   sonarr_key,   "Sonarr",   qb_user, qb_pass)
+    add_sabnzbd_client(RADARR_URL,   radarr_key,   "Radarr",   sabnzbd_key)
+    add_sabnzbd_client(SONARR_URL,   sonarr_key,   "Sonarr",   sabnzbd_key)
     add_flaresolverr(prowlarr_key)
     add_prowlarr_app(prowlarr_key, "Radarr", RADARR_URL, radarr_key)
     add_prowlarr_app(prowlarr_key, "Sonarr", SONARR_URL, sonarr_key)
