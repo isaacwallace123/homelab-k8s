@@ -164,10 +164,7 @@ data:
             post(f"{base_url}/api/v3/rootfolder", api_key, {"path": path})
             print(f"{app}: root folder {path} added", flush=True)
         except urllib.error.HTTPError as e:
-            if e.code == 409:
-                print(f"{app}: root folder {path} already exists", flush=True)
-            else:
-                raise
+            print(f"WARNING: {app}: root folder {path} failed (HTTP {e.code}) — check permissions", flush=True)
 
     def add_flaresolverr(prowlarr_key):
         proxies = get(f"{PROWLARR_URL}/api/v1/indexerproxy", prowlarr_key)

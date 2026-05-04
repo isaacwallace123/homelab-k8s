@@ -22,6 +22,19 @@ spec:
       # idempotent) and strips the old proxy settings that are no longer needed
       # now that all containers share gluetun's network namespace.
       initContainers:
+        # Ensure all media volumes are owned by UID/GID 1000 (user 'abc' in
+        # linuxserver images) so Radarr/Sonarr/qBittorrent can write to them.
+        - name: permissions-init
+          image: busybox:latest
+          command: ["sh", "-c", "chown -R 1000:1000 /movies /tv /downloads && echo 'Permissions set'"]
+          volumeMounts:
+            - name: movies
+              mountPath: /movies
+            - name: tv
+              mountPath: /tv
+            - name: downloads
+              mountPath: /downloads
+
         - name: qbittorrent-init
           image: python:3-slim
           command: [python3, "-c"]
