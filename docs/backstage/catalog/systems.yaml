@@ -1,0 +1,55 @@
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: homelab-platform
+  description: Core k3s cluster platform — GitOps, ingress, secrets, storage, PKI
+  tags:
+    - kubernetes
+    - infrastructure
+    - gitops
+spec:
+  owner: group:homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: media-system
+  description: Self-hosted media automation — Plex, *arr stack, VPN-tunnelled downloaders
+  tags:
+    - media
+    - self-hosted
+spec:
+  owner: group:homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: monitoring-system
+  description: Observability stack — Prometheus, Grafana, Loki, Alertmanager, ntfy
+  tags:
+    - observability
+    - monitoring
+spec:
+  owner: group:homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: portfolio-system
+  description: Public portfolio at isaacwallace.dev — Next.js, PostgreSQL, MinIO, infra-agent
+  tags:
+    - portfolio
+    - public
+spec:
+  owner: group:homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: ai-system
+  description: Cortex AI platform — Intel Arc GPU workloads on k3s-worker-ai
+  tags:
+    - ai
+    - gpu
+spec:
+  owner: group:homelab-ops

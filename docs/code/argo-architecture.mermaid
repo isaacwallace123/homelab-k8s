@@ -1,0 +1,43 @@
+%%{ init: { "theme": "dark" } }%%
+flowchart TB
+    subgraph Git["GitHub — homelab-k8s"]
+        Root["bootstrap/root-app.yaml\n(apply once)"]
+        InfraSet["categories/infrastructure.yaml\nApplicationSet — wave -5"]
+        AppsSet["categories/applications.yaml\nApplicationSet — wave 0"]
+
+        subgraph ArgoApps["argocd-apps/"]
+            InfraApps["infrastructure/**/*-helm-app.yaml\ninfra/**/*-git-app.yaml"]
+            AppDefs["apps/**/*-git-app.yaml"]
+        end
+
+        subgraph Manifests["manifests/"]
+            InfraManifests["infra/\nmetallb · longhorn · cert-manager\nenvoy-gateway · monitoring · network-policies"]
+            AppManifests["apps/\nadguard-home · media-stack · plex\nhomepage · ntfy · portfolio"]
+        end
+    end
+
+    subgraph Cluster["k3s Cluster — ArgoCD"]
+        direction TB
+        W5["Wave -5\ninfrastructure"]
+        W3["Wave -3\nArgoCD config · namespaces\nnetwork policies"]
+        W1["Wave -1\nSealed Secrets"]
+        W0["Wave 0\napplications"]
+        W1P["Wave +1\nmonitoring · portfolio · cortex"]
+    end
+
+    Root -->|"creates"| InfraSet
+    Root -->|"creates"| AppsSet
+    InfraSet -->|"discovers"| InfraApps
+    AppsSet -->|"discovers"| AppDefs
+    InfraApps -->|"deploys"| InfraManifests
+    AppDefs -->|"deploys"| AppManifests
+    InfraManifests -->|"sync"| W5
+    InfraManifests -->|"sync"| W3
+    InfraManifests -->|"sync"| W1
+    AppManifests -->|"sync"| W0
+    AppManifests -->|"sync"| W1P
+
+    W5 -->|"ready"| W3
+    W3 -->|"ready"| W1
+    W1 -->|"secrets exist"| W0
+    W0 -->|"apps running"| W1P

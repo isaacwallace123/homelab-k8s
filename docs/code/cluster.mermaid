@@ -1,0 +1,103 @@
+%%{ init: { "theme": "dark" } }%%
+flowchart TB
+    subgraph LAN["LAN — 192.168.0.0/24"]
+        Client["LAN Clients"]
+        Internet["Internet"]
+        CF["Cloudflare\nTunnel"]
+    end
+
+    subgraph Proxmox["Proxmox VE — pve2"]
+        TrueNAS["TrueNAS NFS\n192.168.0.254\n/tank — 7.3 TB"]
+
+        subgraph CP["k3s-control-plane"]
+            ETCD["etcd"]
+            API["API Server"]
+            Sched["Scheduler"]
+        end
+
+        subgraph WorkerAI["k3s-worker-ai\nIntel Arc B580 + B50 Pro"]
+            Cortex["cortex\nAI Inference"]
+        end
+
+        subgraph Workers["k3s-worker-01 / 02"]
+            subgraph ns_networking["namespace: networking"]
+                EnvoyGW["Envoy Gateway\n192.168.0.245"]
+                AdGuard["AdGuard Home\nDNS 192.168.0.246"]
+                Homepage["Homepage\nDashboard"]
+                Cloudflared["cloudflared"]
+                ntfy["ntfy"]
+            end
+
+            subgraph ns_media["namespace: media"]
+                Plex["Plex\n192.168.0.241:32400"]
+                MediaStack["media-stack\ngluetun · qbittorrent · radarr\nsonarr · prowlarr · sabnzbd\noverseerr · flaresolverr"]
+            end
+
+            subgraph ns_monitoring["namespace: monitoring"]
+                Prometheus["Prometheus"]
+                Grafana["Grafana"]
+                Loki["Loki + Promtail"]
+                Alertmanager["Alertmanager"]
+                NodeExp["node-exporter\ncAdvisor"]
+            end
+
+            subgraph ns_portfolio["namespace: portfolio"]
+                Frontend["Next.js\nfrontend"]
+                InfraAgent["infra-agent"]
+                Postgres["PostgreSQL"]
+                Redis["Redis"]
+                MinIO["MinIO S3"]
+            end
+
+            subgraph ns_infra["namespace: argocd / secrets / cert-manager"]
+                ArgoCD["ArgoCD"]
+                SealedSecrets["Sealed Secrets"]
+                CertMgr["cert-manager"]
+            end
+
+            subgraph storage["Storage"]
+                Longhorn["Longhorn\nBlock Storage"]
+                MetalLB["MetalLB\nL2 Pool"]
+            end
+        end
+    end
+
+    Client -->|"*.lan HTTPS"| EnvoyGW
+    Client -->|"DNS :53"| AdGuard
+    AdGuard -->|"*.lan → 192.168.0.245"| EnvoyGW
+    Internet --> CF
+    CF -->|"isaacwallace.dev"| Cloudflared
+    Cloudflared --> EnvoyGW
+
+    EnvoyGW --> Homepage
+    EnvoyGW --> AdGuard
+    EnvoyGW --> ntfy
+    EnvoyGW --> ArgoCD
+    EnvoyGW --> Grafana
+    EnvoyGW --> Prometheus
+    EnvoyGW --> Alertmanager
+    EnvoyGW --> Loki
+    EnvoyGW --> Plex
+    EnvoyGW --> MediaStack
+    EnvoyGW --> Frontend
+    Client -->|"direct :32400"| Plex
+
+    InfraAgent -->|"PromQL"| Prometheus
+    Alertmanager -->|"webhook"| ntfy
+    Prometheus -->|"scrape"| NodeExp
+
+    Longhorn --> Prometheus
+    Longhorn --> Grafana
+    Longhorn --> Loki
+    Longhorn --> Postgres
+    Longhorn --> Redis
+
+    TrueNAS -->|"NFS /tank"| MediaStack
+    TrueNAS -->|"NFS /tank"| Plex
+    TrueNAS -->|"NFS /tank"| MinIO
+
+    ArgoCD -->|"sync"| ns_networking
+    ArgoCD -->|"sync"| ns_media
+    ArgoCD -->|"sync"| ns_monitoring
+    ArgoCD -->|"sync"| ns_portfolio
+    ArgoCD -->|"sync"| WorkerAI

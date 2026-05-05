@@ -1,0 +1,407 @@
+# ── Platform Infrastructure ───────────────────────────────────────────────────
+
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: argocd
+  description: GitOps controller — continuously reconciles cluster state from git
+  annotations:
+    backstage.io/source-location: url:https://github.com/isaacwallace123/homelab-k8s/tree/main/argocd-apps
+  tags:
+    - gitops
+    - platform
+  links:
+    - url: https://argocd.lan
+      title: ArgoCD UI
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: envoy-gateway
+  description: Kubernetes Gateway API implementation — TLS termination and routing for all *.lan services
+  tags:
+    - ingress
+    - platform
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: metallb
+  description: L2 load balancer — assigns 192.168.0.240-250 to LoadBalancer services
+  tags:
+    - networking
+    - platform
+spec:
+  type: library
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cert-manager
+  description: PKI automation — issues wildcard *.lan TLS cert from homelab self-signed CA
+  tags:
+    - pki
+    - platform
+spec:
+  type: library
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sealed-secrets
+  description: Bitnami Sealed Secrets controller — decrypts SealedSecret resources for safe git storage
+  tags:
+    - secrets
+    - platform
+spec:
+  type: library
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: longhorn
+  description: Distributed block storage — RWO PVCs for stateful workloads with daily snapshots
+  tags:
+    - storage
+    - platform
+  links:
+    - url: https://longhorn.lan
+      title: Longhorn UI
+spec:
+  type: library
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cloudflared
+  description: Cloudflare Tunnel — exposes isaacwallace.dev without inbound firewall rules
+  tags:
+    - networking
+    - platform
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+
+# ── Networking / DNS ──────────────────────────────────────────────────────────
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: adguard-home
+  description: DNS server with ad-blocking and *.lan rewrite rules pointing to 192.168.0.245
+  tags:
+    - dns
+    - networking
+  links:
+    - url: https://adguard.lan
+      title: AdGuard UI
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: homepage
+  description: Cluster dashboard with live widget data for all deployed services
+  tags:
+    - dashboard
+  links:
+    - url: https://home.lan
+      title: Homepage
+spec:
+  type: website
+  lifecycle: production
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ntfy
+  description: Self-hosted push notifications — receives Alertmanager webhooks
+  tags:
+    - notifications
+  links:
+    - url: https://ntfy.lan
+      title: ntfy
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+
+# ── Observability ─────────────────────────────────────────────────────────────
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: prometheus
+  description: Metrics collection — scrapes pods, nodes, cAdvisor; evaluates alert rules
+  tags:
+    - monitoring
+    - metrics
+  links:
+    - url: https://prometheus.lan
+      title: Prometheus UI
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+  providesApis:
+    - prometheus-http-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: grafana
+  description: Dashboards — community dashboards auto-provisioned; datasources for Prometheus and Loki
+  tags:
+    - monitoring
+    - dashboards
+  links:
+    - url: https://grafana.lan
+      title: Grafana
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+  consumesApis:
+    - prometheus-http-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: loki
+  description: Log aggregation backend — receives logs from Promtail DaemonSet
+  tags:
+    - monitoring
+    - logs
+  links:
+    - url: https://loki.lan
+      title: Loki
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: promtail
+  description: Log shipper DaemonSet — tails all pod logs and forwards to Loki
+  tags:
+    - monitoring
+    - logs
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: alertmanager
+  description: Alert routing — deduplicates and routes firing rules to ntfy webhooks
+  tags:
+    - monitoring
+    - alerts
+  links:
+    - url: https://alertmanager.lan
+      title: Alertmanager
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: node-exporter
+  description: Hardware metrics DaemonSet — CPU, memory, disk, network per node
+  tags:
+    - monitoring
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cadvisor
+  description: Container resource metrics DaemonSet — per-container CPU/memory/network
+  tags:
+    - monitoring
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+
+# ── Media ─────────────────────────────────────────────────────────────────────
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: plex
+  description: Media server with Intel iGPU hardware transcode; direct MetalLB access on 192.168.0.241:32400
+  tags:
+    - media
+  links:
+    - url: https://plex.lan
+      title: Plex Web
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: media-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: media-stack
+  description: Multi-container pod — gluetun VPN sidecar, radarr, sonarr, prowlarr, qbittorrent, sabnzbd, overseerr, flaresolverr
+  tags:
+    - media
+    - vpn
+  links:
+    - url: https://radarr.lan
+      title: Radarr
+    - url: https://sonarr.lan
+      title: Sonarr
+    - url: https://prowlarr.lan
+      title: Prowlarr
+    - url: https://qbittorrent.lan
+      title: qBittorrent
+    - url: https://sabnzbd.lan
+      title: SABnzbd
+    - url: https://overseerr.lan
+      title: Overseerr
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: media-system
+
+# ── Portfolio ─────────────────────────────────────────────────────────────────
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: portfolio-frontend
+  description: Next.js portfolio — isaacwallace.dev; auto-deployed via ArgoCD Image Updater on ghcr.io digest push
+  tags:
+    - portfolio
+    - nextjs
+  links:
+    - url: https://isaacwallace.dev
+      title: isaacwallace.dev
+spec:
+  type: website
+  lifecycle: production
+  owner: group:homelab-ops
+  system: portfolio-system
+  consumesApis:
+    - prometheus-http-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: infra-agent
+  description: Cluster metrics API — queries Prometheus and exposes homelab stats to the portfolio frontend
+  tags:
+    - portfolio
+    - api
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: portfolio-system
+  consumesApis:
+    - prometheus-http-api
+  providesApis:
+    - infra-agent-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: portfolio-postgres
+  description: PostgreSQL database for portfolio (Longhorn RWO, 5Gi)
+  tags:
+    - portfolio
+    - database
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: portfolio-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: portfolio-minio
+  description: MinIO S3-compatible object storage for portfolio image uploads (NFS-backed, 50Gi)
+  tags:
+    - portfolio
+    - storage
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: portfolio-system
+
+# ── AI / Cortex ───────────────────────────────────────────────────────────────
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cortex
+  description: AI inference platform on k3s-worker-ai (Intel Arc B580 + B50 Pro); managed from external repo
+  annotations:
+    backstage.io/source-location: url:https://github.com/isaacwallace123/cortex
+  tags:
+    - ai
+    - gpu
+spec:
+  type: service
+  lifecycle: production
+  owner: group:homelab-ops
+  system: ai-system

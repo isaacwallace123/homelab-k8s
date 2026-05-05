@@ -1,0 +1,21 @@
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: isaac
+  description: Homelab operator and owner
+spec:
+  profile:
+    displayName: Isaac Wallace
+    email: isaac@isaacwallace.dev
+  memberOf:
+    - homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: homelab-ops
+  description: Homelab operations — owns all platform and application components
+spec:
+  type: team
+  members:
+    - isaac

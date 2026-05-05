@@ -1,0 +1,63 @@
+%%{ init: { "theme": "dark" } }%%
+flowchart TB
+    subgraph Sources["Metric & Log Sources"]
+        Nodes["Node Exporter\nper-node hardware\nDaemonSet"]
+        Containers["cAdvisor\nper-container resources\nDaemonSet"]
+        Pods["Annotated Pods\nprometheus.io/scrape: true"]
+        K8sAPI["Kubernetes API\ncAdvisor via /proxy/metrics"]
+        LokiSrc["Promtail\nDaemonSet — tails pod logs"]
+    end
+
+    subgraph Collection["Collection"]
+        Prometheus["Prometheus\n:9090\n30-day retention"]
+        Loki["Loki\n:3100\nlog aggregation"]
+    end
+
+    subgraph Evaluation["Evaluation — Alert Rules"]
+        R1["NodeDiskSpaceLow\nroot FS > 80% for 5m"]
+        R2["NodeMemoryPressure\nmem > 90% for 5m"]
+        R3["NodeHighLoad\nload15/cpu > 2 for 10m"]
+        R4["PodCrashLooping\n>3 restarts in 30m  🔴 critical"]
+        R5["ContainerOOMKilled\nOOMKilled termination"]
+        R6["PVCNearlyFull\nPVC > 85% for 5m"]
+        R7["PrometheusTargetDown\nscrape target down 5m"]
+        R8["CertificateExpiringSoon\ncert expires < 14 days"]
+    end
+
+    subgraph Alerting["Alerting"]
+        AM["Alertmanager\n:9093\ndedup + route"]
+        ntfy["ntfy\nntfy.lan/homelab-alerts\npush notifications"]
+    end
+
+    subgraph Visualization["Visualization"]
+        Grafana["Grafana\n:3000\nPrometheus + Loki datasources"]
+        Dashboards["Auto-provisioned Dashboards\nNode Exporter · Kubernetes · Loki"]
+    end
+
+    subgraph Consumers["External Consumers"]
+        InfraAgent["infra-agent\nPortfolio metrics API"]
+    end
+
+    Nodes -->|"scrape :9100"| Prometheus
+    Containers -->|"scrape :8080"| Prometheus
+    Pods -->|"scrape annotation"| Prometheus
+    K8sAPI -->|"bearer token"| Prometheus
+    LokiSrc -->|"push logs"| Loki
+
+    Prometheus -->|"evaluate rules"| R1
+    Prometheus -->|"evaluate rules"| R2
+    Prometheus -->|"evaluate rules"| R3
+    Prometheus -->|"evaluate rules"| R4
+    Prometheus -->|"evaluate rules"| R5
+    Prometheus -->|"evaluate rules"| R6
+    Prometheus -->|"evaluate rules"| R7
+    Prometheus -->|"evaluate rules"| R8
+
+    R1 & R2 & R3 & R4 & R5 & R6 & R7 & R8 -->|"fire"| AM
+    AM -->|"webhook POST"| ntfy
+
+    Prometheus -->|"PromQL"| Grafana
+    Loki -->|"LogQL"| Grafana
+    Grafana --> Dashboards
+
+    Prometheus -->|"PromQL queries"| InfraAgent

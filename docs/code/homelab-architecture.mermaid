@@ -1,0 +1,49 @@
+%%{ init: { "theme": "dark" } }%%
+flowchart LR
+    subgraph Physical["Physical Layer"]
+        Router["Router\n192.168.0.1"]
+        Switch["Gigabit Switch"]
+        PVE["Proxmox VE\npve2"]
+    end
+
+    subgraph VMs["Virtual Machines on pve2"]
+        CP["k3s-control-plane\n4 vCPU / 8 GB RAM"]
+        W1["k3s-worker-01\n8 vCPU / 16 GB RAM"]
+        W2["k3s-worker-02\n8 vCPU / 16 GB RAM"]
+        WAI["k3s-worker-ai\nArc B580 + B50 Pro"]
+        TN["TrueNAS\n7.3 TB Storage\n192.168.0.254"]
+    end
+
+    subgraph Cluster["k3s Cluster"]
+        direction TB
+        Platform["Platform\nArgoCD · MetalLB · Envoy Gateway\ncert-manager · Sealed Secrets · Longhorn"]
+        Apps["Applications\nMedia · Portfolio · AI"]
+        Obs["Observability\nPrometheus · Grafana · Loki"]
+    end
+
+    subgraph External["External"]
+        CF["Cloudflare\nDNS + Tunnel"]
+        GHCR["ghcr.io\nContainer Registry"]
+        GitHub["GitHub\nhomelab-k8s repo"]
+    end
+
+    Router --> Switch
+    Switch --> PVE
+    PVE --> CP
+    PVE --> W1
+    PVE --> W2
+    PVE --> WAI
+    PVE --> TN
+
+    CP --> Cluster
+    W1 --> Cluster
+    W2 --> Cluster
+    WAI --> Cluster
+    TN -->|"NFS"| Cluster
+
+    GitHub -->|"GitOps pull"| Platform
+    GHCR -->|"image pull"| Apps
+    CF -->|"tunnel"| Apps
+
+    Platform --> Apps
+    Platform --> Obs

@@ -1,0 +1,77 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: k3s-cluster
+  description: k3s Kubernetes cluster — 1 control plane + 3 workers on Proxmox VE VMs
+  tags:
+    - kubernetes
+    - infrastructure
+spec:
+  type: kubernetes-cluster
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: longhorn-storage
+  description: Longhorn distributed block storage — RWO PVCs with daily 7-day snapshots
+  tags:
+    - storage
+    - block
+spec:
+  type: storage
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: truenas-nfs
+  description: TrueNAS NFS at 192.168.0.254 — /tank (7.3 TB HDD + SSD); movies, TV, downloads, MinIO, portfolio uploads
+  tags:
+    - storage
+    - nfs
+spec:
+  type: storage
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: metallb-pool
+  description: MetalLB L2 address pool 192.168.0.240-250 — Plex (.241), Envoy Gateway (.245), AdGuard DNS (.246)
+  tags:
+    - networking
+    - loadbalancer
+spec:
+  type: network
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: proxmox-pve2
+  description: Proxmox VE hypervisor (pve2) — hosts all k3s VMs and TrueNAS
+  tags:
+    - virtualization
+    - infrastructure
+spec:
+  type: compute
+  owner: group:homelab-ops
+  system: homelab-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: k3s-worker-ai
+  description: GPU worker node — Intel Arc B580 + B50 Pro; dedicated to Cortex AI workloads
+  tags:
+    - gpu
+    - compute
+spec:
+  type: compute
+  owner: group:homelab-ops
+  system: ai-system

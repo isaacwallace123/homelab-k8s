@@ -1,0 +1,121 @@
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: prometheus-http-api
+  description: Prometheus HTTP API — PromQL queries, instant/range queries, metadata
+  tags:
+    - metrics
+    - prometheus
+  links:
+    - url: https://prometheus.lan/api/v1
+      title: Prometheus API Base
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:homelab-ops
+  system: monitoring-system
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: Prometheus HTTP API
+      version: "2.x"
+    servers:
+      - url: https://prometheus.lan/api/v1
+    paths:
+      /query:
+        get:
+          summary: Instant query
+          parameters:
+            - name: query
+              in: query
+              required: true
+              schema:
+                type: string
+            - name: time
+              in: query
+              schema:
+                type: string
+          responses:
+            "200":
+              description: Query result
+      /query_range:
+        get:
+          summary: Range query
+          parameters:
+            - name: query
+              in: query
+              required: true
+              schema:
+                type: string
+            - name: start
+              in: query
+              required: true
+              schema:
+                type: string
+            - name: end
+              in: query
+              required: true
+              schema:
+                type: string
+            - name: step
+              in: query
+              required: true
+              schema:
+                type: string
+          responses:
+            "200":
+              description: Range query result
+      /targets:
+        get:
+          summary: Scrape targets status
+          responses:
+            "200":
+              description: Target list
+      /alerts:
+        get:
+          summary: Active alerts
+          responses:
+            "200":
+              description: Alert list
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: infra-agent-api
+  description: infra-agent REST API — cluster metrics for the portfolio homelab page
+  tags:
+    - portfolio
+    - metrics
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:homelab-ops
+  system: portfolio-system
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: infra-agent API
+      version: "1.0.0"
+    servers:
+      - url: https://isaacwallace.dev/api/infra
+    paths:
+      /metrics:
+        get:
+          summary: Cluster overview metrics
+          description: Returns CPU, memory, node count, and pod count from Prometheus
+          responses:
+            "200":
+              description: Metrics payload
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      cpu_usage:
+                        type: number
+                      memory_usage:
+                        type: number
+                      node_count:
+                        type: integer
+                      pod_count:
+                        type: integer
