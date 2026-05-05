@@ -19,7 +19,7 @@ spec:
         node-role.kubernetes.io/apps: "true"
       containers:
         - name: adguard
-          image: adguard/adguardhome:latest
+          image: adguard/adguardhome:v0.107.74
           args:
             - --web-addr
             - 0.0.0.0:80
@@ -39,6 +39,22 @@ spec:
             - containerPort: 53
               name: dns-udp
               protocol: UDP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: work
               mountPath: /opt/adguardhome/work
@@ -51,7 +67,7 @@ spec:
             limits:
               memory: 512Mi
         - name: bootstrap
-          image: python:3-slim
+          image: python:3.14.4-slim
           command: [python3, /scripts/bootstrap.py]
           env:
             - name: ADGUARD_USER

@@ -6,6 +6,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: portfolio-postgres-data
   namespace: portfolio
+  annotations:
+    recurring-job-group.longhorn.io/default: enabled
 spec:
   storageClassName: longhorn
   accessModes:
@@ -19,6 +21,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: portfolio-redis-data
   namespace: portfolio
+  annotations:
+    recurring-job-group.longhorn.io/default: enabled
 spec:
   storageClassName: longhorn
   accessModes:
@@ -77,6 +81,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 15
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -136,6 +147,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /data
@@ -229,7 +247,7 @@ spec:
             - name: LOKI_URL
               value: "http://loki.monitoring.svc.cluster.local:3100"
             - name: OVERWATCH_URL
-              value: "http://overwatch.homelab-ai.svc.cluster.local:8000"
+              value: "http://overwatch.cortex.svc.cluster.local:8000"
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -238,6 +256,14 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
@@ -395,6 +421,14 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 15
             failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 15
+            failureThreshold: 3
           volumeMounts:
             - name: uploads
               mountPath: /app/public/uploads

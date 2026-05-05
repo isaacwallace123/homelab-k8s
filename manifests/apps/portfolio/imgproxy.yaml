@@ -21,7 +21,7 @@ spec:
         node-role.kubernetes.io/portfolio: "true"
       containers:
         - name: imgproxy
-          image: darthsim/imgproxy:latest
+          image: darthsim/imgproxy:v3.31.3
           env:
             - name: IMGPROXY_USE_S3
               value: "true"
@@ -56,6 +56,14 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
             failureThreshold: 3
           resources:
             requests:

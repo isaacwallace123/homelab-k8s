@@ -82,7 +82,7 @@ spec:
             - name: dashboards
               mountPath: /var/lib/grafana/dashboards
         - name: download-dashboards
-          image: curlimages/curl:latest
+          image: curlimages/curl:curl-8_20_0
           command:
             - sh
             - -c
@@ -104,7 +104,7 @@ spec:
               mountPath: /dashboards
       containers:
         - name: grafana
-          image: grafana/grafana:latest
+          image: grafana/grafana:v13.0.1
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
@@ -115,6 +115,22 @@ spec:
               value: "http://grafana.monitoring.svc.cluster.local:3000"
           ports:
             - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /var/lib/grafana

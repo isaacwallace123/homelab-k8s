@@ -23,7 +23,7 @@ spec:
       # now that all containers share gluetun's network namespace.
       initContainers:
         - name: qbittorrent-init
-          image: python:3-slim
+          image: python:3.14.4-slim
           command: [python3, "-c"]
           args:
             - |
@@ -97,7 +97,7 @@ spec:
         # All other containers share this pod's network namespace.
         # Their outbound traffic is automatically routed through the VPN tunnel.
         - name: gluetun
-          image: qmcgaw/gluetun:latest
+          image: qmcgaw/gluetun:v3.41.1
           securityContext:
             capabilities:
               add: ["NET_ADMIN"]
@@ -122,6 +122,12 @@ spec:
           ports:
             - containerPort: 8000
               name: health
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
           livenessProbe:
             tcpSocket:
               port: 8000
@@ -140,7 +146,7 @@ spec:
         # Radarr/Sonarr import finished downloads to /movies and /tv (8TB NFS).
         # No proxy config needed — traffic goes through gluetun automatically.
         - name: qbittorrent
-          image: lscr.io/linuxserver/qbittorrent:latest
+          image: lscr.io/linuxserver/qbittorrent:5.1.4-r3-ls453
           env:
             - name: PUID
               value: "1000"
@@ -158,6 +164,22 @@ spec:
             - containerPort: 6881
               protocol: UDP
               name: torrent-udp
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: config-qbittorrent
               mountPath: /config
@@ -172,7 +194,7 @@ spec:
 
         # ── radarr ────────────────────────────────────────────────────────────
         - name: radarr
-          image: lscr.io/linuxserver/radarr:latest
+          image: lscr.io/linuxserver/radarr:6.1.1.10360-ls301
           env:
             - name: PUID
               value: "1000"
@@ -183,6 +205,22 @@ spec:
           ports:
             - containerPort: 7878
               name: radarr-ui
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 7878
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 7878
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config-radarr
               mountPath: /config
@@ -199,7 +237,7 @@ spec:
 
         # ── sonarr ────────────────────────────────────────────────────────────
         - name: sonarr
-          image: lscr.io/linuxserver/sonarr:latest
+          image: lscr.io/linuxserver/sonarr:4.0.17.2952-ls310
           env:
             - name: PUID
               value: "1000"
@@ -210,6 +248,22 @@ spec:
           ports:
             - containerPort: 8989
               name: sonarr-ui
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8989
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8989
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config-sonarr
               mountPath: /config
@@ -226,7 +280,7 @@ spec:
 
         # ── prowlarr ──────────────────────────────────────────────────────────
         - name: prowlarr
-          image: lscr.io/linuxserver/prowlarr:latest
+          image: lscr.io/linuxserver/prowlarr:2.3.5.5327-ls144
           env:
             - name: PUID
               value: "1000"
@@ -237,6 +291,22 @@ spec:
           ports:
             - containerPort: 9696
               name: prowlarr-ui
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9696
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9696
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config-prowlarr
               mountPath: /config
@@ -249,7 +319,7 @@ spec:
 
         # ── flaresolverr ──────────────────────────────────────────────────────
         - name: flaresolverr
-          image: ghcr.io/flaresolverr/flaresolverr:latest
+          image: ghcr.io/flaresolverr/flaresolverr:v3.4.6
           env:
             - name: LOG_LEVEL
               value: info
@@ -258,6 +328,22 @@ spec:
           ports:
             - containerPort: 8191
               name: flare-ui
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8191
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8191
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m
@@ -267,7 +353,7 @@ spec:
 
         # ── sabnzbd ───────────────────────────────────────────────────────────
         - name: sabnzbd
-          image: lscr.io/linuxserver/sabnzbd:latest
+          image: lscr.io/linuxserver/sabnzbd:5.0.1-ls251
           env:
             - name: PUID
               value: "1000"
@@ -278,6 +364,22 @@ spec:
           ports:
             - containerPort: 8090
               name: sabnzbd-ui
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8090
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config-sabnzbd
               mountPath: /config
@@ -292,13 +394,29 @@ spec:
 
         # ── seerr ─────────────────────────────────────────────────────────────
         - name: overseerr
-          image: ghcr.io/seerr-team/seerr:latest
+          image: ghcr.io/seerr-team/seerr:v3.2.0
           env:
             - name: TZ
               value: America/New_York
           ports:
             - containerPort: 5055
               name: overseerr-ui
+          readinessProbe:
+            httpGet:
+              path: /api/v1/status
+              port: 5055
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/v1/status
+              port: 5055
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config-overseerr
               mountPath: /app/config
@@ -314,7 +432,7 @@ spec:
         # start, then wires up qBittorrent download clients, FlareSolverr proxy,
         # and Prowlarr→Radarr/Sonarr app sync. Idempotent — safe to restart.
         - name: bootstrap
-          image: python:3-slim
+          image: python:3.14.4-slim
           command: [python3, /scripts/bootstrap.py]
           env:
             - name: QB_USER

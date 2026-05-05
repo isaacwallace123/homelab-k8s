@@ -1,0 +1,40 @@
+name: Validate Manifests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: kubeconform + YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar xz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin/
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint YAML syntax
+        run: |
+          yamllint -d '{extends: relaxed, rules: {line-length: {max: 200}}}' \
+            manifests/ argocd-apps/ categories/ bootstrap/
+
+      - name: Validate Kubernetes manifests
+        run: |
+          kubeconform \
+            -strict \
+            -ignore-missing-schemas \
+            -summary \
+            -skip SealedSecret,Application,ApplicationSet,ClusterIssuer,Certificate,\
+          GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,\
+          IPAddressPool,L2Advertisement,TLSRoute \
+            -kubernetes-version 1.31.0 \
+            manifests/

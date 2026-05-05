@@ -41,6 +41,12 @@ data:
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ['alertmanager.monitoring.svc.cluster.local:9093']
+    rule_files:
+      - /etc/prometheus/alerts/*.yml
     scrape_configs:
       - job_name: prometheus
         static_configs:
@@ -80,6 +86,10 @@ data:
         static_configs:
           - targets: ['loki.monitoring.svc.cluster.local:3100']
         metrics_path: /metrics
+      - job_name: alertmanager
+        static_configs:
+          - targets: ['alertmanager.monitoring.svc.cluster.local:9093']
+        metrics_path: /metrics
       - job_name: kubernetes-cadvisor
         scheme: https
         tls_config:
@@ -96,6 +106,49 @@ data:
             regex: (.+)
             target_label: __metrics_path__
             replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alerts
+  namespace: monitoring
+data:
+  homelab.yml: |
+    groups:
+      - name: homelab
+        rules:
+          - alert: NodeDiskSpaceLow
+            expr: (1 - node_filesystem_avail_bytes{fstype!="tmpfs",mountpoint="/"} / node_filesystem_size_bytes{fstype!="tmpfs",mountpoint="/"}) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node {{ $labels.instance }} disk usage above 80%"
+              description: "Disk usage is {{ printf \"%.1f\" $value }}%"
+          - alert: NodeMemoryPressure
+            expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node {{ $labels.instance }} memory above 90%"
+              description: "Memory usage is {{ printf \"%.1f\" $value }}%"
+          - alert: NodeHighLoad
+            expr: node_load15 / on(instance) count without(cpu) (node_cpu_seconds_total{mode="idle"}) > 2
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node {{ $labels.instance }} load average high"
+              description: "15-minute load per CPU is {{ printf \"%.2f\" $value }}"
+          - alert: PodCrashLooping
+            expr: increase(container_restart_count[30m]) > 3
+            for: 0m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} crash looping"
+              description: "Container restarted {{ printf \"%.0f\" $value }} times in 30m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -123,7 +176,7 @@ spec:
         runAsUser: 65534
       containers:
         - name: prometheus
-          image: prom/prometheus:latest
+          image: prom/prometheus:v3.11.3
           args:
             - "--config.file=/etc/prometheus/prometheus.yml"
             - "--storage.tsdb.path=/prometheus"
@@ -131,9 +184,27 @@ spec:
             - "--web.enable-lifecycle"
           ports:
             - containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: /etc/prometheus
+            - name: alerts
+              mountPath: /etc/prometheus/alerts
             - name: data
               mountPath: /prometheus
           resources:
@@ -146,6 +217,9 @@ spec:
         - name: config
           configMap:
             name: prometheus-config
+        - name: alerts
+          configMap:
+            name: prometheus-alerts
         - name: data
           hostPath:
             path: /mnt/k3s-data/prometheus

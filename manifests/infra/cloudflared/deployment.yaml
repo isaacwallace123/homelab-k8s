@@ -17,7 +17,7 @@ spec:
         node-role.kubernetes.io/infra: "true"
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:latest
+          image: cloudflare/cloudflared:2026.3.0
           args:
             - tunnel
             - --no-autoupdate

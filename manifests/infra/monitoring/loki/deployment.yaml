@@ -58,10 +58,26 @@ spec:
         runAsUser: 10001
       containers:
         - name: loki
-          image: grafana/loki:latest
+          image: grafana/loki:v3.7.1
           args: ["-config.file=/etc/loki/loki.yaml"]
           ports:
             - containerPort: 3100
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: /etc/loki
@@ -140,8 +156,27 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: promtail
-          image: grafana/promtail:latest
+          image: grafana/promtail:v3.7.1
           args: ["-config.file=/etc/promtail/promtail.yaml"]
+          ports:
+            - containerPort: 9080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 9080
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: /etc/promtail

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "kubernetes": {
+    "fileMatch": ["manifests/.*\\.yaml$"]
+  },
+  "packageRules": [
+    {
+      "description": "Skip user's own CI images — versions are controlled by the portfolio CI pipeline",
+      "matchPackagePatterns": ["^ghcr\\.io/isaacwallace123/"],
+      "enabled": false
+    },
+    {
+      "description": "Group LinuxServer media stack updates",
+      "matchPackagePatterns": ["^lscr\\.io/linuxserver/"],
+      "groupName": "linuxserver media stack",
+      "automerge": false
+    },
+    {
+      "description": "Group monitoring stack updates",
+      "matchPackagePatterns": ["^(prom/|grafana/)"],
+      "groupName": "monitoring stack",
+      "automerge": false
+    }
+  ],
+  "prHourlyLimit": 3,
+  "prConcurrentLimit": 10,
+  "automerge": false,
+  "labels": ["dependencies", "renovate"],
+  "commitMessagePrefix": "chore(deps):",
+  "reviewers": [],
+  "assignees": []
+}

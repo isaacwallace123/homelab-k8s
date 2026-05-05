@@ -21,11 +21,27 @@ spec:
           operator: Exists
       containers:
         - name: cadvisor
-          image: gcr.io/cadvisor/cadvisor:latest
+          image: gcr.io/cadvisor/cadvisor:v0.56.2
           securityContext:
             privileged: true
           ports:
             - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: rootfs
               mountPath: /rootfs

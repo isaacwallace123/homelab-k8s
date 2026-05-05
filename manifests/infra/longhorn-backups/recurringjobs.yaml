@@ -1,0 +1,17 @@
+# Daily snapshot — retains 7 snapshots per volume.
+# Volumes opt in by carrying the annotation:
+#   recurring-job-group.longhorn.io/default: enabled
+# (already applied to all Longhorn PVCs in media and portfolio namespaces)
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshot
+  namespace: longhorn-system
+spec:
+  cron: "0 2 * * *"
+  task: snapshot
+  groups:
+    - default
+  retain: 7
+  concurrency: 2
+  labels: {}

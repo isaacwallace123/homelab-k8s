@@ -1,0 +1,6 @@
+name: etcd-backup
+namespace: kube-system
+syncWave: "0"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/infra/etcd-backup

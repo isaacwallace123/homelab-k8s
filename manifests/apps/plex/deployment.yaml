@@ -19,7 +19,7 @@ spec:
         node-role.kubernetes.io/apps: "true"
       containers:
         - name: plex
-          image: lscr.io/linuxserver/plex:latest
+          image: lscr.io/linuxserver/plex:1.43.1.10611-1e34174b1-ls304
           env:
             - name: PUID
               value: "1000"
@@ -33,6 +33,22 @@ spec:
               value: "http://192.168.0.241:32400/"
           ports:
             - containerPort: 32400
+          readinessProbe:
+            httpGet:
+              path: /identity
+              port: 32400
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /identity
+              port: 32400
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: /config
