@@ -15,7 +15,11 @@ spec:
   hostnames:
     - grafana.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: grafana
@@ -37,7 +41,11 @@ spec:
   hostnames:
     - prometheus.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: prometheus
@@ -59,7 +67,11 @@ spec:
   hostnames:
     - alertmanager.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: alertmanager

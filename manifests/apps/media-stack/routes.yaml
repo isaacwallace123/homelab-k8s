@@ -15,7 +15,11 @@ spec:
   hostnames:
     - overseerr.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: overseerr
@@ -37,7 +41,11 @@ spec:
   hostnames:
     - radarr.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: radarr
@@ -59,7 +67,11 @@ spec:
   hostnames:
     - sonarr.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: sonarr
@@ -81,7 +93,11 @@ spec:
   hostnames:
     - prowlarr.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: prowlarr
@@ -103,7 +119,11 @@ spec:
   hostnames:
     - qbittorrent.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: qbittorrent
@@ -125,7 +145,11 @@ spec:
   hostnames:
     - sabnzbd.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: sabnzbd

@@ -474,7 +474,11 @@ spec:
   hostnames:
     - isaacwallace.dev
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: frontend

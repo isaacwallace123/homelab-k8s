@@ -15,7 +15,11 @@ spec:
   hostnames:
     - adguard.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: adguard-home

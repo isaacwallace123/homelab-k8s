@@ -119,7 +119,11 @@ spec:
   hostnames:
     - minio.lan
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: minio-console

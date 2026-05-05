@@ -101,7 +101,11 @@ spec:
   hostnames:
     - images.isaacwallace.dev
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - group: ""
           kind: Service
           name: imgproxy
