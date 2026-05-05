@@ -90,11 +90,11 @@ spec:
               set -e
               BASE="https://grafana.com/api/dashboards"
               echo "Downloading community dashboards..."
-              wget -q -O /dashboards/node-exporter-full.json   "$BASE/1860/revisions/latest/download"
-              wget -q -O /dashboards/prometheus-stats.json     "$BASE/3662/revisions/latest/download"
-              wget -q -O /dashboards/loki-operational.json     "$BASE/14055/revisions/latest/download"
-              wget -q -O /dashboards/loki-log-search.json      "$BASE/15141/revisions/latest/download"
-              wget -q -O /dashboards/traefik.json              "$BASE/17346/revisions/latest/download"
+              wget -q -O /dashboards/node-exporter-full.json   "$BASE/1860/revisions/latest/download"  || echo "warn: node-exporter dashboard unavailable"
+              wget -q -O /dashboards/prometheus-stats.json     "$BASE/3662/revisions/latest/download"  || echo "warn: prometheus-stats dashboard unavailable"
+              wget -q -O /dashboards/loki-operational.json     "$BASE/14055/revisions/latest/download" || echo "warn: loki-operational dashboard unavailable"
+              wget -q -O /dashboards/loki-log-search.json      "$BASE/15141/revisions/latest/download" || echo "warn: loki-log-search dashboard unavailable"
+              wget -q -O /dashboards/traefik.json              "$BASE/17346/revisions/latest/download" || echo "warn: traefik dashboard unavailable"
               echo "Fixing datasource variable references..."
               sed -i 's/\${DS_PROMETHEUS}/Prometheus/g' /dashboards/*.json
               sed -i 's/\${DS_LOKI}/Loki/g' /dashboards/*.json
@@ -147,11 +147,12 @@ spec:
               cpu: 100m
               memory: 256Mi
             limits:
+              cpu: 500m
               memory: 512Mi
       volumes:
         - name: data
-          hostPath:
-            path: /mnt/k3s-data/grafana
+          persistentVolumeClaim:
+            claimName: grafana-data
             type: DirectoryOrCreate
         - name: datasources
           configMap:

@@ -212,6 +212,7 @@ spec:
               cpu: 50m
               memory: 512Mi
             limits:
+              cpu: 2000m
               memory: 2Gi
       volumes:
         - name: config
@@ -221,9 +222,8 @@ spec:
           configMap:
             name: prometheus-alerts
         - name: data
-          hostPath:
-            path: /mnt/k3s-data/prometheus
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: prometheus-data
 ---
 apiVersion: v1
 kind: Service
