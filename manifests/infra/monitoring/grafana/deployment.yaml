@@ -82,7 +82,7 @@ spec:
             - name: dashboards
               mountPath: /var/lib/grafana/dashboards
         - name: download-dashboards
-          image: curlimages/curl:8.20.0
+          image: busybox:1.36
           command:
             - sh
             - -c
@@ -90,11 +90,11 @@ spec:
               set -e
               BASE="https://grafana.com/api/dashboards"
               echo "Downloading community dashboards..."
-              curl -fsSL "$BASE/1860/revisions/latest/download"  -o /dashboards/node-exporter-full.json
-              curl -fsSL "$BASE/3662/revisions/latest/download"  -o /dashboards/prometheus-stats.json
-              curl -fsSL "$BASE/14055/revisions/latest/download" -o /dashboards/loki-operational.json
-              curl -fsSL "$BASE/15141/revisions/latest/download" -o /dashboards/loki-log-search.json
-              curl -fsSL "$BASE/17346/revisions/latest/download" -o /dashboards/traefik.json
+              wget -q -O /dashboards/node-exporter-full.json   "$BASE/1860/revisions/latest/download"
+              wget -q -O /dashboards/prometheus-stats.json     "$BASE/3662/revisions/latest/download"
+              wget -q -O /dashboards/loki-operational.json     "$BASE/14055/revisions/latest/download"
+              wget -q -O /dashboards/loki-log-search.json      "$BASE/15141/revisions/latest/download"
+              wget -q -O /dashboards/traefik.json              "$BASE/17346/revisions/latest/download"
               echo "Fixing datasource variable references..."
               sed -i 's/\${DS_PROMETHEUS}/Prometheus/g' /dashboards/*.json
               sed -i 's/\${DS_LOKI}/Loki/g' /dashboards/*.json
