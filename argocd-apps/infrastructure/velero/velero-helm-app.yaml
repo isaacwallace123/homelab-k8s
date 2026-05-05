@@ -44,6 +44,9 @@ values: |
         includedNamespaces:
           - "*"
         storageLocation: default
+  # Skip upgrade-CRDs job — bitnami/kubectl:1.34 doesn't exist yet; CRDs are
+  # installed by the chart directly on a fresh install.
+  upgradeCRDs: false
   resources:
     requests:
       cpu: 100m
