@@ -101,16 +101,14 @@ spec:
             name: adguard-bootstrap
             defaultMode: 0755
 ---
-# Web UI — accessible at http://192.168.0.240:3000
+# Web UI — accessible at https://adguard.lan (routed via Envoy Gateway)
 apiVersion: v1
 kind: Service
 metadata:
   name: adguard-home
   namespace: networking
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.240"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: adguard-home
   ports:

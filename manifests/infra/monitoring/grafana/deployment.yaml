@@ -112,7 +112,7 @@ spec:
                   name: grafana-secrets
                   key: admin-password
             - name: GF_SERVER_ROOT_URL
-              value: "http://grafana.monitoring.svc.cluster.local:3000"
+              value: "https://grafana.lan"
           ports:
             - containerPort: 3000
           readinessProbe:
@@ -170,10 +170,8 @@ kind: Service
 metadata:
   name: grafana
   namespace: monitoring
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.247"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: grafana
   ports:

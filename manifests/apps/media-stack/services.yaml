@@ -1,13 +1,13 @@
+# ── Media Stack Services ───────────────────────────────────────────────────────
+# All web UIs accessible via https://<name>.lan (routed through Envoy Gateway).
+# Plex keeps its LoadBalancer at 192.168.0.241 — media clients need direct IP.
 apiVersion: v1
 kind: Service
 metadata:
   name: qbittorrent
   namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
-    metallb.io/allow-shared-ip: "media-stack"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: media-stack
   ports:
@@ -20,11 +20,8 @@ kind: Service
 metadata:
   name: radarr
   namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
-    metallb.io/allow-shared-ip: "media-stack"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: media-stack
   ports:
@@ -37,11 +34,8 @@ kind: Service
 metadata:
   name: sonarr
   namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
-    metallb.io/allow-shared-ip: "media-stack"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: media-stack
   ports:
@@ -54,11 +48,8 @@ kind: Service
 metadata:
   name: prowlarr
   namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
-    metallb.io/allow-shared-ip: "media-stack"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: media-stack
   ports:
@@ -71,11 +62,8 @@ kind: Service
 metadata:
   name: sabnzbd
   namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
-    metallb.io/allow-shared-ip: "media-stack"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: media-stack
   ports:
@@ -88,11 +76,8 @@ kind: Service
 metadata:
   name: overseerr
   namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
-    metallb.io/allow-shared-ip: "media-stack"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: media-stack
   ports:

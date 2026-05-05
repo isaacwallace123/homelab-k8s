@@ -5,7 +5,7 @@ metadata:
   namespace: networking
 data:
   server.yml: |
-    base-url: http://192.168.0.249
+    base-url: https://ntfy.lan
     listen-http: :80
     cache-file: /var/cache/ntfy/cache.db
     cache-duration: 12h
@@ -72,16 +72,14 @@ spec:
         - name: cache
           emptyDir: {}
 ---
-# Notification server — accessible at http://192.168.0.249
+# Notification server — accessible at https://ntfy.lan (routed via Envoy Gateway)
 apiVersion: v1
 kind: Service
 metadata:
   name: ntfy
   namespace: networking
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.249"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: ntfy
   ports:
