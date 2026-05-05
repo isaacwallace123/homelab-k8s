@@ -78,10 +78,6 @@ data:
             regex: ([^:]+)(?::\d+)?;(\d+)
             replacement: $1:$2
             target_label: __address__
-      - job_name: traefik
-        static_configs:
-          - targets: ['traefik.networking.svc.cluster.local:9000']
-        metrics_path: /metrics
       - job_name: loki
         static_configs:
           - targets: ['loki.monitoring.svc.cluster.local:3100']
@@ -149,6 +145,38 @@ data:
             annotations:
               summary: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} crash looping"
               description: "Container restarted {{ printf \"%.0f\" $value }} times in 30m"
+          - alert: ContainerOOMKilled
+            expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+            for: 0m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} OOM killed"
+              description: "Container was terminated by the OOM killer — increase its memory limit"
+          - alert: PVCNearlyFull
+            expr: (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "PVC {{ $labels.persistentvolumeclaim }} in {{ $labels.namespace }} above 85%"
+              description: "Volume is {{ printf \"%.1f\" $value }}% full"
+          - alert: PrometheusTargetDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Prometheus target {{ $labels.job }}/{{ $labels.instance }} is down"
+              description: "Scrape target has been unreachable for more than 5 minutes"
+          - alert: CertificateExpiringSoon
+            expr: (x509_cert_expiry - time()) / 86400 < 14
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: "TLS certificate expiring in less than 14 days"
+              description: "Certificate for {{ $labels.subject }} expires in {{ printf \"%.0f\" $value }} days"
 ---
 apiVersion: apps/v1
 kind: Deployment
