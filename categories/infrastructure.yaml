@@ -90,6 +90,23 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
+      ignoreDifferences:
+        # Envoy Gateway webhook re-defaults these fields on every apply
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          jqPathExpressions:
+            - .spec.rules[].matches
+            - .spec.rules[].filters[].requestRedirect.port
+        # Longhorn / k8s provisioner annotates PVCs after binding
+        - group: ""
+          kind: PersistentVolumeClaim
+          jsonPointers:
+            - /metadata/annotations/volume.kubernetes.io~1storage-provisioner
+            - /metadata/annotations/volume.beta.kubernetes.io~1storage-provisioner
+            - /metadata/annotations/pv.kubernetes.io~1bind-completed
+            - /metadata/annotations/pv.kubernetes.io~1bound-by-controller
+            - /spec/volumeName
+            - /spec/volumeMode
       syncPolicy:
         automated:
           prune: true
@@ -98,3 +115,4 @@ spec:
           - CreateNamespace=true
           - ServerSideApply=true
           - SkipDryRunOnMissingResource=true
+          - RespectIgnoreDifferences=true

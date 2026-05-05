@@ -30,18 +30,18 @@ spec:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
+            timeoutSeconds: 10
+            failureThreshold: 5
           volumeMounts:
             - name: rootfs
               mountPath: /rootfs
@@ -75,6 +75,7 @@ spec:
         - name: dev-disk
           hostPath:
             path: /dev/disk
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
