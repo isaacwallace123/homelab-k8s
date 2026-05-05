@@ -125,24 +125,26 @@ data:
       - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
     scrape_configs:
       - job_name: kubernetes-pods
-        kubernetes_sd_configs:
-          - role: pod
+        static_configs:
+          - targets:
+              - localhost
+            labels:
+              __path__: /var/log/pods/*/*/*.log
         pipeline_stages:
           - cri: {}
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: __host__
-          - source_labels: [__meta_kubernetes_namespace]
+          - source_labels: [__path__]
+            regex: /var/log/pods/([^_]+)_([^_]+)_[^/]+/([^/]+)/.*
             target_label: namespace
-          - source_labels: [__meta_kubernetes_pod_name]
+            replacement: $1
+          - source_labels: [__path__]
+            regex: /var/log/pods/([^_]+)_([^_]+)_[^/]+/([^/]+)/.*
             target_label: pod
-          - source_labels: [__meta_kubernetes_pod_container_name]
+            replacement: $2
+          - source_labels: [__path__]
+            regex: /var/log/pods/([^_]+)_([^_]+)_[^/]+/([^/]+)/.*
             target_label: container
-          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
-            separator: /
-            regex: (.+)/(.+)
-            target_label: __path__
-            replacement: /var/log/pods/*$1*/$2/*.log
+            replacement: $3
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -158,7 +160,6 @@ spec:
       labels:
         app: promtail
     spec:
-      serviceAccountName: prometheus
       tolerations:
         - effect: NoSchedule
           operator: Exists
