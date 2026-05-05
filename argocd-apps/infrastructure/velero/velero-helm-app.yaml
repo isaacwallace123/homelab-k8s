@@ -1,0 +1,53 @@
+name: velero
+namespace: velero
+syncWave: "0"
+repoURL: https://vmware-tanzu.github.io/helm-charts
+chart: velero
+targetRevision: "9.0.1"
+values: |
+  initContainers:
+    - name: velero-plugin-for-aws
+      image: velero/velero-plugin-for-aws:v1.11.1
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - mountPath: /target
+          name: plugins
+  configuration:
+    backupStorageLocation:
+      - name: default
+        provider: aws
+        bucket: velero-backups
+        default: true
+        config:
+          region: us-east-1
+          s3ForcePathStyle: "true"
+          s3Url: http://velero-minio.velero.svc.cluster.local:9000
+          publicUrl: http://velero-minio.velero.svc.cluster.local:9000
+    volumeSnapshotLocation:
+      - name: default
+        provider: aws
+        config:
+          region: us-east-1
+  credentials:
+    useSecret: true
+    existingSecret: velero-credentials
+  nodeAgent:
+    enabled: true
+    tolerations:
+      - operator: Exists
+  schedules:
+    daily-backup:
+      disabled: false
+      schedule: "0 2 * * *"
+      template:
+        ttl: "720h0m0s"
+        includedNamespaces:
+          - "*"
+        storageLocation: default
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

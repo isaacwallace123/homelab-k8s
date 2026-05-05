@@ -1,0 +1,6 @@
+name: uptime-kuma
+namespace: networking
+syncWave: "0"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/apps/uptime-kuma

@@ -194,6 +194,29 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: envoy-gateway-system
 ---
+# ── velero namespace ──────────────────────────────────────────────────────────
+# Allow intra-namespace (velero→node-agent→minio) + gateway for MinIO console.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: velero
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: networking
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+---
 # ── Plex: allow all external ingress ─────────────────────────────────────────
 # Plex clients on the LAN connect directly to 192.168.0.241:32400 (MetalLB L2).
 # Without this, the allow-same-namespace deny-all would block those connections.

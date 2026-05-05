@@ -207,6 +207,41 @@ spec:
     requests:
       storage: 1Gi
 ---
+# ── MinIO (velero namespace) ──────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-velero-minio
+  annotations:
+    argocd.argoproj.io/sync-options: Replace=true
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: velero
+    name: tank-velero-minio
+  nfs:
+    server: 192.168.0.252
+    path: /mnt/tank/configs/velero/minio
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-velero-minio
+  namespace: velero
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: tank-velero-minio
+  resources:
+    requests:
+      storage: 50Gi
+---
 # ── MinIO (portfolio namespace) ───────────────────────────────────────────────
 apiVersion: v1
 kind: PersistentVolume
