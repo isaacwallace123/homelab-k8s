@@ -21,7 +21,7 @@ spec:
           operator: Exists
       containers:
         - name: cadvisor
-          image: gcr.io/cadvisor/cadvisor:v0.56.2
+          image: gcr.io/cadvisor/cadvisor:v0.52.1
           securityContext:
             privileged: true
           ports:

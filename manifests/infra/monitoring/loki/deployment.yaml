@@ -58,7 +58,7 @@ spec:
         runAsUser: 10001
       containers:
         - name: loki
-          image: grafana/loki:v3.7.1
+          image: grafana/loki:3.7.1
           args: ["-config.file=/etc/loki/loki.yaml"]
           ports:
             - containerPort: 3100
@@ -156,7 +156,7 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: promtail
-          image: grafana/promtail:v3.7.1
+          image: grafana/promtail:3.7.1
           args: ["-config.file=/etc/promtail/promtail.yaml"]
           ports:
             - containerPort: 9080

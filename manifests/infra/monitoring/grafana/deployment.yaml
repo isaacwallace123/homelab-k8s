@@ -82,7 +82,7 @@ spec:
             - name: dashboards
               mountPath: /var/lib/grafana/dashboards
         - name: download-dashboards
-          image: curlimages/curl:curl-8_20_0
+          image: curlimages/curl:8.20.0
           command:
             - sh
             - -c
