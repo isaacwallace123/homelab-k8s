@@ -16,13 +16,8 @@ data:
     receivers:
       - name: ntfy
         webhook_configs:
-          - url: http://ntfy.networking.svc.cluster.local/homelab-alerts
+          - url: "http://ntfy.networking.svc.cluster.local/homelab-alerts?priority=high&tags=warning,homelab"
             send_resolved: true
-            http_config:
-              headers:
-                Title: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-                Priority: high
-                Tags: warning,homelab
     inhibit_rules:
       - source_matchers:
           - severity = critical
