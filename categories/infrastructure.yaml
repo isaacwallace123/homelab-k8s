@@ -107,6 +107,17 @@ spec:
             - /metadata/annotations/pv.kubernetes.io~1bound-by-controller
             - /spec/volumeName
             - /spec/volumeMode
+        # k8s volume-binding-controller writes uid/resourceVersion into PV claimRef
+        # at bind time — ArgoCD must never overwrite these or PVCs go Lost
+        - group: ""
+          kind: PersistentVolume
+          jsonPointers:
+            - /spec/claimRef/uid
+            - /spec/claimRef/resourceVersion
+            - /spec/claimRef/apiVersion
+            - /spec/claimRef/kind
+            - /spec/volumeMode
+            - /status
       syncPolicy:
         automated:
           prune: true
