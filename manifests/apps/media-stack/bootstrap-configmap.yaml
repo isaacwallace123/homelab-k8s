@@ -362,6 +362,15 @@ data:
     wait_ready(PROWLARR_URL, prowlarr_key, "Prowlarr", "v1")
     wait_ready_sabnzbd(sabnzbd_key)
 
+    # Allow access via sabnzbd.lan (SABnzbd 4.x hostname verification)
+    try:
+        url = f"{SAB_URL}/api?mode=set_config&section=misc&keyword=host_whitelist&value=sabnzbd.lan&apikey={sabnzbd_key}&output=json"
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=10) as r:
+            json.loads(r.read())
+            print("SABnzbd: host_whitelist set to sabnzbd.lan", flush=True)
+    except Exception as e:
+        print(f"SABnzbd: could not set host_whitelist: {e}", flush=True)
+
     configure_qbittorrent(qb_user, qb_pass)
     add_root_folder(RADARR_URL, radarr_key, "Radarr", "/movies")
     add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")

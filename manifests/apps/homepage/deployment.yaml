@@ -16,71 +16,71 @@ data:
   services.yaml: |
     - Media:
         - Plex:
-            href: http://192.168.0.241:32400/web
+            href: https://plex.lan/web
             icon: plex.png
             description: Media Server
             widget:
               type: plex
-              url: http://192.168.0.241:32400
+              url: http://plex.media.svc.cluster.local:32400
               key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
         - Overseerr:
-            href: http://192.168.0.241:5055
+            href: https://overseerr.lan
             icon: overseerr.png
             description: Media Requests
             widget:
               type: overseerr
-              url: http://192.168.0.241:5055
+              url: http://overseerr.media.svc.cluster.local:5055
               key: "{{HOMEPAGE_VAR_OVERSEERR_KEY}}"
         - Radarr:
-            href: http://192.168.0.241:7878
+            href: https://radarr.lan
             icon: radarr.png
             description: Movies
             widget:
               type: radarr
-              url: http://192.168.0.241:7878
+              url: http://radarr.media.svc.cluster.local:7878
               key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
         - Sonarr:
-            href: http://192.168.0.241:8989
+            href: https://sonarr.lan
             icon: sonarr.png
             description: TV Shows
             widget:
               type: sonarr
-              url: http://192.168.0.241:8989
+              url: http://sonarr.media.svc.cluster.local:8989
               key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
         - Prowlarr:
-            href: http://192.168.0.241:9696
+            href: https://prowlarr.lan
             icon: prowlarr.png
             description: Indexers
             widget:
               type: prowlarr
-              url: http://192.168.0.241:9696
+              url: http://prowlarr.media.svc.cluster.local:9696
               key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
         - qBittorrent:
-            href: http://192.168.0.241:8080
+            href: https://qbittorrent.lan
             icon: qbittorrent.png
             description: Torrent Client (VPN)
             widget:
               type: qbittorrent
-              url: http://192.168.0.241:8080
+              url: http://qbittorrent.media.svc.cluster.local:8080
               username: admin
               password: "{{HOMEPAGE_VAR_QB_PASS}}"
         - SABnzbd:
-            href: http://192.168.0.241:8090
+            href: https://sabnzbd.lan
             icon: sabnzbd.png
             description: Usenet Client
             widget:
               type: sabnzbd
-              url: http://192.168.0.241:8090
+              url: http://sabnzbd.media.svc.cluster.local:8090
               key: "{{HOMEPAGE_VAR_SAB_KEY}}"
 
     - Networking:
         - AdGuard Home:
-            href: http://192.168.0.240
+            href: https://adguard.lan
             icon: adguard-home.png
             description: DNS & Ad Blocker
             widget:
               type: adguard
-              url: http://192.168.0.240
+              url: http://adguard-home.networking.svc.cluster.local:80
               username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
               password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"
         - Cudy Router:
@@ -94,12 +94,12 @@ data:
 
     - Monitoring:
         - Grafana:
-            href: http://192.168.0.247:3000
+            href: https://grafana.lan
             icon: grafana.png
             description: Metrics & Dashboards
             widget:
               type: grafana
-              url: http://192.168.0.247:3000
+              url: http://grafana.monitoring.svc.cluster.local:3000
               username: admin
               password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
         - Cluster:
@@ -455,7 +455,7 @@ spec:
           image: ghcr.io/gethomepage/homepage:v1.12.3
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: "192.168.0.248"
+              value: "home.lan"
             - name: HOMEPAGE_VAR_QB_PASS
               valueFrom:
                 secretKeyRef:
@@ -557,18 +557,16 @@ spec:
           configMap:
             name: homepage-config
 ---
-# Dashboard — replaces Homer at http://192.168.0.248
+# Dashboard — accessible at https://home.lan (routed via Envoy Gateway)
 apiVersion: v1
 kind: Service
 metadata:
   name: homepage
   namespace: networking
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.248"
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: homepage
   ports:
-    - port: 80
+    - port: 3000
       targetPort: 3000

@@ -139,3 +139,20 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: monitoring
+---
+# ── Plex: allow all external ingress ─────────────────────────────────────────
+# Plex clients on the LAN connect directly to 192.168.0.241:32400 (MetalLB L2).
+# Without this, the allow-same-namespace deny-all would block those connections.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-plex-external
+  namespace: media
+spec:
+  podSelector:
+    matchLabels:
+      app: plex
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
