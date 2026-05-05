@@ -13,11 +13,11 @@ exit /b
 )
 
 echo Starting port forward...
-echo Access ArgoCD at: http://localhost:8080
+echo Access ArgoCD at: https://localhost:8080
 echo Press CTRL+C to stop.
 echo.
 
-start /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8080"
-kubectl port-forward svc/argocd-install-server -n argocd 8080:80
+start /b cmd /c "timeout /t 2 /nobreak >nul && start https://localhost:8080"
+kubectl port-forward svc/argocd-server -n argocd 8080:443
 
 PAUSE

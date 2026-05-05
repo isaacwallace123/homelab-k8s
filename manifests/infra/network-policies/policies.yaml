@@ -17,6 +17,7 @@ spec:
   ingress: []
 ---
 # ── All namespaces: allow intra-namespace traffic ─────────────────────────────
+# Also allow ingress from networking namespace (Envoy Gateway routes to these).
 # media
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -30,6 +31,10 @@ spec:
   ingress:
     - from:
         - podSelector: {}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: networking
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -43,6 +48,10 @@ spec:
   ingress:
     - from:
         - podSelector: {}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: networking
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -69,6 +78,10 @@ spec:
   ingress:
     - from:
         - podSelector: {}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: networking
 ---
 # ── Allow Prometheus to scrape all namespaces ─────────────────────────────────
 apiVersion: networking.k8s.io/v1

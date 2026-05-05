@@ -23,7 +23,7 @@ spec:
         node-role.kubernetes.io/portfolio: "true"
       containers:
         - name: minio
-          image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+          image: minio/minio:RELEASE.2025-04-22T22-12-26Z
           args:
             - server
             - /data
