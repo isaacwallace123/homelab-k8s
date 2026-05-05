@@ -7,7 +7,9 @@ metadata:
   namespace: networking
 spec:
   parentRefs:
-    - name: envoy-gateway
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: envoy-gateway
       namespace: networking
       sectionName: http
   hostnames:
