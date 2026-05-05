@@ -156,7 +156,7 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: promtail
-          image: grafana/promtail:3.7.1
+          image: grafana/promtail:2.9.10
           args: ["-config.file=/etc/promtail/promtail.yaml"]
           ports:
             - containerPort: 9080

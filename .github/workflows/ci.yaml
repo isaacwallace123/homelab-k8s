@@ -36,5 +36,6 @@ jobs:
             -skip SealedSecret,Application,ApplicationSet,ClusterIssuer,Certificate,\
           GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,\
           IPAddressPool,L2Advertisement,TLSRoute \
+            -ignore-filename-pattern '\.argocd-source-.*\.yaml' \
             -kubernetes-version 1.31.0 \
             manifests/
