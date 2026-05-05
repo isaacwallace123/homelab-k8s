@@ -236,6 +236,10 @@ spec:
         - name: infra-agent
           image: ghcr.io/isaacwallace123/portfolio-infra:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: INFRA_API_KEY
               valueFrom:

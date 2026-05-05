@@ -23,6 +23,10 @@ spec:
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:2026.3.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           args:
             - tunnel
             - --no-autoupdate

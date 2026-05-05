@@ -194,6 +194,64 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: envoy-gateway-system
 ---
+# ── cert-manager namespace ────────────────────────────────────────────────────
+# cert-manager is outbound-only (ACME challenges, k8s API). Allow intra-namespace
+# so controller→webhook communication works.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: cert-manager
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# ── longhorn-system namespace ─────────────────────────────────────────────────
+# Longhorn engines/replicas communicate across nodes within the namespace.
+# Also allow monitoring scrapes and gateway access for the UI.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: longhorn-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: networking
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+---
+# ── envoy-gateway-system namespace ───────────────────────────────────────────
+# Envoy receives external traffic from MetalLB (L2) — must allow all ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-ingress
+  namespace: envoy-gateway-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+---
 # ── velero namespace ──────────────────────────────────────────────────────────
 # Allow intra-namespace (velero→node-agent→minio) + gateway for MinIO console.
 apiVersion: networking.k8s.io/v1

@@ -22,6 +22,10 @@ spec:
       containers:
         - name: imgproxy
           image: darthsim/imgproxy:v3.31.3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: IMGPROXY_USE_S3
               value: "true"

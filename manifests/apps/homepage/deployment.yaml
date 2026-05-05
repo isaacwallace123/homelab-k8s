@@ -453,6 +453,10 @@ spec:
       containers:
         - name: homepage
           image: ghcr.io/gethomepage/homepage:v1.12.3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
               value: "home.lan"
