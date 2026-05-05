@@ -195,20 +195,20 @@ spec:
               kubernetes.io/metadata.name: envoy-gateway-system
 ---
 # ── cert-manager namespace ────────────────────────────────────────────────────
-# cert-manager is outbound-only (ACME challenges, k8s API). Allow intra-namespace
-# so controller→webhook communication works.
+# cert-manager's admission webhook is called by the kube-apiserver (host process,
+# not a pod), so podSelector rules cannot cover it. Allow all ingress — cert-manager
+# has no sensitive external endpoints and the webhook is TLS-authenticated.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-same-namespace
+  name: allow-all-ingress
   namespace: cert-manager
 spec:
   podSelector: {}
   policyTypes:
     - Ingress
   ingress:
-    - from:
-        - podSelector: {}
+    - {}
 ---
 # ── longhorn-system namespace ─────────────────────────────────────────────────
 # Longhorn engines/replicas communicate across nodes within the namespace.
