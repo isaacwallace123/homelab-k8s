@@ -1,6 +1,7 @@
-# Nightly k3s etcd snapshot.
-# Snapshots land in /mnt/k3s-data/etcd-backups on the control-plane node.
-# For off-node durability, mount the NAS via NFS and point the hostPath there.
+# Nightly k3s state backup.
+# k3s uses SQLite (not embedded etcd) as its datastore on this cluster.
+# sqlite3 .backup produces a consistent point-in-time copy while k3s is live.
+# Backups land in /mnt/k3s-data/etcd-backups on the control-plane node.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -20,8 +21,6 @@ spec:
             - key: node-role.kubernetes.io/control-plane
               effect: NoSchedule
               operator: Exists
-          hostPID: true
-          hostNetwork: true
           restartPolicy: OnFailure
           containers:
             - name: etcd-snapshot
@@ -33,22 +32,28 @@ spec:
                 - -c
                 - |
                   set -e
-                  SNAPSHOT_DIR=/backup
+                  apk add --no-cache --quiet sqlite
+                  BACKUP_DIR=/backup
+                  DB_PATH=/k3s-db/state.db
                   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-                  echo "Taking k3s etcd snapshot..."
-                  # Run k3s in the host mount+network namespace so 127.0.0.1:6443 resolves correctly
-                  nsenter -m/proc/1/ns/mnt -n/proc/1/ns/net -- /usr/local/bin/k3s etcd-snapshot save \
-                    --name "snapshot-${TIMESTAMP}" \
-                    --dir /mnt/k3s-data/etcd-backups
-                  echo "Snapshot saved. Pruning snapshots older than 7 days..."
-                  find "${SNAPSHOT_DIR}" -name "snapshot-*.zip" -mtime +7 -delete
-                  echo "Done. Current snapshots:"
-                  ls -lh "${SNAPSHOT_DIR}"
+                  DEST="${BACKUP_DIR}/state-${TIMESTAMP}.db"
+                  echo "Backing up k3s SQLite state to ${DEST}..."
+                  sqlite3 "${DB_PATH}" ".backup '${DEST}'"
+                  echo "Backup complete ($(du -sh ${DEST} | cut -f1)). Pruning backups older than 7 days..."
+                  find "${BACKUP_DIR}" -name "state-*.db" -mtime +7 -delete
+                  echo "Done. Current backups:"
+                  ls -lh "${BACKUP_DIR}"
               volumeMounts:
                 - name: backup
                   mountPath: /backup
+                - name: k3s-db
+                  mountPath: /k3s-db
           volumes:
             - name: backup
               hostPath:
                 path: /mnt/k3s-data/etcd-backups
                 type: DirectoryOrCreate
+            - name: k3s-db
+              hostPath:
+                path: /var/lib/rancher/k3s/server/db
+                type: Directory
