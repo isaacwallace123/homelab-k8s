@@ -215,32 +215,21 @@ spec:
     - {}
 ---
 # ── longhorn-system namespace ─────────────────────────────────────────────────
-# Longhorn engines/replicas communicate across nodes within the namespace.
-# Also allow monitoring scrapes and gateway access for the UI.
+# Longhorn's admission webhook (validator.longhorn.io) is called by the
+# kube-apiserver (host process, not a pod), so podSelector rules cannot cover it.
+# Allow all ingress — webhook is TLS-authenticated, and Longhorn engines already
+# accept cross-node replication traffic that can't be pod-selector scoped.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-same-namespace
+  name: allow-all-ingress
   namespace: longhorn-system
 spec:
   podSelector: {}
   policyTypes:
     - Ingress
   ingress:
-    - from:
-        - podSelector: {}
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: networking
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: envoy-gateway-system
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: monitoring
+    - {}
 ---
 # ── envoy-gateway-system namespace ───────────────────────────────────────────
 # Envoy receives external traffic from MetalLB (L2) — must allow all ingress.
