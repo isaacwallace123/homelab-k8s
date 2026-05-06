@@ -21,6 +21,7 @@ spec:
               effect: NoSchedule
               operator: Exists
           hostPID: true
+          hostNetwork: true
           restartPolicy: OnFailure
           containers:
             - name: etcd-snapshot
@@ -35,10 +36,10 @@ spec:
                   SNAPSHOT_DIR=/backup
                   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
                   echo "Taking k3s etcd snapshot..."
-                  # Run k3s in the host mount namespace
-                  nsenter -m/proc/1/ns/mnt -- /usr/local/bin/k3s etcd-snapshot save \
+                  # Run k3s in the host mount+network namespace so 127.0.0.1:6443 resolves correctly
+                  nsenter -m/proc/1/ns/mnt -n/proc/1/ns/net -- /usr/local/bin/k3s etcd-snapshot save \
                     --name "snapshot-${TIMESTAMP}" \
-                    --dir "${SNAPSHOT_DIR}"
+                    --dir /mnt/k3s-data/etcd-backups
                   echo "Snapshot saved. Pruning snapshots older than 7 days..."
                   find "${SNAPSHOT_DIR}" -name "snapshot-*.zip" -mtime +7 -delete
                   echo "Done. Current snapshots:"
