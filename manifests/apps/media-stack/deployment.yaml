@@ -378,8 +378,7 @@ spec:
             - containerPort: 8090
               name: sabnzbd-ui
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 8090
             initialDelaySeconds: 20
             periodSeconds: 10
@@ -389,9 +388,9 @@ spec:
             httpGet:
               path: /
               port: 8090
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 30
-            timeoutSeconds: 10
+            timeoutSeconds: 15
             failureThreshold: 3
           volumeMounts:
             - name: config-sabnzbd
