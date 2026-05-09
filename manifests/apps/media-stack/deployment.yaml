@@ -129,6 +129,13 @@ spec:
           ports:
             - containerPort: 8000
               name: health
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             tcpSocket:
               port: 8000
@@ -147,7 +154,7 @@ spec:
               memory: 64Mi
             limits:
               cpu: 500m
-              memory: 256Mi
+              memory: 512Mi
 
         # ── qbittorrent ───────────────────────────────────────────────────────
         # Downloads to /downloads (fast HDD via NFS).
@@ -172,6 +179,13 @@ spec:
             - containerPort: 6881
               protocol: UDP
               name: torrent-udp
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /
@@ -214,6 +228,13 @@ spec:
           ports:
             - containerPort: 7878
               name: radarr-ui
+          startupProbe:
+            tcpSocket:
+              port: 7878
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /
@@ -258,6 +279,13 @@ spec:
           ports:
             - containerPort: 8989
               name: sonarr-ui
+          startupProbe:
+            tcpSocket:
+              port: 8989
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /
@@ -302,6 +330,13 @@ spec:
           ports:
             - containerPort: 9696
               name: prowlarr-ui
+          startupProbe:
+            tcpSocket:
+              port: 9696
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /
@@ -340,6 +375,13 @@ spec:
           ports:
             - containerPort: 8191
               name: flare-ui
+          startupProbe:
+            tcpSocket:
+              port: 8191
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /
@@ -377,6 +419,13 @@ spec:
           ports:
             - containerPort: 8090
               name: sabnzbd-ui
+          startupProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             tcpSocket:
               port: 8090
@@ -414,6 +463,13 @@ spec:
           ports:
             - containerPort: 5055
               name: overseerr-ui
+          startupProbe:
+            tcpSocket:
+              port: 5055
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /
