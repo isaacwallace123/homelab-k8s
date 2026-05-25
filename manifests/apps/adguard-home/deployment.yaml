@@ -93,14 +93,40 @@ spec:
       volumes:
         - name: work
           persistentVolumeClaim:
-            claimName: tank-config-adguard-work
+            claimName: adguard-work
         - name: config
           persistentVolumeClaim:
-            claimName: tank-config-adguard-conf
+            claimName: adguard-conf
         - name: scripts
           configMap:
             name: adguard-bootstrap
             defaultMode: 0755
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: adguard-conf
+  namespace: networking
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: adguard-work
+  namespace: networking
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
 ---
 # Web UI — accessible at https://adguard.lan (routed via Envoy Gateway)
 apiVersion: v1
