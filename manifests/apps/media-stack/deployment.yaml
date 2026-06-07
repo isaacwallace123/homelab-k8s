@@ -40,12 +40,15 @@ spec:
                   with open(config_file) as f:
                       lines = f.readlines()
 
-              # Strip proxy keys — no longer needed with VPN sidecar pattern
+              # Strip proxy keys — no longer needed with VPN sidecar pattern.
+              # Includes the qBittorrent 5.x key name (Session\ProxyPeerConnections)
+              # which lives under [BitTorrent], not the legacy Connection\/Proxy\ keys.
               remove_prefixes = (
                   'Connection\\ProxyType=',
                   'Connection\\ProxyIp=',
                   'Connection\\ProxyPort=',
                   'Connection\\ProxyPeerConnections=',
+                  'Session\\ProxyPeerConnections=',
                   'Proxy\\Type=',
                   'Proxy\\Ip=',
                   'Proxy\\Port=',
