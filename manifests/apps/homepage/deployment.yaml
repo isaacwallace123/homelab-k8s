@@ -32,7 +32,7 @@ data:
               url: http://overseerr.media.svc.cluster.local:5055
               key: "{{HOMEPAGE_VAR_OVERSEERR_KEY}}"
         - Radarr:
-            href: http://192.168.0.242
+            href: http://192.168.0.233
             icon: radarr.png
             description: Movies
             widget:
