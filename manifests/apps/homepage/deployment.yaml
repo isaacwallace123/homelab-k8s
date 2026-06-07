@@ -94,7 +94,7 @@ data:
 
     - Monitoring:
         - Grafana:
-            href: http://192.168.0.210
+            href: http://192.168.0.240
             icon: grafana.png
             description: Metrics & Dashboards
             widget:

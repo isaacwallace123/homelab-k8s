@@ -254,14 +254,14 @@ spec:
           persistentVolumeClaim:
             claimName: prometheus-data
 ---
-# Web UI — accessible at http://192.168.0.211 (direct LAN, no DNS needed)
+# Web UI — accessible at http://192.168.0.241 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: prometheus
   namespace: monitoring
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.211"
+    metallb.io/loadBalancerIPs: "192.168.0.241"
 spec:
   type: LoadBalancer
   selector:

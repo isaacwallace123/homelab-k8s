@@ -9,7 +9,9 @@ spec:
   autoAssign: false
   addresses:
     # Organized ranges (see service annotations):
-    #   .201-.209 core infra | .210-.219 monitoring | .220-.229 dashboards
-    #   .230-.239 media       | .240-.250 spare/future
+    #   .201-.209 core infra | .220-.229 dashboards
+    #   .230-.239 media       | .240-.249 monitoring + spare
+    # .210-.219 is EXCLUDED: owned by the other Proxmox k8s/agones cluster VMs.
     # IMPORTANT: GigaHub DHCP must end at .200 or lower (it currently ends at .200).
-    - 192.168.0.201-192.168.0.250
+    - 192.168.0.201-192.168.0.209
+    - 192.168.0.220-192.168.0.250
