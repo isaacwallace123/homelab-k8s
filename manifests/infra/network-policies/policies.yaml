@@ -246,7 +246,7 @@ spec:
     - {}
 ---
 # ── Plex: allow all external ingress ─────────────────────────────────────────
-# Plex clients on the LAN connect directly to 192.168.0.241:32400 (MetalLB L2).
+# Plex clients on the LAN connect directly to 192.168.0.230:32400 (MetalLB L2).
 # Without this, the allow-same-namespace deny-all would block those connections.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -264,7 +264,7 @@ spec:
 ---
 # ── Media stack: allow direct LAN access to per-service LoadBalancer IPs ───────
 # radarr/sonarr/prowlarr/qbittorrent/sabnzbd/overseerr now have their own MetalLB
-# IPs (192.168.0.242-.249). LAN clients hit the pod directly via MetalLB L2, so —
+# IPs (192.168.0.231-.236). LAN clients hit the pod directly via MetalLB L2, so —
 # like Plex above — the allow-same-namespace deny-all would otherwise block them.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

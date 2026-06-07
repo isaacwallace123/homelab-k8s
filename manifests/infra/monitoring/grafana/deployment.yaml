@@ -112,7 +112,7 @@ spec:
                   name: grafana-secrets
                   key: admin-password
             - name: GF_SERVER_ROOT_URL
-              value: "http://192.168.0.234"
+              value: "http://192.168.0.210"
           ports:
             - containerPort: 3000
           readinessProbe:
@@ -165,14 +165,14 @@ spec:
           configMap:
             name: grafana-dashboards
 ---
-# Web UI — accessible at http://192.168.0.234 (direct LAN, no DNS needed)
+# Web UI — accessible at http://192.168.0.210 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: grafana
   namespace: monitoring
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.234"
+    metallb.io/loadBalancerIPs: "192.168.0.210"
 spec:
   type: LoadBalancer
   selector:

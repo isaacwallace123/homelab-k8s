@@ -4,8 +4,12 @@ metadata:
   name: homelab-pool
   namespace: networking
 spec:
+  # autoAssign off: every service pins its own IP (organized by /tens), so MetalLB
+  # never hands out an address on its own — prevents accidental collisions.
+  autoAssign: false
   addresses:
-    # Expanded for per-service LoadBalancer IP exposure (DNS-free direct access).
-    # IMPORTANT: keep your router's DHCP pool BELOW .224 so it never hands out
-    # an address MetalLB has claimed here.
-    - 192.168.0.224-192.168.0.250
+    # Organized ranges (see service annotations):
+    #   .201-.209 core infra | .210-.219 monitoring | .220-.229 dashboards
+    #   .230-.239 media       | .240-.250 spare/future
+    # IMPORTANT: GigaHub DHCP must end at .200 or lower (it currently ends at .200).
+    - 192.168.0.201-192.168.0.250

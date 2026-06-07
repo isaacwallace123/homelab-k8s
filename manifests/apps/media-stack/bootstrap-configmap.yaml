@@ -288,7 +288,7 @@ data:
             "configContract": "PlexServerSettings",
             "tags": [],
             "fields": [
-                {"name": "host",           "value": "192.168.0.241"},
+                {"name": "host",           "value": "192.168.0.230"},
                 {"name": "port",           "value": 32400},
                 {"name": "useSsl",         "value": False},
                 {"name": "authToken",      "value": plex_token},

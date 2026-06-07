@@ -1,4 +1,4 @@
-# Direct LAN access to the ArgoCD UI — https://192.168.0.237 (no DNS needed).
+# Direct LAN access to the ArgoCD UI — https://192.168.0.203 (no DNS needed).
 # argocd-server keeps its own self-signed TLS cert, so expect a browser warning.
 # Replaces the argocd.lan TLSRoute (see argocd-route.yaml.disabled).
 apiVersion: v1
@@ -7,7 +7,7 @@ metadata:
   name: argocd-server-lb
   namespace: argocd
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.237"
+    metallb.io/loadBalancerIPs: "192.168.0.203"
 spec:
   type: LoadBalancer
   selector:

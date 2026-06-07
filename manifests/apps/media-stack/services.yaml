@@ -1,9 +1,9 @@
 # ── Media Stack Services ───────────────────────────────────────────────────────
-# Direct LAN access via dedicated MetalLB IPs (no DNS required):
-#   qBittorrent  http://192.168.0.247      Radarr    http://192.168.0.233
-#   SABnzbd      http://192.168.0.248      Sonarr    http://192.168.0.243
-#   Overseerr    http://192.168.0.249      Prowlarr  http://192.168.0.244
-#   Plex         http://192.168.0.241:32400
+# Direct LAN access via dedicated MetalLB IPs (media block .230-.239, no DNS):
+#   Plex       http://192.168.0.230:32400   Radarr    http://192.168.0.231
+#   Sonarr     http://192.168.0.232         Prowlarr  http://192.168.0.233
+#   qBittorrent http://192.168.0.234        SABnzbd   http://192.168.0.235
+#   Overseerr  http://192.168.0.236
 # Each service also keeps its native port so in-cluster widgets keep working.
 # NOTE: requires the allow-media-external NetworkPolicy (default-deny otherwise).
 apiVersion: v1
@@ -12,7 +12,7 @@ metadata:
   name: qbittorrent
   namespace: media
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.247"
+    metallb.io/loadBalancerIPs: "192.168.0.234"
 spec:
   type: LoadBalancer
   selector:
@@ -31,8 +31,7 @@ metadata:
   name: radarr
   namespace: media
   annotations:
-    # .242 is taken by cortex/courier — radarr uses .233
-    metallb.io/loadBalancerIPs: "192.168.0.233"
+    metallb.io/loadBalancerIPs: "192.168.0.231"
 spec:
   type: LoadBalancer
   selector:
@@ -51,7 +50,7 @@ metadata:
   name: sonarr
   namespace: media
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.243"
+    metallb.io/loadBalancerIPs: "192.168.0.232"
 spec:
   type: LoadBalancer
   selector:
@@ -70,7 +69,7 @@ metadata:
   name: prowlarr
   namespace: media
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.244"
+    metallb.io/loadBalancerIPs: "192.168.0.233"
 spec:
   type: LoadBalancer
   selector:
@@ -89,7 +88,7 @@ metadata:
   name: sabnzbd
   namespace: media
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.248"
+    metallb.io/loadBalancerIPs: "192.168.0.235"
 spec:
   type: LoadBalancer
   selector:
@@ -108,7 +107,7 @@ metadata:
   name: overseerr
   namespace: media
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.249"
+    metallb.io/loadBalancerIPs: "192.168.0.236"
 spec:
   type: LoadBalancer
   selector:

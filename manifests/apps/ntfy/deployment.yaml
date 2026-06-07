@@ -5,7 +5,7 @@ metadata:
   namespace: networking
 data:
   server.yml: |
-    base-url: http://192.168.0.232
+    base-url: http://192.168.0.222
     listen-http: :8080
     cache-file: /var/cache/ntfy/cache.db
     cache-duration: 12h
@@ -77,14 +77,14 @@ spec:
         - name: cache
           emptyDir: {}
 ---
-# Notification server — accessible at http://192.168.0.232 (direct LAN, no DNS needed)
+# Notification server — accessible at http://192.168.0.222 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: ntfy
   namespace: networking
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.232"
+    metallb.io/loadBalancerIPs: "192.168.0.222"
 spec:
   type: LoadBalancer
   selector:

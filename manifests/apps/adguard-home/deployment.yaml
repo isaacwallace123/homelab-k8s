@@ -128,14 +128,14 @@ spec:
     requests:
       storage: 1Gi
 ---
-# Web UI — accessible at http://192.168.0.231 (direct LAN, no DNS needed)
+# Web UI — accessible at http://192.168.0.221 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: adguard-home
   namespace: networking
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.231"
+    metallb.io/loadBalancerIPs: "192.168.0.221"
 spec:
   type: LoadBalancer
   selector:
@@ -148,14 +148,14 @@ spec:
       targetPort: 3000
       name: setup
 ---
-# DNS — accessible at 192.168.0.246:53
+# DNS — accessible at 192.168.0.202:53
 apiVersion: v1
 kind: Service
 metadata:
   name: adguard-dns
   namespace: networking
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.246"
+    metallb.io/loadBalancerIPs: "192.168.0.202"
 spec:
   type: LoadBalancer
   selector:

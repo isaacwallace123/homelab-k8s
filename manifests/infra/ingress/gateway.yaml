@@ -7,7 +7,7 @@ spec:
   gatewayClassName: envoy
   infrastructure:
     annotations:
-      metallb.io/loadBalancerIPs: "192.168.0.245"
+      metallb.io/loadBalancerIPs: "192.168.0.201"
   listeners:
     # Plain HTTP — used for public apps (portfolio via Cloudflare Tunnel)
     # and HTTP→HTTPS redirects on .lan domains
