@@ -128,23 +128,25 @@ spec:
     requests:
       storage: 1Gi
 ---
-# Web UI — accessible at https://adguard.lan (routed via Envoy Gateway)
+# Web UI — accessible at http://192.168.0.231 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: adguard-home
   namespace: networking
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.231"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: adguard-home
   ports:
-    - port: 3000
-      targetPort: 3000
-      name: setup
     - port: 80
       targetPort: 80
       name: http
+    - port: 3000
+      targetPort: 3000
+      name: setup
 ---
 # DNS — accessible at 192.168.0.246:53
 apiVersion: v1

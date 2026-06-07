@@ -261,3 +261,80 @@ spec:
     - Ingress
   ingress:
     - {}
+---
+# ── Media stack: allow direct LAN access to per-service LoadBalancer IPs ───────
+# radarr/sonarr/prowlarr/qbittorrent/sabnzbd/overseerr now have their own MetalLB
+# IPs (192.168.0.242-.249). LAN clients hit the pod directly via MetalLB L2, so —
+# like Plex above — the allow-same-namespace deny-all would otherwise block them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-media-external
+  namespace: media
+spec:
+  podSelector:
+    matchLabels:
+      app: media-stack
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+---
+# ── Monitoring: allow direct LAN access to Grafana/Prometheus/Alertmanager ─────
+# Each now has its own MetalLB IP (.234/.235/.236) for DNS-free direct access.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-external
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-external
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertmanager-external
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: alertmanager
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
+---
+# ── ArgoCD: allow direct LAN access to the UI via its LoadBalancer IP (.237) ───
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-argocd-server-external
+  namespace: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}

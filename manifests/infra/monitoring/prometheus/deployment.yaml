@@ -254,14 +254,22 @@ spec:
           persistentVolumeClaim:
             claimName: prometheus-data
 ---
+# Web UI — accessible at http://192.168.0.235 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: prometheus
   namespace: monitoring
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.235"
 spec:
+  type: LoadBalancer
   selector:
     app: prometheus
   ports:
+    - port: 80
+      targetPort: 9090
+      name: http
     - port: 9090
       targetPort: 9090
+      name: web

@@ -1,16 +1,26 @@
 # ── Media Stack Services ───────────────────────────────────────────────────────
-# All web UIs accessible via https://<name>.lan (routed through Envoy Gateway).
-# Plex keeps its LoadBalancer at 192.168.0.241 — media clients need direct IP.
+# Direct LAN access via dedicated MetalLB IPs (no DNS required):
+#   qBittorrent  http://192.168.0.247      Radarr    http://192.168.0.242
+#   SABnzbd      http://192.168.0.248      Sonarr    http://192.168.0.243
+#   Overseerr    http://192.168.0.249      Prowlarr  http://192.168.0.244
+#   Plex         http://192.168.0.241:32400
+# Each service also keeps its native port so in-cluster widgets keep working.
+# NOTE: requires the allow-media-external NetworkPolicy (default-deny otherwise).
 apiVersion: v1
 kind: Service
 metadata:
   name: qbittorrent
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.247"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: media-stack
   ports:
+    - port: 80
+      targetPort: 8080
+      name: http
     - port: 8080
       targetPort: 8080
       name: webui
@@ -20,11 +30,16 @@ kind: Service
 metadata:
   name: radarr
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.242"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: media-stack
   ports:
+    - port: 80
+      targetPort: 7878
+      name: http
     - port: 7878
       targetPort: 7878
       name: webui
@@ -34,11 +49,16 @@ kind: Service
 metadata:
   name: sonarr
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.243"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: media-stack
   ports:
+    - port: 80
+      targetPort: 8989
+      name: http
     - port: 8989
       targetPort: 8989
       name: webui
@@ -48,11 +68,16 @@ kind: Service
 metadata:
   name: prowlarr
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.244"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: media-stack
   ports:
+    - port: 80
+      targetPort: 9696
+      name: http
     - port: 9696
       targetPort: 9696
       name: webui
@@ -62,11 +87,16 @@ kind: Service
 metadata:
   name: sabnzbd
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.248"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: media-stack
   ports:
+    - port: 80
+      targetPort: 8090
+      name: http
     - port: 8090
       targetPort: 8090
       name: webui
@@ -76,11 +106,16 @@ kind: Service
 metadata:
   name: overseerr
   namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.249"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: media-stack
   ports:
+    - port: 80
+      targetPort: 5055
+      name: http
     - port: 5055
       targetPort: 5055
       name: webui

@@ -90,14 +90,22 @@ spec:
         - name: data
           emptyDir: {}
 ---
+# Web UI — accessible at http://192.168.0.236 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: alertmanager
   namespace: monitoring
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.236"
 spec:
+  type: LoadBalancer
   selector:
     app: alertmanager
   ports:
+    - port: 80
+      targetPort: 9093
+      name: http
     - port: 9093
       targetPort: 9093
+      name: web

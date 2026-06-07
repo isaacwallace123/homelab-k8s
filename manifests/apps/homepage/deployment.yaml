@@ -16,7 +16,7 @@ data:
   services.yaml: |
     - Media:
         - Plex:
-            href: https://plex.lan/web
+            href: http://192.168.0.241:32400/web
             icon: plex.png
             description: Media Server
             widget:
@@ -24,7 +24,7 @@ data:
               url: http://plex.media.svc.cluster.local:32400
               key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
         - Overseerr:
-            href: https://overseerr.lan
+            href: http://192.168.0.249
             icon: overseerr.png
             description: Media Requests
             widget:
@@ -32,7 +32,7 @@ data:
               url: http://overseerr.media.svc.cluster.local:5055
               key: "{{HOMEPAGE_VAR_OVERSEERR_KEY}}"
         - Radarr:
-            href: https://radarr.lan
+            href: http://192.168.0.242
             icon: radarr.png
             description: Movies
             widget:
@@ -40,7 +40,7 @@ data:
               url: http://radarr.media.svc.cluster.local:7878
               key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
         - Sonarr:
-            href: https://sonarr.lan
+            href: http://192.168.0.243
             icon: sonarr.png
             description: TV Shows
             widget:
@@ -48,7 +48,7 @@ data:
               url: http://sonarr.media.svc.cluster.local:8989
               key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
         - Prowlarr:
-            href: https://prowlarr.lan
+            href: http://192.168.0.244
             icon: prowlarr.png
             description: Indexers
             widget:
@@ -56,7 +56,7 @@ data:
               url: http://prowlarr.media.svc.cluster.local:9696
               key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
         - qBittorrent:
-            href: https://qbittorrent.lan
+            href: http://192.168.0.247
             icon: qbittorrent.png
             description: Torrent Client (VPN)
             widget:
@@ -65,7 +65,7 @@ data:
               username: admin
               password: "{{HOMEPAGE_VAR_QB_PASS}}"
         - SABnzbd:
-            href: https://sabnzbd.lan
+            href: http://192.168.0.248
             icon: sabnzbd.png
             description: Usenet Client
             widget:
@@ -75,7 +75,7 @@ data:
 
     - Networking:
         - AdGuard Home:
-            href: https://adguard.lan
+            href: http://192.168.0.231
             icon: adguard-home.png
             description: DNS & Ad Blocker
             widget:
@@ -94,7 +94,7 @@ data:
 
     - Monitoring:
         - Grafana:
-            href: https://grafana.lan
+            href: http://192.168.0.234
             icon: grafana.png
             description: Metrics & Dashboards
             widget:
@@ -185,7 +185,7 @@ data:
 
     - Infrastructure:
         - ArgoCD:
-            href: https://argocd.lan
+            href: https://192.168.0.237
             icon: argocd.png
             description: GitOps Deployments
         - Proxmox:
@@ -459,7 +459,7 @@ spec:
               drop: ["ALL"]
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: "home.lan"
+              value: "home.lan,192.168.0.230"
             - name: HOMEPAGE_VAR_QB_PASS
               valueFrom:
                 secretKeyRef:
@@ -562,16 +562,22 @@ spec:
           configMap:
             name: homepage-config
 ---
-# Dashboard — accessible at https://home.lan (routed via Envoy Gateway)
+# Dashboard — accessible at http://192.168.0.230 (direct LAN, no DNS needed)
 apiVersion: v1
 kind: Service
 metadata:
   name: homepage
   namespace: networking
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.230"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: homepage
   ports:
+    - port: 80
+      targetPort: 3000
+      name: http
     - port: 3000
       targetPort: 3000
+      name: web

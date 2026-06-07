@@ -5,4 +5,7 @@ metadata:
   namespace: networking
 spec:
   addresses:
-    - 192.168.0.240-192.168.0.250
+    # Expanded for per-service LoadBalancer IP exposure (DNS-free direct access).
+    # IMPORTANT: keep your router's DHCP pool BELOW .224 so it never hands out
+    # an address MetalLB has claimed here.
+    - 192.168.0.224-192.168.0.250
