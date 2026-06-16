@@ -101,39 +101,6 @@ spec:
     requests:
       storage: 4Ti
 ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tank-downloads
-  annotations: {}
-spec:
-  capacity:
-    storage: 75Gi
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  claimRef:
-    namespace: media
-    name: tank-downloads
-  nfs:
-    server: 192.168.0.252
-    path: /mnt/tank/downloads
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tank-downloads
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: ""
-  volumeName: tank-downloads
-  resources:
-    requests:
-      storage: 75Gi
----
 # ── Fast downloads (NVMe pool, passed through to TrueNAS) ──────────────────────
 # Scratch space for in-flight + seeding downloads. Lives on the NVMe pool, NOT
 # tank — tank is long-term library storage only. Imports copy NVMe→tank.
