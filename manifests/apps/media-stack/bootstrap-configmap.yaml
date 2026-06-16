@@ -182,16 +182,24 @@ data:
                     urllib.parse.urlencode({"json": creds}).encode())
         print("qBittorrent: WebUI credentials synced", flush=True)
 
+        # Bind libtorrent to the VPN interface (gluetun's tun0). Without this,
+        # libtorrent binds to the default-route interface (eth0), so its traffic
+        # is sourced from the pod IP, hits the ip-rule that routes pod-IP traffic
+        # out eth0, and is killed by gluetun's killswitch (DROP) — DHT gets 0
+        # nodes and every UDP tracker returns "Operation not permitted". Binding
+        # by interface name (not address) survives VPN reconnects.
+        #
         # Torrent layout: incomplete (active writes) and complete live in the
         # same dataset so qBit's completion move is an atomic rename, not a copy.
         prefs = json.dumps({
+            "current_network_interface": "tun0",
             "save_path": "/downloads/torrent/complete",
             "temp_path_enabled": True,
             "temp_path": "/downloads/torrent/incomplete",
         })
         opener.open(f"{QB_URL}/api/v2/app/setPreferences",
                     urllib.parse.urlencode({"json": prefs}).encode())
-        print("qBittorrent: save=/downloads/torrent/complete temp=/downloads/torrent/incomplete", flush=True)
+        print("qBittorrent: bound to tun0; save=/downloads/torrent/complete temp=/downloads/torrent/incomplete", flush=True)
 
         # Pre-create category subdirs so Radarr/Sonarr health checks pass
         for subdir in ["/downloads/torrent/incomplete",
