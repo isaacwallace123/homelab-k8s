@@ -201,17 +201,16 @@ data:
                     urllib.parse.urlencode({"json": prefs}).encode())
         print("qBittorrent: bound to tun0; save=/downloads/torrent/complete temp=/downloads/torrent/incomplete", flush=True)
 
-        # Pre-create category subdirs so Radarr/Sonarr health checks pass
+        # Flat layout: just incomplete + complete, no per-category subdirs.
         for subdir in ["/downloads/torrent/incomplete",
-                       "/downloads/torrent/complete/radarr",
-                       "/downloads/torrent/complete/sonarr",
-                       "/downloads/torrent/complete/manual"]:
+                       "/downloads/torrent/complete"]:
             os.makedirs(subdir, exist_ok=True)
             print(f"Created {subdir}", flush=True)
 
-        # Create per-app categories so downloads land in tidy subdirectories
-        for cat, path in [("radarr", "/downloads/torrent/complete/radarr"),
-                          ("sonarr", "/downloads/torrent/complete/sonarr")]:
+        # Keep the category *labels* (Radarr/Sonarr identify their downloads by
+        # them) but point every category at the flat complete dir — no subfolders.
+        for cat, path in [("radarr", "/downloads/torrent/complete"),
+                          ("sonarr", "/downloads/torrent/complete")]:
             form = urllib.parse.urlencode({"category": cat, "savePath": path}).encode()
             try:
                 opener.open(f"{QB_URL}/api/v2/torrents/createCategory", form)
