@@ -508,6 +508,12 @@ spec:
         - name: bootstrap
           image: python:3.14.4-slim
           command: [python3, /scripts/bootstrap.py]
+          # Run as UID/GID 1000 (not root): the downloads NFS export uses
+          # root_squash, so a root process can't mkdir in the 1000:1000-owned
+          # dataset. Bootstrap only reads configs + calls localhost APIs.
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
           env:
             - name: QB_USER
               value: admin
