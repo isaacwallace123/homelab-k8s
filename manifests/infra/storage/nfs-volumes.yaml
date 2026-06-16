@@ -134,6 +134,43 @@ spec:
     requests:
       storage: 75Gi
 ---
+# ── Fast downloads (NVMe pool, passed through to TrueNAS) ──────────────────────
+# Scratch space for in-flight + seeding downloads. Lives on the NVMe pool, NOT
+# tank — tank is long-term library storage only. Imports copy NVMe→tank.
+# flash/downloads child dataset (root dataset can't be permissioned/shared).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nvme-downloads
+  annotations: {}
+spec:
+  capacity:
+    storage: 450Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: media
+    name: nvme-downloads
+  nfs:
+    server: 192.168.0.252
+    path: /mnt/flash/downloads
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nvme-downloads
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: nvme-downloads
+  resources:
+    requests:
+      storage: 450Gi
+---
 # ── MinIO (portfolio namespace) ───────────────────────────────────────────────
 apiVersion: v1
 kind: PersistentVolume

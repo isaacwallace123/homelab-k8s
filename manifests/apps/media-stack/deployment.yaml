@@ -160,8 +160,9 @@ spec:
               memory: 512Mi
 
         # ── qbittorrent ───────────────────────────────────────────────────────
-        # Downloads to /downloads (fast HDD via NFS).
-        # Radarr/Sonarr import finished downloads to /movies and /tv (8TB NFS).
+        # Downloads to /downloads (fast NVMe pool via NFS), organized into
+        # torrent/{incomplete,complete} subfolders by the bootstrap sidecar.
+        # Radarr/Sonarr import finished downloads to /movies and /tv (tank NFS).
         # No proxy config needed — traffic goes through gluetun automatically.
         - name: qbittorrent
           image: lscr.io/linuxserver/qbittorrent:5.1.4-r3-ls453
@@ -565,7 +566,7 @@ spec:
             claimName: config-sabnzbd
         - name: downloads
           persistentVolumeClaim:
-            claimName: tank-downloads
+            claimName: nvme-downloads
         - name: movies
           persistentVolumeClaim:
             claimName: tank-movies

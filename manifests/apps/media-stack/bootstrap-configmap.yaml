@@ -125,6 +125,28 @@ data:
             time.sleep(5)
         raise RuntimeError(f"{name} not ready after 10 minutes")
 
+    def configure_sabnzbd_folders(api_key):
+        # Usenet layout mirrors the torrent side: incomplete + complete in the
+        # same dataset so SAB's post-processing move is a rename, not a copy.
+        # Categories (movies/tv/audio/software) are relative to complete_dir,
+        # so "movies" → /downloads/usenet/complete/movies automatically.
+        for d in ["/downloads/usenet/incomplete",
+                  "/downloads/usenet/complete/movies",
+                  "/downloads/usenet/complete/tv",
+                  "/downloads/usenet/complete/audio",
+                  "/downloads/usenet/complete/software"]:
+            os.makedirs(d, exist_ok=True)
+        for kw, val in [("download_dir", "/downloads/usenet/incomplete"),
+                        ("complete_dir", "/downloads/usenet/complete")]:
+            try:
+                url = (f"{SAB_URL}/api?mode=set_config&section=misc&keyword={kw}"
+                       f"&value={urllib.parse.quote(val)}&apikey={api_key}&output=json")
+                with urllib.request.urlopen(urllib.request.Request(url), timeout=10) as r:
+                    json.loads(r.read())
+                print(f"SABnzbd: {kw} = {val}", flush=True)
+            except Exception as e:
+                print(f"SABnzbd: could not set {kw}: {e}", flush=True)
+
     def configure_qbittorrent(qb_user, qb_pass):
         jar = http.cookiejar.CookieJar()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -160,19 +182,28 @@ data:
                     urllib.parse.urlencode({"json": creds}).encode())
         print("qBittorrent: WebUI credentials synced", flush=True)
 
-        # Set default save path and disable temp path
-        prefs = json.dumps({"save_path": "/downloads", "temp_path_enabled": False})
+        # Torrent layout: incomplete (active writes) and complete live in the
+        # same dataset so qBit's completion move is an atomic rename, not a copy.
+        prefs = json.dumps({
+            "save_path": "/downloads/torrent/complete",
+            "temp_path_enabled": True,
+            "temp_path": "/downloads/torrent/incomplete",
+        })
         opener.open(f"{QB_URL}/api/v2/app/setPreferences",
                     urllib.parse.urlencode({"json": prefs}).encode())
-        print("qBittorrent: save path set to /downloads", flush=True)
+        print("qBittorrent: save=/downloads/torrent/complete temp=/downloads/torrent/incomplete", flush=True)
 
         # Pre-create category subdirs so Radarr/Sonarr health checks pass
-        for subdir in ["/downloads/radarr", "/downloads/sonarr"]:
+        for subdir in ["/downloads/torrent/incomplete",
+                       "/downloads/torrent/complete/radarr",
+                       "/downloads/torrent/complete/sonarr",
+                       "/downloads/torrent/complete/manual"]:
             os.makedirs(subdir, exist_ok=True)
             print(f"Created {subdir}", flush=True)
 
         # Create per-app categories so downloads land in tidy subdirectories
-        for cat, path in [("radarr", "/downloads/radarr"), ("sonarr", "/downloads/sonarr")]:
+        for cat, path in [("radarr", "/downloads/torrent/complete/radarr"),
+                          ("sonarr", "/downloads/torrent/complete/sonarr")]:
             form = urllib.parse.urlencode({"category": cat, "savePath": path}).encode()
             try:
                 opener.open(f"{QB_URL}/api/v2/torrents/createCategory", form)
@@ -371,6 +402,7 @@ data:
     except Exception as e:
         print(f"SABnzbd: could not set host_whitelist: {e}", flush=True)
 
+    configure_sabnzbd_folders(sabnzbd_key)
     configure_qbittorrent(qb_user, qb_pass)
     add_root_folder(RADARR_URL, radarr_key, "Radarr", "/movies")
     add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")
