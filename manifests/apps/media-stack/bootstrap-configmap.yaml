@@ -126,15 +126,10 @@ data:
         raise RuntimeError(f"{name} not ready after 10 minutes")
 
     def configure_sabnzbd_folders(api_key):
-        # Usenet layout mirrors the torrent side: incomplete + complete in the
-        # same dataset so SAB's post-processing move is a rename, not a copy.
-        # Categories (movies/tv/audio/software) are relative to complete_dir,
-        # so "movies" → /downloads/usenet/complete/movies automatically.
-        for d in ["/downloads/usenet/incomplete",
-                  "/downloads/usenet/complete/movies",
-                  "/downloads/usenet/complete/tv",
-                  "/downloads/usenet/complete/audio",
-                  "/downloads/usenet/complete/software"]:
+        # Flat layout (mirrors the torrent side): just incomplete + complete.
+        # incomplete and complete share the dataset so SAB's post-processing
+        # move is a rename, not a copy.
+        for d in ["/downloads/usenet/incomplete", "/downloads/usenet/complete"]:
             os.makedirs(d, exist_ok=True)
         for kw, val in [("download_dir", "/downloads/usenet/incomplete"),
                         ("complete_dir", "/downloads/usenet/complete")]:
@@ -146,6 +141,26 @@ data:
                 print(f"SABnzbd: {kw} = {val}", flush=True)
             except Exception as e:
                 print(f"SABnzbd: could not set {kw}: {e}", flush=True)
+        # Point every category at the flat complete dir (absolute path) so SAB
+        # doesn't append a per-category subfolder. Keep the category *names* —
+        # Radarr/Sonarr match usenet downloads by them.
+        try:
+            url = f"{SAB_URL}/api?mode=get_config&section=categories&apikey={api_key}&output=json"
+            with urllib.request.urlopen(urllib.request.Request(url), timeout=10) as r:
+                cats = json.loads(r.read())["config"]["categories"]
+            for c in cats:
+                name = c.get("name", "")
+                if name in ("", "*"):
+                    continue
+                u = (f"{SAB_URL}/api?mode=set_config&section=categories"
+                     f"&keyword={urllib.parse.quote(name)}"
+                     f"&dir={urllib.parse.quote('/downloads/usenet/complete')}"
+                     f"&apikey={api_key}&output=json")
+                with urllib.request.urlopen(urllib.request.Request(u), timeout=10) as r:
+                    json.loads(r.read())
+                print(f"SABnzbd: category '{name}' → flat complete", flush=True)
+        except Exception as e:
+            print(f"SABnzbd: could not flatten category dirs: {e}", flush=True)
 
     def configure_qbittorrent(qb_user, qb_pass):
         jar = http.cookiejar.CookieJar()
