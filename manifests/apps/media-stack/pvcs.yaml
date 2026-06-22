@@ -93,8 +93,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: config-plex
   namespace: media
-  annotations:
-    recurring-job-group.longhorn.io/default: enabled
+  # No recurring snapshots: Plex's metadata/thumbnail cache is high-churn and
+  # rebuildable. Snapshots bloated this volume to ~54GB and filled node disks.
 spec:
   accessModes:
     - ReadWriteOnce

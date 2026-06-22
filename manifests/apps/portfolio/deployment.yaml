@@ -21,8 +21,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: portfolio-redis-data
   namespace: portfolio
-  annotations:
-    recurring-job-group.longhorn.io/default: enabled
+  # No recurring snapshots: redis is an ephemeral cache.
 spec:
   storageClassName: longhorn
   accessModes:

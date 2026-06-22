@@ -5,7 +5,8 @@ metadata:
   namespace: monitoring
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-    recurring-job-group.longhorn.io/default: enabled
+    # No recurring snapshots: Prometheus TSDB is high-churn; snapshots bloated
+    # this volume to ~44GB. Metrics are observability data, safe to not snapshot.
 spec:
   storageClassName: longhorn
   accessModes:

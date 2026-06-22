@@ -1,7 +1,9 @@
-# Daily snapshot — retains 7 snapshots per volume.
-# Volumes opt in by carrying the annotation:
+# Daily snapshot — retains 3 snapshots per volume.
+# Only LOW-CHURN, hard-to-rebuild volumes opt in (databases + app configs) via:
 #   recurring-job-group.longhorn.io/default: enabled
-# (already applied to all Longhorn PVCs in media and portfolio namespaces)
+# High-churn/rebuildable volumes (Plex cache, Prometheus/Loki TSDB, redis) are
+# intentionally NOT snapshotted — 7-day snapshot retention on those bloated them
+# to 2-3x nominal size (Plex 54GB, Prometheus 44GB) and filled the node disks.
 apiVersion: longhorn.io/v1beta2
 kind: RecurringJob
 metadata:
@@ -12,6 +14,6 @@ spec:
   task: snapshot
   groups:
     - default
-  retain: 7
+  retain: 3
   concurrency: 2
   labels: {}
