@@ -6,11 +6,6 @@
   },
   "packageRules": [
     {
-      "description": "Skip user's own CI images — versions are controlled by the portfolio CI pipeline",
-      "matchPackagePatterns": ["^ghcr\\.io/isaacwallace123/"],
-      "enabled": false
-    },
-    {
       "description": "Group LinuxServer media stack updates",
       "matchPackagePatterns": ["^lscr\\.io/linuxserver/"],
       "groupName": "linuxserver media stack",

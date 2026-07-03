@@ -1,7 +1,0 @@
-name: argocd-image-updater
-namespace: argocd
-syncWave: "-1"
-repoURL: https://argoproj.github.io/argo-helm
-chart: argocd-image-updater
-targetRevision: "0.9.6"
-values: ""

@@ -60,14 +60,6 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: envoy-gateway-system
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: portfolio
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: cortex
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -80,27 +72,6 @@ spec:
     - Ingress
   ingress:
     - {}  # networking is the public-facing entry point — allow all (LAN, Cloudflare, cluster)
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-same-namespace
-  namespace: portfolio
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector: {}
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: networking
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: envoy-gateway-system
 ---
 # ── Allow Prometheus to scrape all namespaces ─────────────────────────────────
 apiVersion: networking.k8s.io/v1
@@ -132,48 +103,6 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: monitoring
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-prometheus-scrape
-  namespace: portfolio
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: monitoring
----
-# ── cortex namespace ─────────────────────────────────────────────────────────
-# AI workloads. Allow intra-namespace + gateway + portfolio (infra-agent→overwatch).
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-same-namespace
-  namespace: cortex
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector: {}
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: networking
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: envoy-gateway-system
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: portfolio
 ---
 # ── argocd namespace ──────────────────────────────────────────────────────────
 # Allow intra-namespace (controller→server→dex) + gateway for UI.

@@ -37,15 +37,13 @@ Single source of truth for my homelab Kubernetes platform. Ansible bootstraps k3
 | Network Storage | TrueNAS (NFS — `/tank`) |
 | Observability | Prometheus, Grafana, Loki, Promtail, Alertmanager |
 | Notifications | ntfy |
-| AI Platform | Cortex (external repo) |
 
 ### Cluster Topology
 
 | Node | Role | Workloads |
 | :--- | :--- | :--- |
 | `k3s-control-plane` | Control plane | etcd, API server, scheduler |
-| `k3s-worker-ai` | GPU worker | Cortex AI stack (Intel Arc B580 + B50 Pro) |
-| `k3s-worker-*` | General workers | Infra, apps, monitoring, portfolio |
+| `k3s-worker-*` | General workers | Infra, apps, monitoring |
 
 **MetalLB address pool:** `192.168.0.240 – 192.168.0.250`
 
@@ -85,36 +83,23 @@ flowchart TB
                 Alertmanager["Alertmanager"]
             end
 
-            subgraph Portfolio["portfolio namespace"]
-                Frontend["Next.js Frontend"]
-                InfraAgent["infra-agent"]
-                Postgres["PostgreSQL\n(Longhorn)"]
-                MinIO["MinIO S3"]
-            end
-
-            subgraph Cortex["cortex namespace\n(external repo)"]
-                AI["AI workloads\nIntel Arc GPU"]
-            end
         end
     end
 
     User -->|"*.lan HTTPS"| Envoy
     User -->|"DNS queries"| AdGuard
     AdGuard -->|"*.lan → 192.168.0.245"| Envoy
-    CF -->|"isaacwallace.dev"| Envoy
     Internet --> CF
+    CF --> Envoy
     Envoy --> MediaStack
     Envoy --> Plex
     Envoy --> Grafana
-    Envoy --> Frontend
     Envoy --> ArgoCD
-    Longhorn --> Postgres
     Longhorn --> Prometheus
     Longhorn --> Grafana
     Longhorn --> Loki
     NFS --> MediaStack
     NFS --> Plex
-    InfraAgent -->|"metrics queries"| Prometheus
     Prometheus -->|"scrape"| Monitoring
     Alertmanager -->|"webhooks"| ntfy["ntfy\nnotifications"]
 ```
@@ -142,7 +127,7 @@ bootstrap/root-app.yaml          ← apply once manually after ArgoCD install
 - Wave `-3` — ArgoCD config, namespaces, network policies
 - Wave `-1` — Sealed Secrets (secrets exist before workloads start)
 - Wave `0`  — Applications
-- Wave `1`  — Monitoring, Portfolio, Cortex
+- Wave `1`  — Monitoring
 
 **Bootstrap a fresh cluster:**
 
@@ -183,9 +168,8 @@ TLS is terminated at the gateway using a cert-manager-issued wildcard certificat
 | `prometheus.lan` | Prometheus | `monitoring` |
 | `alertmanager.lan` | Alertmanager | `monitoring` |
 | `loki.lan` | Loki | `monitoring` |
-| `isaacwallace.dev` | Portfolio (public, Cloudflare Tunnel) | `portfolio` |
 
-**NetworkPolicy baseline:** default-deny ingress per namespace, with explicit allow rules for same-namespace traffic, Envoy Gateway, and necessary cross-namespace calls (e.g. `portfolio → monitoring` for infra-agent → Prometheus).
+**NetworkPolicy baseline:** default-deny ingress per namespace, with explicit allow rules for same-namespace traffic, Envoy Gateway, and necessary cross-namespace calls.
 
 ---
 
@@ -213,24 +197,7 @@ The entire \*arr stack runs as a single pod (`media-stack`) in the `media` names
 | AdGuard Home | DNS filtering + `.lan` rewrites |
 | Homepage | Cluster dashboard with live widget data |
 | ntfy | Self-hosted push notifications (Alertmanager webhooks) |
-| cloudflared | Cloudflare Tunnel — exposes `isaacwallace.dev` without open ports |
-
-### Portfolio
-
-Multi-service Next.js application at `isaacwallace.dev`. Automatically deploys on every push via ArgoCD Image Updater (digest pinning to `ghcr.io`).
-
-| Service | Role |
-| :--- | :--- |
-| frontend | Next.js app (PostgreSQL, Redis, MinIO) |
-| infra-agent | Cluster metrics API for the homelab page |
-| postgres | PostgreSQL (Longhorn RWO) |
-| redis | Session cache (Longhorn RWO) |
-| minio | Object storage for uploaded images |
-| imgproxy | On-the-fly image resizing |
-
-### AI / Cortex
-
-Managed from a [separate repository](https://github.com/isaacwallace123/cortex.git) (`deploy/helm/cortex`). ArgoCD deploys and self-heals it in the `cortex` namespace. Runs on `k3s-worker-ai` with Intel Arc GPU access.
+| cloudflared | Cloudflare Tunnel — external access without open ports |
 
 ---
 
@@ -267,8 +234,8 @@ All alerts route to ntfy at `ntfy.lan/homelab-alerts`.
 
 | Type | Backend | Used by |
 | :--- | :--- | :--- |
-| Longhorn (RWO) | Local disk on workers | Prometheus (10 Gi), Grafana (2 Gi), Loki (10 Gi), Postgres (5 Gi), Redis (1 Gi), media app configs |
-| NFS (RWX) | TrueNAS `/tank` at `192.168.0.254` | Movies (4 Ti), TV (4 Ti), Downloads (75 Gi, SSD), MinIO (50 Gi), portfolio uploads |
+| Longhorn (RWO) | Local disk on workers | Prometheus (10 Gi), Grafana (2 Gi), Loki (10 Gi), media app configs |
+| NFS (RWX) | TrueNAS `/tank` at `192.168.0.254` | Movies (4 Ti), TV (4 Ti), Downloads (75 Gi, SSD) |
 
 Longhorn volumes have daily snapshots with 7-day retention via `RecurringJob`.
 

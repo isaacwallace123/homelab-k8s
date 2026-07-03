@@ -31,14 +31,4 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: portfolio
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: cortex
----
-apiVersion: v1
-kind: Namespace
-metadata:
   name: secrets

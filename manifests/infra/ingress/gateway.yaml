@@ -9,7 +9,7 @@ spec:
     annotations:
       metallb.io/loadBalancerIPs: "192.168.0.201"
   listeners:
-    # Plain HTTP — used for public apps (portfolio via Cloudflare Tunnel)
+    # Plain HTTP — used for public apps via Cloudflare Tunnel
     # and HTTP→HTTPS redirects on .lan domains
     - name: http
       protocol: HTTP

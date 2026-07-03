@@ -4,8 +4,7 @@
 # Automatically joins new VMs to k3s with node labels baked in.
 # Runs once on VM creation via remote-exec (not on updates).
 #
-# For existing nodes (worker-ai, worker-apps), label them manually:
-#   kubectl label node k3s-worker-node-1 node-role.kubernetes.io/ai=true   node-role.kubernetes.io/worker=true --overwrite
+# For existing nodes (worker-apps), label them manually:
 #   kubectl label node k3s-worker-node-2 node-role.kubernetes.io/apps=true node-role.kubernetes.io/worker=true --overwrite
 # =============================================================================
 

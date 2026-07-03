@@ -1,39 +1,3 @@
-# ── Portfolio ─────────────────────────────────────────────────────────────────
-# postgres and redis use Longhorn (provisioned dynamically in deployment.yaml).
-# Only uploads stays on NFS because it needs ReadWriteMany.
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tank-portfolio-uploads
-  annotations: {}
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  claimRef:
-    namespace: portfolio
-    name: tank-portfolio-uploads
-  nfs:
-    server: 192.168.0.252
-    path: /mnt/tank/uploads
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tank-portfolio-uploads
-  namespace: portfolio
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: ""
-  volumeName: tank-portfolio-uploads
-  resources:
-    requests:
-      storage: 10Gi
----
 # ── Media ─────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: PersistentVolume
@@ -137,37 +101,3 @@ spec:
   resources:
     requests:
       storage: 450Gi
----
-# ── MinIO (portfolio namespace) ───────────────────────────────────────────────
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tank-images-minio
-  annotations: {}
-spec:
-  capacity:
-    storage: 50Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  claimRef:
-    namespace: portfolio
-    name: tank-images-minio
-  nfs:
-    server: 192.168.0.252
-    path: /mnt/tank/images/minio
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tank-images-minio
-  namespace: portfolio
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ""
-  volumeName: tank-images-minio
-  resources:
-    requests:
-      storage: 50Gi

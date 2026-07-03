@@ -1,9 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml
-  - sealed-secret.yaml
-  - portfolio-minio-secret.yaml
-  - infra-agent-hints.yaml
-  - minio.yaml
-  - imgproxy.yaml
