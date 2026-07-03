@@ -36,26 +36,3 @@ resource "null_resource" "join_worker_infra" {
   depends_on = [proxmox_virtual_environment_vm.worker_infra]
 }
 
-# ── Portfolio worker ───────────────────────────────────────────────────────────
-resource "null_resource" "join_worker_portfolio" {
-  triggers = {
-    vm_id = proxmox_virtual_environment_vm.worker_portfolio.id
-  }
-
-  connection {
-    type        = "ssh"
-    user        = "isaac"
-    private_key = file(var.ssh_private_key_path)
-    host        = "192.168.0.14"
-    timeout     = "5m"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "cloud-init status --wait || true",
-      "curl -sfL https://get.k3s.io | K3S_URL='${local.k3s_server_url}' K3S_TOKEN='${var.k3s_token}' INSTALL_K3S_EXEC='agent' sh -",
-    ]
-  }
-
-  depends_on = [proxmox_virtual_environment_vm.worker_portfolio]
-}

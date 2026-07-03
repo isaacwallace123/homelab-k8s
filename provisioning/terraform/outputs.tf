@@ -6,9 +6,8 @@ output "control_plane_ip" {
 output "worker_ips" {
   description = "k3s worker node IPs"
   value = {
-    apps      = "192.168.0.12"  # pve2 — media stack, AdGuard, Homer
-    infra     = "192.168.0.13"  # pve2 — MetalLB, Longhorn, monitoring
-    portfolio = "192.168.0.14"  # pve2 — portfolio, postgres, redis
+    apps  = "192.168.0.12"  # pve2 — media stack, AdGuard, Homer
+    infra = "192.168.0.13"  # pve2 — MetalLB, Longhorn, monitoring
   }
 }
 
@@ -23,7 +22,6 @@ output "next_steps" {
     2. Label nodes for workload scheduling:
          kubectl label node k3s-worker-apps      node-role.kubernetes.io/apps=true
          kubectl label node k3s-worker-infra     node-role.kubernetes.io/infra=true
-         kubectl label node k3s-worker-portfolio node-role.kubernetes.io/portfolio=true
 
     3. Update nodeSelectors in manifests to target the new labels.
   EOT
