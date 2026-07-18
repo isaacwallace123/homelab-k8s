@@ -66,12 +66,28 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: k3s-worker-ai
-  description: GPU worker node — Intel Arc B580 + B50 Pro; dedicated to Cortex AI workloads
+  name: cyberlab-proxmox-node
+  description: External Proxmox node for cyber range VMs and likely first AI lab placement; owned by cyberlab and AI lab repos for their resources
   tags:
-    - gpu
-    - compute
+    - proxmox
+    - cyberlab
+    - external
 spec:
   type: compute
   owner: group:homelab-ops
-  system: ai-system
+  system: cyberlab-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ai-node-01-planned
+  description: Planned AI-owned Proxmox VM for model runtime, RAG, agents, evals, and lab-status assistant
+  tags:
+    - gpu
+    - compute
+    - ai
+    - planned
+spec:
+  type: compute
+  owner: group:homelab-ops
+  system: ai-lab-system

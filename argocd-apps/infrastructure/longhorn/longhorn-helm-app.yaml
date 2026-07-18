@@ -1,5 +1,6 @@
 name: longhorn
 namespace: longhorn-system
+project: infrastructure
 syncWave: "0"
 repoURL: https://charts.longhorn.io
 chart: longhorn

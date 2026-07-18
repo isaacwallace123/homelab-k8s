@@ -46,10 +46,33 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: System
 metadata:
-  name: ai-system
-  description: Cortex AI platform — Intel Arc GPU workloads on k3s-worker-ai
+  name: lab-observability-system
+  description: Shared read-only visibility across homelab, cyberlab, and AI lab
+  tags:
+    - observability
+    - operations
+spec:
+  owner: group:homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: cyberlab-system
+  description: Externally owned cyber range - Proxmox VMs, SOC, attacker/victim systems, scenarios
+  tags:
+    - cyberlab
+    - external
+    - proxmox
+spec:
+  owner: group:homelab-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: ai-lab-system
+  description: Externally owned AI lab - model serving, RAG, agents, evals, and AI demos
   tags:
     - ai
-    - gpu
+    - external
 spec:
   owner: group:homelab-ops

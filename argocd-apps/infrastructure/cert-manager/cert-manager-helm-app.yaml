@@ -1,5 +1,6 @@
 name: cert-manager
 namespace: cert-manager
+project: infrastructure
 syncWave: "-2"
 repoURL: https://charts.jetstack.io
 chart: cert-manager

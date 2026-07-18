@@ -12,6 +12,12 @@ Single source of truth for my homelab Kubernetes platform. Ansible bootstraps k3
 
 ## Architecture
 
+This homelab is one of three separate lab workspaces that temporarily share two physical servers.
+The homelab stays focused on personal services and the k3s/GitOps platform on `pve2`; the
+cyberlab and AI lab keep their own repositories and operational boundaries. See
+[Shared server context](docs/shared-server-context.md) and
+[Lab organization and Kubernetes strategy](docs/lab-organization-and-kubernetes-strategy.md).
+
 ### Infrastructure Layer
 
 | Area | Implementation | Notes |
@@ -266,6 +272,16 @@ kubectl create secret generic my-secret --from-literal=key=value \
 | `manifests/infra/` | Raw Kubernetes manifests for platform infrastructure |
 | `provisioning/` | Ansible playbooks for k3s install and node setup |
 | `scripts/` | Utility scripts (ArgoCD CLI helpers) |
+
+## Lab Boundaries
+
+| Workspace | Owns | Homelab relationship |
+| :--- | :--- | :--- |
+| `homelab` | personal services, k3s, GitOps, ingress, observability, NAS/media workflows | This repository |
+| `cyberlab` | isolated cyber range VMs, SOC, attack/defense scenarios, security case studies | May export metrics/status; not managed by homelab ArgoCD |
+| `ailab` | model serving, RAG, agents, evals, lab assistants, AI demos | May reuse observability/ingress patterns; heavy runtimes should stay AI-owned |
+
+Kubernetes is the homelab service runtime, not the universal control plane for all labs. Crossplane is deferred until there is a concrete self-service platform API worth testing.
 
 ---
 

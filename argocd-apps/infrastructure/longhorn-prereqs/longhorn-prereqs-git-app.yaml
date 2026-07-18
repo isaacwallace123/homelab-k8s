@@ -1,5 +1,6 @@
 name: longhorn-prereqs
 namespace: longhorn-system
+project: infrastructure
 syncWave: "-1"
 repoURL: https://github.com/isaacwallace123/homelab-k8s.git
 targetRevision: main

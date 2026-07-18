@@ -1,0 +1,93 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infrastructure
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Homelab cluster infrastructure managed by this repository.
+  sourceRepos:
+    - https://github.com/isaacwallace123/homelab-k8s.git
+    - https://argoproj.github.io/argo-helm
+    - https://bitnami.github.io/sealed-secrets
+    - https://charts.jetstack.io
+    - https://charts.longhorn.io
+    - https://intel.github.io/helm-charts/
+    - https://kubernetes-sigs.github.io/node-feature-discovery/charts
+    - https://metallb.github.io/metallb
+    - docker.io/envoyproxy
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: applications
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Homelab user-facing applications. This project must not manage cyberlab or AI core infrastructure.
+  sourceRepos:
+    - https://github.com/isaacwallace123/homelab-k8s.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: media
+    - server: https://kubernetes.default.svc
+      namespace: networking
+    - server: https://kubernetes.default.svc
+      namespace: portfolio
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Homelab observability stack and read-only cross-lab visibility integrations.
+  sourceRepos:
+    - https://github.com/isaacwallace123/homelab-k8s.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+  clusterResourceWhitelist:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: lab-observability
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Future read-only dashboards, exporters, and status surfaces for cyberlab and AI lab.
+  sourceRepos:
+    - https://github.com/isaacwallace123/homelab-k8s.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: networking
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

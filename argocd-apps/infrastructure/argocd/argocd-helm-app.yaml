@@ -1,5 +1,6 @@
 name: argocd
 namespace: argocd
+project: infrastructure
 syncWave: "-3"
 repoURL: https://argoproj.github.io/argo-helm
 chart: argo-cd

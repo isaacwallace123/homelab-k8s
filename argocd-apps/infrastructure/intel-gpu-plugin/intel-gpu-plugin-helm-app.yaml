@@ -1,5 +1,6 @@
 name: intel-gpu-plugin
 namespace: kube-system
+project: infrastructure
 syncWave: "-1"
 repoURL: https://intel.github.io/helm-charts/
 chart: intel-device-plugins-gpu

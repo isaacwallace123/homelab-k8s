@@ -4,8 +4,8 @@
 # Discovers all *-helm-app.yaml and *-git-app.yaml files under
 # argocd-apps/infrastructure/ and generates ArgoCD Applications from them.
 #
-# helm-app.yaml fields: name, namespace, syncWave, repoURL, chart, targetRevision, values
-# git-app.yaml  fields: name, namespace, syncWave, repoURL, targetRevision, appPath
+# helm-app.yaml fields: name, namespace, project, syncWave, repoURL, chart, targetRevision, values
+# git-app.yaml  fields: name, namespace, project, syncWave, repoURL, targetRevision, appPath
 # =============================================================================
 
 # Helm-chart-based infrastructure (MetalLB, Traefik, Longhorn, ArgoCD, etc.)
@@ -30,7 +30,7 @@ spec:
       annotations:
         argocd.argoproj.io/sync-wave: '{{syncWave}}'
     spec:
-      project: default
+      project: '{{project}}'
       source:
         repoURL: '{{repoURL}}'
         chart: '{{chart}}'
@@ -80,7 +80,7 @@ spec:
       annotations:
         argocd.argoproj.io/sync-wave: '{{syncWave}}'
     spec:
-      project: default
+      project: '{{project}}'
       source:
         repoURL: '{{repoURL}}'
         targetRevision: '{{targetRevision}}'

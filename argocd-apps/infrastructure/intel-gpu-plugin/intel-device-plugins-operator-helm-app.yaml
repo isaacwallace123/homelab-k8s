@@ -1,5 +1,6 @@
 name: intel-device-plugins-operator
 namespace: kube-system
+project: infrastructure
 syncWave: "-2"
 repoURL: https://intel.github.io/helm-charts/
 chart: intel-device-plugins-operator

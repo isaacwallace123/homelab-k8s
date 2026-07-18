@@ -387,21 +387,39 @@ spec:
   owner: group:homelab-ops
   system: portfolio-system
 
-# ── AI / Cortex ───────────────────────────────────────────────────────────────
+# -- Cross-Lab Status ----------------------------------------------------------
 
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: cortex
-  description: AI inference platform on k3s-worker-ai (Intel Arc B580 + B50 Pro); managed from external repo
+  name: cyberlab-status
+  description: Read-only cyberlab health and roadmap surface; cyber range resources remain owned by the cyberlab repo
   annotations:
-    backstage.io/source-location: url:https://github.com/isaacwallace123/cortex
+    backstage.io/source-location: url:https://github.com/isaacwallace123/cyberlab
   tags:
-    - ai
-    - gpu
+    - cyberlab
+    - status
+    - external
 spec:
   type: service
-  lifecycle: production
+  lifecycle: experimental
   owner: group:homelab-ops
-  system: ai-system
+  system: cyberlab-system
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ai-lab-status-assistant
+  description: Planned AI-owned lab status assistant with read-only ingestion from approved homelab, cyberlab, and AI lab docs
+  annotations:
+    backstage.io/source-location: url:https://github.com/isaacwallace123/ailab
+  tags:
+    - ai
+    - status
+    - external
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:homelab-ops
+  system: ai-lab-system

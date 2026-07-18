@@ -10,14 +10,18 @@ flowchart LR
         CP["k3s-control-plane\n4 vCPU / 8 GB RAM"]
         W1["k3s-worker-01\n8 vCPU / 16 GB RAM"]
         W2["k3s-worker-02\n8 vCPU / 16 GB RAM"]
-        WAI["k3s-worker-ai\nArc B580 + B50 Pro"]
         TN["TrueNAS\n7.3 TB Storage\n192.168.0.254"]
+    end
+
+    subgraph FederatedLabs["Federated Labs"]
+        CYB["cyberlab\nProxmox range VMs"]
+        AI["ai-node-01 planned\nAI-owned VM"]
     end
 
     subgraph Cluster["k3s Cluster"]
         direction TB
         Platform["Platform\nArgoCD · MetalLB · Envoy Gateway\ncert-manager · Sealed Secrets · Longhorn"]
-        Apps["Applications\nMedia · Portfolio · AI"]
+        Apps["Applications\nMedia · Portfolio · Status UIs"]
         Obs["Observability\nPrometheus · Grafana · Loki"]
     end
 
@@ -32,14 +36,14 @@ flowchart LR
     PVE --> CP
     PVE --> W1
     PVE --> W2
-    PVE --> WAI
     PVE --> TN
 
     CP --> Cluster
     W1 --> Cluster
     W2 --> Cluster
-    WAI --> Cluster
     TN -->|"NFS"| Cluster
+    CYB -.->|"read-only metrics"| Obs
+    AI -.->|"read-only metrics"| Obs
 
     GitHub -->|"GitOps pull"| Platform
     GHCR -->|"image pull"| Apps

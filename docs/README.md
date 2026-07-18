@@ -4,6 +4,14 @@ Extended documentation for the homelab-k8s platform.
 
 ## Contents
 
+### Shared context
+
+| File | Contents |
+| :--- | :--- |
+| [shared-server-context.md](shared-server-context.md) | Physical server inventory, lab boundaries, and the migration path from two shared servers to one server per lab |
+| [lab-organization-and-kubernetes-strategy.md](lab-organization-and-kubernetes-strategy.md) | Federated lab control-plane model, Kubernetes boundaries, Crossplane posture, and future server layout |
+| [recovery-and-operations-drills.md](recovery-and-operations-drills.md) | Recovery drills, backup checks, alerts, and shared operations evidence to add |
+
 ### `backstage/catalog/`
 
 Backstage software catalog entity definitions. Import these into a Backstage instance via a `catalog-info.yaml` or a static location.
@@ -11,10 +19,10 @@ Backstage software catalog entity definitions. Import these into a Backstage ins
 | File | Contents |
 | :--- | :--- |
 | [org.yaml](backstage/catalog/org.yaml) | User (isaac) and Group (homelab-ops) |
-| [systems.yaml](backstage/catalog/systems.yaml) | Platform, media, monitoring, portfolio, AI systems |
-| [components.yaml](backstage/catalog/components.yaml) | All deployed services — ArgoCD, Envoy Gateway, Prometheus, Grafana, Plex, media-stack, portfolio, Cortex, … |
+| [systems.yaml](backstage/catalog/systems.yaml) | Platform, media, monitoring, portfolio, cyberlab, AI lab, and shared observability systems |
+| [components.yaml](backstage/catalog/components.yaml) | Deployed homelab services plus externally owned cyberlab and AI lab status components |
 | [apis.yaml](backstage/catalog/apis.yaml) | Prometheus HTTP API and infra-agent REST API |
-| [resources.yaml](backstage/catalog/resources.yaml) | k3s cluster, Longhorn, TrueNAS NFS, MetalLB pool, Proxmox, GPU worker |
+| [resources.yaml](backstage/catalog/resources.yaml) | k3s cluster, Longhorn, TrueNAS NFS, MetalLB pool, Proxmox, and planned external lab resources |
 
 ### `code/`
 

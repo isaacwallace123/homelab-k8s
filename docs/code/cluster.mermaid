@@ -15,10 +15,6 @@ flowchart TB
             Sched["Scheduler"]
         end
 
-        subgraph WorkerAI["k3s-worker-ai\nIntel Arc B580 + B50 Pro"]
-            Cortex["cortex\nAI Inference"]
-        end
-
         subgraph Workers["k3s-worker-01 / 02"]
             subgraph ns_networking["namespace: networking"]
                 EnvoyGW["Envoy Gateway\n192.168.0.245"]
@@ -62,6 +58,11 @@ flowchart TB
         end
     end
 
+    subgraph FederatedLabs["Federated lab systems"]
+        Cyberlab["cyberlab\nProxmox range VMs"]
+        AINode["ai-node-01 planned\nAI-owned VM"]
+    end
+
     Client -->|"*.lan HTTPS"| EnvoyGW
     Client -->|"DNS :53"| AdGuard
     AdGuard -->|"*.lan → 192.168.0.245"| EnvoyGW
@@ -85,6 +86,8 @@ flowchart TB
     InfraAgent -->|"PromQL"| Prometheus
     Alertmanager -->|"webhook"| ntfy
     Prometheus -->|"scrape"| NodeExp
+    Prometheus -.->|"read-only metrics"| Cyberlab
+    Prometheus -.->|"read-only metrics"| AINode
 
     Longhorn --> Prometheus
     Longhorn --> Grafana
@@ -100,4 +103,3 @@ flowchart TB
     ArgoCD -->|"sync"| ns_media
     ArgoCD -->|"sync"| ns_monitoring
     ArgoCD -->|"sync"| ns_portfolio
-    ArgoCD -->|"sync"| WorkerAI
