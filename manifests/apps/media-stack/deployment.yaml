@@ -23,7 +23,7 @@ spec:
       # now that all containers share gluetun's network namespace.
       initContainers:
         - name: qbittorrent-init
-          image: python:3.14.4-slim
+          image: python:3.14.6-slim
           command: [python3, "-c"]
           args:
             - |
@@ -165,7 +165,7 @@ spec:
         # Radarr/Sonarr import finished downloads to /movies and /tv (tank NFS).
         # No proxy config needed — traffic goes through gluetun automatically.
         - name: qbittorrent
-          image: lscr.io/linuxserver/qbittorrent:5.1.4-r3-ls453
+          image: lscr.io/linuxserver/qbittorrent:5.2.3_v2.0.13-ls468
           env:
             - name: PUID
               value: "1000"
@@ -221,7 +221,7 @@ spec:
 
         # ── radarr ────────────────────────────────────────────────────────────
         - name: radarr
-          image: lscr.io/linuxserver/radarr:6.1.1.10360-ls301
+          image: lscr.io/linuxserver/radarr:6.3.0.10514-ls311
           env:
             - name: PUID
               value: "1000"
@@ -272,7 +272,7 @@ spec:
 
         # ── sonarr ────────────────────────────────────────────────────────────
         - name: sonarr
-          image: lscr.io/linuxserver/sonarr:4.0.17.2952-ls310
+          image: lscr.io/linuxserver/sonarr:4.0.19.2979-ls320
           env:
             - name: PUID
               value: "1000"
@@ -323,7 +323,7 @@ spec:
 
         # ── prowlarr ──────────────────────────────────────────────────────────
         - name: prowlarr
-          image: lscr.io/linuxserver/prowlarr:2.3.5.5327-ls144
+          image: lscr.io/linuxserver/prowlarr:2.4.0.5397-ls154
           env:
             - name: PUID
               value: "1000"
@@ -370,7 +370,7 @@ spec:
 
         # ── flaresolverr ──────────────────────────────────────────────────────
         - name: flaresolverr
-          image: ghcr.io/flaresolverr/flaresolverr:v3.4.6
+          image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
           env:
             - name: LOG_LEVEL
               value: info
@@ -412,7 +412,7 @@ spec:
 
         # ── sabnzbd ───────────────────────────────────────────────────────────
         - name: sabnzbd
-          image: lscr.io/linuxserver/sabnzbd:5.0.1-ls251
+          image: lscr.io/linuxserver/sabnzbd:5.0.4-ls262
           env:
             - name: PUID
               value: "1000"
@@ -460,7 +460,7 @@ spec:
 
         # ── seerr ─────────────────────────────────────────────────────────────
         - name: overseerr
-          image: ghcr.io/seerr-team/seerr:v3.2.0
+          image: ghcr.io/seerr-team/seerr:v3.3.0
           env:
             - name: TZ
               value: America/New_York
@@ -506,7 +506,7 @@ spec:
         # start, then wires up qBittorrent download clients, FlareSolverr proxy,
         # and Prowlarr→Radarr/Sonarr app sync. Idempotent — safe to restart.
         - name: bootstrap
-          image: python:3.14.4-slim
+          image: python:3.14.6-slim
           command: [python3, /scripts/bootstrap.py]
           # Run as UID/GID 1000 (not root): the downloads NFS export uses
           # root_squash, so a root process can't mkdir in the 1000:1000-owned
