@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://isaacwallace.dev/schemas/argocd-app-descriptor.schema.json",
+  "title": "Homelab ArgoCD ApplicationSet descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "namespace",
+    "project",
+    "syncWave",
+    "repoURL",
+    "targetRevision"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "project": {
+      "type": "string",
+      "enum": [
+        "infrastructure",
+        "applications",
+        "monitoring",
+        "lab-observability"
+      ]
+    },
+    "syncWave": {
+      "type": "string",
+      "pattern": "^-?[0-9]+$"
+    },
+    "repoURL": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "chart": {
+      "type": "string",
+      "minLength": 1
+    },
+    "values": {
+      "type": "string"
+    },
+    "appPath": {
+      "type": "string",
+      "pattern": "^(manifests/apps|manifests/infra)/[A-Za-z0-9._/-]+$"
+    }
+  },
+  "oneOf": [
+    {
+      "title": "Git manifest application",
+      "required": [
+        "appPath"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "chart"
+            ]
+          },
+          {
+            "required": [
+              "values"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Helm chart application",
+      "required": [
+        "chart",
+        "values"
+      ],
+      "not": {
+        "required": [
+          "appPath"
+        ]
+      }
+    }
+  ]
+}

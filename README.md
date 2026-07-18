@@ -271,7 +271,10 @@ kubectl create secret generic my-secret --from-literal=key=value \
 | `manifests/apps/` | Raw Kubernetes manifests for homelab applications |
 | `manifests/infra/` | Raw Kubernetes manifests for platform infrastructure |
 | `provisioning/` | Ansible playbooks for k3s install and node setup |
+| `schemas/` | Validation schemas for custom GitOps descriptor files |
 | `scripts/` | Utility scripts (ArgoCD CLI helpers) |
+
+See [GitOps organization](docs/gitops-organization.md) for the descriptor contract and service onboarding workflow.
 
 ## Lab Boundaries
 

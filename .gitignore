@@ -5,6 +5,8 @@
 kubeconfig
 *.yaml.secret
 .claude/
+__pycache__/
+*.pyc
 
 # Terraform
 provisioning/terraform/.terraform/

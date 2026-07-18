@@ -19,13 +19,16 @@ jobs:
             | tar xz -C /tmp
           sudo mv /tmp/kubeconform /usr/local/bin/
 
-      - name: Install yamllint
-        run: pip install yamllint
+      - name: Install Python validators
+        run: pip install yamllint pyyaml jsonschema
 
       - name: Lint YAML syntax
         run: |
           yamllint -d '{extends: relaxed, rules: {line-length: {max: 200}}}' \
             manifests/ argocd-apps/ categories/ bootstrap/
+
+      - name: Validate GitOps descriptors
+        run: python scripts/validate-gitops.py
 
       - name: Validate Kubernetes manifests
         run: |
@@ -33,9 +36,7 @@ jobs:
             -strict \
             -ignore-missing-schemas \
             -summary \
-            -skip SealedSecret,Application,ApplicationSet,ClusterIssuer,Certificate,\
-          GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,\
-          IPAddressPool,L2Advertisement,TLSRoute \
+            -skip "SealedSecret,Application,ApplicationSet,AppProject,ClusterIssuer,Certificate,GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,IPAddressPool,L2Advertisement" \
             -ignore-filename-pattern '\.argocd-source-.*\.yaml' \
             -kubernetes-version 1.31.0 \
-            manifests/
+            bootstrap/ categories/ manifests/

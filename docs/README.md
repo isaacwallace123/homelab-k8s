@@ -10,6 +10,7 @@ Extended documentation for the homelab-k8s platform.
 | :--- | :--- |
 | [shared-server-context.md](shared-server-context.md) | Physical server inventory, lab boundaries, and the migration path from two shared servers to one server per lab |
 | [lab-organization-and-kubernetes-strategy.md](lab-organization-and-kubernetes-strategy.md) | Federated lab control-plane model, Kubernetes boundaries, Crossplane posture, and future server layout |
+| [gitops-organization.md](gitops-organization.md) | App-of-Apps structure, descriptor contract, service onboarding, and when to revisit the deployment engine |
 | [recovery-and-operations-drills.md](recovery-and-operations-drills.md) | Recovery drills, backup checks, alerts, and shared operations evidence to add |
 
 ### `backstage/catalog/`
