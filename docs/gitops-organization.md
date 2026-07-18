@@ -41,6 +41,8 @@ Every file under `argocd-apps/**/*-app.yaml` must declare:
 - `targetRevision`
 - either `appPath` for repo-backed manifests or `chart` plus `values` for Helm charts
 
+Helm chart descriptors must pin `targetRevision` to an exact chart version. Avoid wildcards such as `*`, `7.*`, or `v1.17.*`.
+
 Project rules:
 
 | Directory | Project |

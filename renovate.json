@@ -4,6 +4,17 @@
   "kubernetes": {
     "fileMatch": ["manifests/.*\\.yaml$"]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Helm charts declared in ArgoCD ApplicationSet descriptors",
+      "managerFilePatterns": ["/(^|/)argocd-apps/.+-helm-app\\.ya?ml$/"],
+      "datasourceTemplate": "helm",
+      "matchStrings": [
+        "repoURL:\\s*(?<registryUrl>\\S+)\\s+chart:\\s*(?<depName>\\S+)\\s+targetRevision:\\s*\"?(?<currentValue>[^\"\\n]+)\"?"
+      ]
+    }
+  ],
   "packageRules": [
     {
       "description": "Group LinuxServer media stack updates",
@@ -15,6 +26,12 @@
       "description": "Group monitoring stack updates",
       "matchPackagePatterns": ["^(prom/|grafana/)"],
       "groupName": "monitoring stack",
+      "automerge": false
+    },
+    {
+      "description": "Group platform Helm chart updates",
+      "matchDatasources": ["helm"],
+      "groupName": "platform helm charts",
       "automerge": false
     }
   ],

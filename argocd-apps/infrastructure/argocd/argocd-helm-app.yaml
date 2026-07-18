@@ -4,7 +4,7 @@ project: infrastructure
 syncWave: "-3"
 repoURL: https://argoproj.github.io/argo-helm
 chart: argo-cd
-targetRevision: "7.*"
+targetRevision: "7.9.1"
 values: |
   global:
     nodeSelector:

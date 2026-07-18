@@ -4,7 +4,7 @@ project: infrastructure
 syncWave: "-2"
 repoURL: https://charts.jetstack.io
 chart: cert-manager
-targetRevision: v1.17.*
+targetRevision: v1.17.4
 values: |
   crds:
     enabled: true

@@ -114,6 +114,8 @@ def validate_descriptor(path: Path, schema: dict[str, Any], projects: dict[str, 
         errors.append(f"{path.relative_to(ROOT)}: *-git-app.yaml descriptors must use appPath")
     if filename.endswith("-helm-app.yaml") and has_app_path:
         errors.append(f"{path.relative_to(ROOT)}: *-helm-app.yaml descriptors must use chart/values")
+    if filename.endswith("-helm-app.yaml") and "*" in descriptor["targetRevision"]:
+        errors.append(f"{path.relative_to(ROOT)}: Helm chart targetRevision must be pinned, not a wildcard")
     if not filename.endswith(("-git-app.yaml", "-helm-app.yaml")):
         errors.append(f"{path.relative_to(ROOT)}: descriptor filename must end with -git-app.yaml or -helm-app.yaml")
 
