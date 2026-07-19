@@ -188,7 +188,7 @@ resource "proxmox_virtual_environment_vm" "worker_infra" {
 
   disk {
     datastore_id = "local-lvm"
-    size         = 60
+    size         = 100
     interface    = "scsi0"
     file_format  = "raw"
     discard      = "on"
