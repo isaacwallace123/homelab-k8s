@@ -49,7 +49,7 @@ resource "proxmox_virtual_environment_vm" "control_plane" {
       }
     }
     dns {
-      servers = ["192.168.0.246", "1.1.1.1"]
+      servers = ["192.168.0.202", "1.1.1.1"]
     }
     user_account {
       username = "isaac"
@@ -106,7 +106,7 @@ resource "proxmox_virtual_environment_vm" "worker_apps" {
 
   disk {
     datastore_id = "local-lvm"
-    size         = 100
+    size         = 150
     interface    = "scsi0"
     file_format  = "raw"
     discard      = "on"
@@ -130,7 +130,7 @@ resource "proxmox_virtual_environment_vm" "worker_apps" {
       }
     }
     dns {
-      servers = ["192.168.0.246", "1.1.1.1"]
+      servers = ["192.168.0.202", "1.1.1.1"]
     }
     user_account {
       username = "isaac"
@@ -212,7 +212,7 @@ resource "proxmox_virtual_environment_vm" "worker_infra" {
       }
     }
     dns {
-      servers = ["192.168.0.246", "1.1.1.1"]
+      servers = ["192.168.0.202", "1.1.1.1"]
     }
     user_account {
       username = "isaac"
@@ -231,4 +231,3 @@ resource "proxmox_virtual_environment_vm" "worker_infra" {
     ignore_changes = [clone, boot_order, vga]
   }
 }
-
