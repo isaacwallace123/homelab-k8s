@@ -52,6 +52,34 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
+  name: portfolio
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: >-
+    Public-facing portfolio network — the main site, the shared auth API + its database, and the
+    lab websites (sanitised read-only views), all sourced from the externally owned portfolio
+    monorepo (the cyberlab website moved in from the cyberlab repo). This project deploys STATELESS
+    WEBSITES only; it must never manage cyberlab range VMs, the SOC, Windows/AD, or any
+    Proxmox/Terraform-owned infrastructure. The cyberlab namespace holds only the read-only website.
+  sourceRepos:
+    - https://github.com/isaacwallace123/portfolio-v3.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: portfolio
+    - server: https://kubernetes.default.svc
+      namespace: cyberlab
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
   name: monitoring
   namespace: argocd
   annotations:

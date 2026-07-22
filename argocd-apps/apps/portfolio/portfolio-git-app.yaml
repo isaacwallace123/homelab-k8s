@@ -1,0 +1,11 @@
+# Portfolio network → isaacwallace.dev + the dedicated auth service (auth.isaacwallace.dev) + the
+# general-API stub (api.isaacwallace.dev) + Postgres. Manifests are owned by the externally-owned
+# portfolio repo (deploy/k8s); this descriptor just tells homelab ArgoCD to reconcile them.
+# syncWave 2 = after core infra + networking.
+name: portfolio
+namespace: portfolio
+project: portfolio
+syncWave: "2"
+repoURL: https://github.com/isaacwallace123/portfolio-v3.git
+targetRevision: main
+appPath: deploy/k8s
