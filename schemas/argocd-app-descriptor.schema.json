@@ -27,7 +27,8 @@
         "infrastructure",
         "applications",
         "monitoring",
-        "lab-observability"
+        "lab-observability",
+        "portfolio"
       ]
     },
     "syncWave": {
@@ -51,7 +52,8 @@
     },
     "appPath": {
       "type": "string",
-      "pattern": "^(manifests/apps|manifests/infra)/[A-Za-z0-9._/-]+$"
+      "comment": "Relative path within the source repo. The manifests/apps|manifests/infra convention is enforced by validate-gitops.py for homelab-sourced descriptors; externally-sourced descriptors (e.g. portfolio-v3) use the remote repo's own layout.",
+      "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
     }
   },
   "oneOf": [

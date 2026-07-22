@@ -71,6 +71,8 @@ def namespace_allowed(namespace: str, project: dict[str, Any]) -> bool:
 
 def expected_project_for_path(path: Path) -> str:
     relative = path.relative_to(ROOT).as_posix()
+    if relative.startswith("argocd-apps/apps/portfolio/"):
+        return "portfolio"
     if relative.startswith("argocd-apps/apps/"):
         return "applications"
     if relative.startswith("argocd-apps/infrastructure/monitoring/"):
@@ -120,13 +122,20 @@ def validate_descriptor(path: Path, schema: dict[str, Any], projects: dict[str, 
         errors.append(f"{path.relative_to(ROOT)}: descriptor filename must end with -git-app.yaml or -helm-app.yaml")
 
     if has_app_path:
-        app_path = ROOT / descriptor["appPath"]
-        if not app_path.exists() or not app_path.is_dir():
-            errors.append(f"{path.relative_to(ROOT)}: appPath {descriptor['appPath']!r} does not exist")
-        if project_name == "applications" and not descriptor["appPath"].startswith("manifests/apps/"):
-            errors.append(f"{path.relative_to(ROOT)}: applications project descriptors must point under manifests/apps/")
-        if project_name in {"infrastructure", "monitoring"} and not descriptor["appPath"].startswith("manifests/infra/"):
-            errors.append(f"{path.relative_to(ROOT)}: infrastructure/monitoring descriptors must point under manifests/infra/")
+        app_path_value = descriptor["appPath"]
+        if descriptor["repoURL"] == HOMELAB_REPO:
+            # Homelab-sourced git apps point at manifests vendored in this repo; validate them locally.
+            app_path = ROOT / app_path_value
+            if not app_path.exists() or not app_path.is_dir():
+                errors.append(f"{path.relative_to(ROOT)}: appPath {app_path_value!r} does not exist")
+            if not app_path_value.startswith(("manifests/apps/", "manifests/infra/")):
+                errors.append(f"{path.relative_to(ROOT)}: homelab-sourced appPath must live under manifests/apps/ or manifests/infra/")
+            if project_name == "applications" and not app_path_value.startswith("manifests/apps/"):
+                errors.append(f"{path.relative_to(ROOT)}: applications project descriptors must point under manifests/apps/")
+            if project_name in {"infrastructure", "monitoring"} and not app_path_value.startswith("manifests/infra/"):
+                errors.append(f"{path.relative_to(ROOT)}: infrastructure/monitoring descriptors must point under manifests/infra/")
+        # Externally-sourced descriptors (e.g. portfolio-v3) reference paths in the remote repo,
+        # which cannot be validated locally; the project source/namespace allow-lists gate them instead.
 
     return errors
 
@@ -140,7 +149,7 @@ def validate_categories() -> list[str]:
                 errors.append(f"{path.relative_to(ROOT)}: ApplicationSet template project must be '{{{{project}}}}'")
 
     projects = load_projects()
-    for required in ("infrastructure", "applications", "monitoring", "lab-observability"):
+    for required in ("infrastructure", "applications", "monitoring", "lab-observability", "portfolio"):
         if required not in projects:
             errors.append(f"{PROJECTS_PATH.relative_to(ROOT)}: missing AppProject {required!r}")
 
