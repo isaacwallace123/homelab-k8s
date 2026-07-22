@@ -28,7 +28,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: truenas-nfs
-  description: TrueNAS NFS at 192.168.0.254 — /tank (7.3 TB HDD + SSD); movies, TV, downloads, MinIO, portfolio uploads
+  description: TrueNAS NFS at 192.168.0.252 — /mnt/tank (7.3 TB HDD + SSD); movies, TV, and downloads
   tags:
     - storage
     - nfs

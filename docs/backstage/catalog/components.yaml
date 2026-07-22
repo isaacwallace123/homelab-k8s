@@ -106,25 +106,6 @@ spec:
   owner: group:homelab-ops
   system: homelab-platform
 
-# ── Networking / DNS ──────────────────────────────────────────────────────────
-
----
-apiVersion: backstage.io/v1alpha1
-kind: Component
-metadata:
-  name: adguard-home
-  description: DNS server with ad-blocking and *.lan rewrite rules pointing to 192.168.0.245
-  tags:
-    - dns
-    - networking
-  links:
-    - url: https://adguard.lan
-      title: AdGuard UI
-spec:
-  type: service
-  lifecycle: production
-  owner: group:homelab-ops
-  system: homelab-platform
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
@@ -280,7 +261,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: plex
-  description: Media server with Intel iGPU hardware transcode; direct MetalLB access on 192.168.0.241:32400
+  description: Media server with Intel iGPU hardware transcode; direct MetalLB access on 192.168.0.230:32400
   tags:
     - media
   links:

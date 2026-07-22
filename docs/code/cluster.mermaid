@@ -7,7 +7,7 @@ flowchart TB
     end
 
     subgraph Proxmox["Proxmox VE — pve2"]
-        TrueNAS["TrueNAS NFS\n192.168.0.254\n/tank — 7.3 TB"]
+        TrueNAS["TrueNAS NFS\n192.168.0.252\n/tank — 7.3 TB"]
 
         subgraph CP["k3s-control-plane"]
             ETCD["etcd"]
@@ -17,15 +17,15 @@ flowchart TB
 
         subgraph Workers["k3s-worker-01 / 02"]
             subgraph ns_networking["namespace: networking"]
-                EnvoyGW["Envoy Gateway\n192.168.0.245"]
-                AdGuard["AdGuard Home\nDNS 192.168.0.246"]
+                EnvoyGW["Envoy Gateway\n192.168.0.201"]
+                AdGuard["AdGuard Home\nDNS 192.168.0.202"]
                 Homepage["Homepage\nDashboard"]
                 Cloudflared["cloudflared"]
                 ntfy["ntfy"]
             end
 
             subgraph ns_media["namespace: media"]
-                Plex["Plex\n192.168.0.241:32400"]
+                Plex["Plex\n192.168.0.230:32400"]
                 MediaStack["media-stack\ngluetun · qbittorrent · radarr\nsonarr · prowlarr · sabnzbd\noverseerr · flaresolverr"]
             end
 
@@ -65,7 +65,7 @@ flowchart TB
 
     Client -->|"*.lan HTTPS"| EnvoyGW
     Client -->|"DNS :53"| AdGuard
-    AdGuard -->|"*.lan → 192.168.0.245"| EnvoyGW
+    AdGuard -->|"*.lan → 192.168.0.201"| EnvoyGW
     Internet --> CF
     CF -->|"isaacwallace.dev"| Cloudflared
     Cloudflared --> EnvoyGW

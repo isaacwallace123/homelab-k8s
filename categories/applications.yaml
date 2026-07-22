@@ -64,6 +64,12 @@ spec:
         revision: main
         files:
           - path: argocd-apps/apps/**/*-git-app.yaml
+      selector:
+        matchExpressions:
+          - key: name
+            operator: NotIn
+            values:
+              - adguard-home
   template:
     metadata:
       name: '{{name}}'

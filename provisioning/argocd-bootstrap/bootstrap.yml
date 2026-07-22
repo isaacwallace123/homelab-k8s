@@ -28,7 +28,7 @@
       apt:
         name:
           - open-iscsi       # Required by Longhorn for block storage volumes
-          - nfs-common       # NFS client — mounts /tank/media from 192.168.0.254
+          - nfs-common       # NFS client — mounts /tank/media from 192.168.0.252
           - curl
           - jq
         state: present
@@ -54,7 +54,7 @@
         mode: "0644"
 
     # -------------------------------------------------------------------------
-    # NFS mount — /tank on 192.168.0.254 → /mnt/tank
+    # NFS mount — /tank on 192.168.0.252 → /mnt/tank
     # -------------------------------------------------------------------------
     - name: Create NFS mount point
       file:
@@ -65,7 +65,7 @@
     - name: Mount /tank/config from NFS server
       mount:
         path: /mnt/tank
-        src: 192.168.0.254:/tank
+        src: 192.168.0.252:/mnt/tank
         fstype: nfs
         opts: defaults,_netdev,nofail
         state: mounted

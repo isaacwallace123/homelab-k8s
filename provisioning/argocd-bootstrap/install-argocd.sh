@@ -80,7 +80,7 @@ echo ""
 #   wave -2 → traefik/envoy-gateway, nfd, cert-manager
 #   wave -1 → ingress, intel-gpu-plugin, argocd-image-updater,
 #              cert-manager-config, longhorn-prereqs
-#   wave  0 → longhorn, storage, cloudflared, gluetun, adguard-home
+#   wave  0 → longhorn, storage, cloudflared, gluetun
 #   wave  1 → monitoring, media apps, portfolio, homelab-ai
 #
 # All secrets are encrypted in git as SealedSecrets.
@@ -95,7 +95,7 @@ log "  Bootstrap complete!"
 log "============================================"
 echo ""
 echo "  Repo:     $REPO"
-echo "  ArgoCD:   http://argocd.lan (AdGuard: argocd.lan → 192.168.0.245)"
+echo "  ArgoCD:   http://argocd.lan (AdGuard: argocd.lan → 192.168.0.201)"
 echo "  User:     admin"
 echo "  Pass:     $ARGOCD_PASS"
 echo ""

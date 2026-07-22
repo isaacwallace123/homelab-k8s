@@ -51,13 +51,17 @@ cyberlab and AI lab keep their own repositories and operational boundaries. See
 | `k3s-control-plane` | Control plane | etcd, API server, scheduler |
 | `k3s-worker-*` | General workers | Infra, apps, monitoring |
 
-**MetalLB address pool:** `192.168.0.240 – 192.168.0.250`
+**MetalLB address pool:** `192.168.0.220 – 192.168.0.250`
 
 | IP | Service |
 | :--- | :--- |
-| `192.168.0.241` | Plex media server (direct LAN, port 32400) |
-| `192.168.0.245` | Envoy Gateway (all `.lan` HTTPS + HTTP redirect) |
-| `192.168.0.246` | AdGuard DNS (UDP/TCP 53) |
+| `192.168.0.201` | Envoy Gateway (all `.lan` HTTPS + HTTP redirect) |
+| `192.168.0.202` | AdGuard DNS (UDP/TCP 53) |
+| `192.168.0.203` | ArgoCD (direct LAN TLS) |
+| `192.168.0.230` | Plex media server (direct LAN, port 32400) |
+| `192.168.0.240` | Grafana |
+| `192.168.0.241` | Prometheus |
+| `192.168.0.242` | Alertmanager |
 
 ```mermaid
 flowchart TB
@@ -66,20 +70,20 @@ flowchart TB
     Internet["Internet"]
 
     subgraph Proxmox["Proxmox VE — pve2"]
-        NFS["TrueNAS NFS\n192.168.0.254\n/tank (7.3 TB HDD + SSD)"]
+        NFS["TrueNAS NFS\n192.168.0.252\n/tank (7.3 TB HDD + SSD)"]
 
         subgraph K3s["k3s Cluster"]
             ArgoCD["ArgoCD\n(self-heals from git)"]
             SealedSecrets["Sealed Secrets\nController"]
             MetalLB["MetalLB\nL2 LoadBalancer"]
-            Envoy["Envoy Gateway\n192.168.0.245"]
-            AdGuard["AdGuard Home\nDNS 192.168.0.246"]
+            Envoy["Envoy Gateway\n192.168.0.201"]
+            AdGuard["AdGuard Home\nDNS 192.168.0.202"]
             CertManager["cert-manager\nhomelab CA"]
             Longhorn["Longhorn\nBlock Storage"]
 
             subgraph Media["media namespace"]
                 MediaStack["media-stack\ngluetun · radarr · sonarr\nprowlarr · sabnzbd · overseerr\nqbittorrent · flaresolverr"]
-                Plex["Plex\n192.168.0.241:32400"]
+                Plex["Plex\n192.168.0.230:32400"]
             end
 
             subgraph Monitoring["monitoring namespace"]
@@ -94,7 +98,7 @@ flowchart TB
 
     User -->|"*.lan HTTPS"| Envoy
     User -->|"DNS queries"| AdGuard
-    AdGuard -->|"*.lan → 192.168.0.245"| Envoy
+    AdGuard -->|"*.lan → 192.168.0.201"| Envoy
     Internet --> CF
     CF --> Envoy
     Envoy --> MediaStack
@@ -125,7 +129,7 @@ bootstrap/root-app.yaml          ← apply once manually after ArgoCD install
         │                longhorn, envoy-gateway, ingress, monitoring, storage …
         └── applications.yaml    ← ApplicationSet (sync-wave 0)
                 discovers argocd-apps/apps/**/*-git-app.yaml
-                deploys: adguard-home, media-stack, plex, homepage, ntfy
+                deploys: media-stack, plex, homepage, ntfy
 ```
 
 **Sync waves ensure ordering:**
@@ -153,14 +157,14 @@ kubectl apply -f bootstrap/root-app.yaml
 
 ## Networking
 
-All LAN services are reachable at `<service>.lan` via Envoy Gateway. AdGuard Home handles DNS and rewrites every `.lan` hostname to `192.168.0.245`.
+LAN HTTP services are exposed through Envoy Gateway at `192.168.0.201`. Internal hostname records
+must be supplied by the router or client DNS configuration.
 
 TLS is terminated at the gateway using a cert-manager-issued wildcard certificate (`*.lan`) signed by the homelab self-signed CA. Install the CA cert (`homelab-ca.crt`) in your browser/OS trust store for the green padlock.
 
 | Hostname | Service | Namespace |
 | :--- | :--- | :--- |
 | `home.lan` | Homepage dashboard | `networking` |
-| `adguard.lan` | AdGuard Home UI | `networking` |
 | `ntfy.lan` | ntfy notifications | `networking` |
 | `argocd.lan` | ArgoCD UI (TLS passthrough) | `argocd` |
 | `plex.lan` | Plex Web | `media` |
@@ -183,7 +187,7 @@ TLS is terminated at the gateway using a cert-manager-issued wildcard certificat
 
 ### Media
 
-The entire \*arr stack runs as a single pod (`media-stack`) in the `media` namespace. All containers share the `gluetun` VPN sidecar network namespace — outbound traffic is automatically tunnelled through NordVPN WireGuard. Plex runs as a separate deployment with direct MetalLB access on `192.168.0.241:32400`.
+The entire \*arr stack runs as a single pod (`media-stack`) in the `media` namespace. All containers share the `gluetun` VPN sidecar network namespace — outbound traffic is automatically tunnelled through NordVPN WireGuard. Plex runs as a separate deployment with direct MetalLB access on `192.168.0.230:32400`.
 
 | App | Purpose |
 | :--- | :--- |
@@ -238,10 +242,12 @@ All alerts route to ntfy at `ntfy.lan/homelab-alerts`.
 
 ## Storage
 
+Current remediation guidance: [Storage pressure recovery plan (2026-07-18)](docs/storage-pressure-recovery-plan-2026-07-18.md).
+
 | Type | Backend | Used by |
 | :--- | :--- | :--- |
 | Longhorn (RWO) | Local disk on workers | Prometheus (10 Gi), Grafana (2 Gi), Loki (10 Gi), media app configs |
-| NFS (RWX) | TrueNAS `/tank` at `192.168.0.254` | Movies (4 Ti), TV (4 Ti), Downloads (75 Gi, SSD) |
+| NFS (RWX) | TrueNAS `/tank` at `192.168.0.252` | Movies (4 Ti), TV (4 Ti), Downloads (450 Gi requested, SSD) |
 
 Longhorn volumes have daily snapshots with 7-day retention via `RecurringJob`.
 
