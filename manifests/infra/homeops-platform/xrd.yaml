@@ -51,6 +51,14 @@ spec:
                   default: 3
                   minimum: 1
                   maximum: 6
+                cacheReplicas:
+                  type: integer
+                  description: Redis cache tier size (0 or 1). The broker sets 1 for the "cache"
+                    operator decision. The demo checkout app does not route through it yet — a real
+                    app would; this provisions the tier.
+                  default: 0
+                  minimum: 0
+                  maximum: 1
                 ttlSeconds:
                   type: integer
                   description: Hard time-to-live. Teardown is broker-owned; the broker deletes the

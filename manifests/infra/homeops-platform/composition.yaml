@@ -382,3 +382,88 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.runId
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
+
+          # ── Redis cache tier: replicas driven by spec.cacheReplicas (the "cache" decision) ──
+          # Always rendered; scaled 0→1 when the operator enables the cache. Sized 0 by default.
+          - name: redis-deployment
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: homeops
+                forProvider:
+                  manifest:
+                    apiVersion: apps/v1
+                    kind: Deployment
+                    metadata:
+                      name: redis
+                      namespace: "" # patched from spec.runId
+                      labels:
+                        app: redis
+                    spec:
+                      replicas: 0 # patched from spec.cacheReplicas
+                      selector:
+                        matchLabels:
+                          app: redis
+                      template:
+                        metadata:
+                          labels:
+                            app: redis
+                        spec:
+                          containers:
+                            - name: redis
+                              image: redis:7-alpine
+                              ports:
+                                - containerPort: 6379
+                              resources:
+                                requests:
+                                  cpu: 50m
+                                  memory: 32Mi
+                                limits:
+                                  cpu: 200m
+                                  memory: 128Mi
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-redis" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cacheReplicas
+                toFieldPath: spec.forProvider.manifest.spec.replicas
+
+          - name: redis-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: homeops
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata:
+                      name: redis
+                      namespace: "" # patched from spec.runId
+                    spec:
+                      selector:
+                        app: redis
+                      ports:
+                        - port: 6379
+                          targetPort: 6379
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-redis-svc" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
