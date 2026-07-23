@@ -22,6 +22,11 @@ rules:
   - apiGroups: ["platform.homelab.isaacwallace.dev"]
     resources: ["labruns/status"]
     verbs: ["get"]
+  # Read-only resource usage (CPU/memory) for run telemetry. metrics.k8s.io exposes only usage
+  # numbers — no pod specs, env, or secrets — so this stays low-sensitivity.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
