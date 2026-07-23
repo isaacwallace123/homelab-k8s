@@ -1,18 +1,18 @@
 # checkout-traffic-spike — the first scenario Composition.
 #
-# Turns a LabRun into a disposable namespace with the isolation primitives in place BEFORE any
-# workload (ResourceQuota, LimitRange, default-deny NetworkPolicy), then a real, self-contained
-# workload inside that boundary: a "checkout" HTTP service (replica count driven by spec.apiReplicas,
-# so the future "scale" decision is a one-field patch) and a load generator that drives steady
-# traffic at it. Two scoped NetworkPolicy allow-rules open exactly what the workload needs —
-# intra-namespace pod traffic and DNS — while all other egress stays denied.
+# Turns a LabRun into a disposable namespace with isolation primitives in place BEFORE any workload
+# (ResourceQuota, LimitRange, default-deny NetworkPolicy), then a REAL, self-contained three-tier
+# workload inside that boundary:
 #
-# One scenario today == one Composition. A second scenario adds its own Composition (named for its
-# scenario id) and the broker selects it by id; for now the XRD's defaultCompositionRef points here.
+#   k6 (real load) → Envoy (gateway + metrics source) → checkout-demo → Postgres, with a Redis cache.
 #
-# Every child is a provider-kubernetes Object reconciled through the `homeops` ProviderConfig; child
-# Objects are named `<runId>-<part>` to stay unique (Object is cluster-scoped). Teardown deletes the
-# LabRun → Crossplane deletes these Objects → the namespace and everything in it is removed.
+# checkout-demo does honest, load-dependent work (a pool-limited pg_sleep query), so under k6's load
+# the service saturates and Envoy measures real request rate, latency percentiles, and 5xx. The
+# operator decisions relieve it for real: scaling adds replicas (spec.apiReplicas → more pooled DB
+# connections), and the cache brings up Redis (spec.cacheReplicas) which the app serves from,
+# skipping the DB. Nothing here is modelled — the arena reads Envoy's numbers.
+#
+# One scenario == one Composition today; a second scenario adds its own, selected by scenario id.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -31,6 +31,12 @@ spec:
       input:
         apiVersion: pt.fn.crossplane.io/v1beta1
         kind: Resources
+        patchSets:
+          - name: namespaced
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
         resources:
           # ── disposable namespace ──────────────────────────────────────────
           - name: namespace
@@ -45,7 +51,7 @@ spec:
                     apiVersion: v1
                     kind: Namespace
                     metadata:
-                      name: "" # patched from spec.runId
+                      name: ""
                       labels:
                         homeops.isaacwallace.dev/managed: "true"
                         homeops.isaacwallace.dev/kind: run
@@ -66,21 +72,18 @@ spec:
                 fromFieldPath: spec.forProvider.manifest.metadata.name
                 toFieldPath: status.namespace
 
-          # ── resource envelope: 4 vCPU / 6 GiB, capped pod count ───────────
+          # ── resource envelope + per-container ceilings + network baseline ──
           - name: resourcequota
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: v1
                     kind: ResourceQuota
-                    metadata:
-                      name: run-quota
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: run-quota, namespace: "" }
                     spec:
                       hard:
                         requests.cpu: "4"
@@ -90,380 +93,429 @@ spec:
                         pods: "20"
                         count/services: "10"
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-quota" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-quota" } }] }
 
-          # ── per-container defaults + ceilings ─────────────────────────────
           - name: limitrange
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: v1
                     kind: LimitRange
-                    metadata:
-                      name: run-limits
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: run-limits, namespace: "" }
                     spec:
                       limits:
                         - type: Container
-                          default:
-                            cpu: 500m
-                            memory: 512Mi
-                          defaultRequest:
-                            cpu: 100m
-                            memory: 128Mi
-                          max:
-                            cpu: "2"
-                            memory: 2Gi
+                          default: { cpu: 500m, memory: 512Mi }
+                          defaultRequest: { cpu: 50m, memory: 64Mi }
+                          max: { cpu: "2", memory: 2Gi }
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-limits" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-limits" } }] }
 
-          # ── default-deny ingress AND egress (baseline) ────────────────────
           - name: networkpolicy-default-deny
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: networking.k8s.io/v1
                     kind: NetworkPolicy
-                    metadata:
-                      name: default-deny
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: default-deny, namespace: "" }
                     spec:
                       podSelector: {}
-                      policyTypes:
-                        - Ingress
-                        - Egress
+                      policyTypes: [Ingress, Egress]
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-default-deny" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-default-deny" } }] }
 
-          # ── allow intra-namespace pod traffic (load generator → checkout) ──
           - name: networkpolicy-allow-intra
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: networking.k8s.io/v1
                     kind: NetworkPolicy
-                    metadata:
-                      name: allow-intra
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: allow-intra, namespace: "" }
                     spec:
                       podSelector: {}
-                      policyTypes:
-                        - Ingress
-                        - Egress
-                      ingress:
-                        - from:
-                            - podSelector: {}
-                      egress:
-                        - to:
-                            - podSelector: {}
+                      policyTypes: [Ingress, Egress]
+                      ingress: [{ from: [{ podSelector: {} }] }]
+                      egress: [{ to: [{ podSelector: {} }] }]
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-allow-intra" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-intra" } }] }
 
-          # ── allow DNS egress to kube-dns (so `http://checkout` resolves) ───
           - name: networkpolicy-allow-dns
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: networking.k8s.io/v1
                     kind: NetworkPolicy
-                    metadata:
-                      name: allow-dns
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: allow-dns, namespace: "" }
                     spec:
                       podSelector: {}
-                      policyTypes:
-                        - Egress
+                      policyTypes: [Egress]
                       egress:
-                        - to:
-                            - namespaceSelector:
-                                matchLabels:
-                                  kubernetes.io/metadata.name: kube-system
-                          ports:
-                            - protocol: UDP
-                              port: 53
-                            - protocol: TCP
-                              port: 53
+                        - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+                          ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-allow-dns" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-dns" } }] }
 
-          # ── checkout API: replica count driven by spec.apiReplicas ─────────
-          - name: checkout-deployment
+          # ── Postgres (the data tier the checkout query hits) ──────────────
+          - name: postgres-deployment
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: apps/v1
                     kind: Deployment
-                    metadata:
-                      name: checkout
-                      namespace: "" # patched from spec.runId
-                      labels:
-                        app: checkout
+                    metadata: { name: postgres, namespace: "", labels: { app: postgres } }
                     spec:
-                      replicas: 3 # patched from spec.apiReplicas
-                      selector:
-                        matchLabels:
-                          app: checkout
+                      replicas: 1
+                      selector: { matchLabels: { app: postgres } }
                       template:
-                        metadata:
-                          labels:
-                            app: checkout
+                        metadata: { labels: { app: postgres } }
                         spec:
                           containers:
-                            - name: whoami
-                              image: traefik/whoami:v1.10.3
-                              ports:
-                                - containerPort: 80
+                            - name: postgres
+                              image: postgres:16-alpine
+                              env:
+                                - { name: POSTGRES_USER, value: checkout }
+                                - { name: POSTGRES_PASSWORD, value: checkout }
+                                - { name: POSTGRES_DB, value: checkout }
+                                - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+                              ports: [{ containerPort: 5432 }]
                               resources:
-                                requests:
-                                  cpu: 50m
-                                  memory: 32Mi
-                                limits:
-                                  cpu: 100m
-                                  memory: 64Mi
+                                requests: { cpu: 100m, memory: 128Mi }
+                                limits: { cpu: 500m, memory: 512Mi }
+                              volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+                          volumes: [{ name: data, emptyDir: {} }]
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-checkout" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.apiReplicas
-                toFieldPath: spec.forProvider.manifest.spec.replicas
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-postgres" } }] }
 
-          # ── checkout Service (stable name the load generator targets) ──────
-          - name: checkout-service
+          - name: postgres-service
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: v1
                     kind: Service
-                    metadata:
-                      name: checkout
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: postgres, namespace: "" }
                     spec:
-                      selector:
-                        app: checkout
-                      ports:
-                        - port: 80
-                          targetPort: 80
+                      selector: { app: postgres }
+                      ports: [{ port: 5432, targetPort: 5432 }]
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-checkout-svc" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-postgres-svc" } }] }
 
-          # ── load generator: steady traffic at the checkout Service ─────────
-          - name: loadgen-deployment
-            base:
-              apiVersion: kubernetes.crossplane.io/v1alpha2
-              kind: Object
-              spec:
-                providerConfigRef:
-                  name: homeops
-                forProvider:
-                  manifest:
-                    apiVersion: apps/v1
-                    kind: Deployment
-                    metadata:
-                      name: loadgen
-                      namespace: "" # patched from spec.runId
-                      labels:
-                        app: loadgen
-                    spec:
-                      replicas: 1
-                      selector:
-                        matchLabels:
-                          app: loadgen
-                      template:
-                        metadata:
-                          labels:
-                            app: loadgen
-                        spec:
-                          containers:
-                            - name: loadgen
-                              image: busybox:1.36
-                              command:
-                                - /bin/sh
-                                - -c
-                                - "while true; do wget -q -O- http://checkout/ >/dev/null 2>&1; sleep 1; done"
-                              resources:
-                                requests:
-                                  cpu: 25m
-                                  memory: 16Mi
-                                limits:
-                                  cpu: 50m
-                                  memory: 32Mi
-            patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-loadgen" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
-
-          # ── Redis cache tier: replicas driven by spec.cacheReplicas (the "cache" decision) ──
-          # Always rendered; scaled 0→1 when the operator enables the cache. Sized 0 by default.
+          # ── Redis cache tier (scaled 0→1 by the cache decision) ───────────
           - name: redis-deployment
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: apps/v1
                     kind: Deployment
-                    metadata:
-                      name: redis
-                      namespace: "" # patched from spec.runId
-                      labels:
-                        app: redis
+                    metadata: { name: redis, namespace: "", labels: { app: redis } }
                     spec:
-                      replicas: 0 # patched from spec.cacheReplicas
-                      selector:
-                        matchLabels:
-                          app: redis
+                      replicas: 0
+                      selector: { matchLabels: { app: redis } }
                       template:
-                        metadata:
-                          labels:
-                            app: redis
+                        metadata: { labels: { app: redis } }
                         spec:
                           containers:
                             - name: redis
                               image: redis:7-alpine
-                              ports:
-                                - containerPort: 6379
+                              ports: [{ containerPort: 6379 }]
                               resources:
-                                requests:
-                                  cpu: 50m
-                                  memory: 32Mi
-                                limits:
-                                  cpu: 200m
-                                  memory: 128Mi
+                                requests: { cpu: 50m, memory: 32Mi }
+                                limits: { cpu: 200m, memory: 128Mi }
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-redis" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.cacheReplicas
-                toFieldPath: spec.forProvider.manifest.spec.replicas
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-redis" } }] }
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.cacheReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
 
           - name: redis-service
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
-                providerConfigRef:
-                  name: homeops
+                providerConfigRef: { name: homeops }
                 forProvider:
                   manifest:
                     apiVersion: v1
                     kind: Service
-                    metadata:
-                      name: redis
-                      namespace: "" # patched from spec.runId
+                    metadata: { name: redis, namespace: "" }
                     spec:
-                      selector:
-                        app: redis
-                      ports:
-                        - port: 6379
-                          targetPort: 6379
+                      selector: { app: redis }
+                      ports: [{ port: 6379, targetPort: 6379 }]
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string: { type: Format, fmt: "%s-redis-svc" }
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.runId
-                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-redis-svc" } }] }
+
+          # ── checkout-demo (replica count = the scale decision) ────────────
+          - name: checkout-deployment
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: apps/v1
+                    kind: Deployment
+                    metadata: { name: checkout, namespace: "", labels: { app: checkout } }
+                    spec:
+                      replicas: 3
+                      selector: { matchLabels: { app: checkout } }
+                      template:
+                        metadata: { labels: { app: checkout } }
+                        spec:
+                          containers:
+                            - name: checkout
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
+                              env:
+                                - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
+                                - { name: REDIS_ADDR, value: "redis:6379" }
+                                - { name: CACHE_ENABLED, value: "true" }
+                                - { name: DB_QUERY_MS, value: "40" }
+                                - { name: DB_MAX_CONNS, value: "4" }
+                              ports: [{ containerPort: 8080 }]
+                              readinessProbe:
+                                httpGet: { path: /healthz, port: 8080 }
+                                initialDelaySeconds: 5
+                                periodSeconds: 5
+                              resources:
+                                requests: { cpu: 50m, memory: 32Mi }
+                                limits: { cpu: 250m, memory: 64Mi }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout" } }] }
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.apiReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
+
+          - name: checkout-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata: { name: checkout, namespace: "" }
+                    spec:
+                      selector: { app: checkout }
+                      ports: [{ port: 80, targetPort: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-svc" } }] }
+
+          # ── Envoy gateway — the metrics source (admin :9901 exposes stats) ─
+          - name: envoy-config
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: ConfigMap
+                    metadata: { name: envoy-config, namespace: "" }
+                    data:
+                      envoy.yaml: |
+                        admin:
+                          address:
+                            socket_address: { address: 0.0.0.0, port_value: 9901 }
+                        static_resources:
+                          listeners:
+                            - name: ingress
+                              address:
+                                socket_address: { address: 0.0.0.0, port_value: 80 }
+                              filter_chains:
+                                - filters:
+                                    - name: envoy.filters.network.http_connection_manager
+                                      typed_config:
+                                        "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                                        stat_prefix: ingress
+                                        route_config:
+                                          name: local
+                                          virtual_hosts:
+                                            - name: checkout
+                                              domains: ["*"]
+                                              routes:
+                                                - match: { prefix: "/" }
+                                                  route: { cluster: checkout, timeout: 5s }
+                                        http_filters:
+                                          - name: envoy.filters.http.router
+                                            typed_config:
+                                              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                          clusters:
+                            - name: checkout
+                              type: STRICT_DNS
+                              connect_timeout: 2s
+                              load_assignment:
+                                cluster_name: checkout
+                                endpoints:
+                                  - lb_endpoints:
+                                      - endpoint:
+                                          address:
+                                            socket_address: { address: checkout, port_value: 80 }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-config" } }] }
+
+          - name: envoy-deployment
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: apps/v1
+                    kind: Deployment
+                    metadata: { name: envoy, namespace: "", labels: { app: envoy } }
+                    spec:
+                      replicas: 1
+                      selector: { matchLabels: { app: envoy } }
+                      template:
+                        metadata: { labels: { app: envoy } }
+                        spec:
+                          containers:
+                            - name: envoy
+                              image: envoyproxy/envoy:v1.31-latest
+                              args: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "checkout"]
+                              ports: [{ containerPort: 80 }, { containerPort: 9901 }]
+                              resources:
+                                requests: { cpu: 50m, memory: 64Mi }
+                                limits: { cpu: 300m, memory: 192Mi }
+                              volumeMounts: [{ name: config, mountPath: /etc/envoy }]
+                          volumes: [{ name: config, configMap: { name: envoy-config } }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy" } }] }
+              # the mounted ConfigMap is namespace-local, so its name stays "envoy-config"
+
+          - name: envoy-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata: { name: envoy, namespace: "" }
+                    spec:
+                      selector: { app: envoy }
+                      ports:
+                        - { name: http, port: 80, targetPort: 80 }
+                        - { name: admin, port: 9901, targetPort: 9901 }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-svc" } }] }
+
+          # ── k6 — real load generator hitting Envoy ────────────────────────
+          - name: k6-config
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: ConfigMap
+                    metadata: { name: k6-script, namespace: "" }
+                    data:
+                      script.js: |
+                        import http from 'k6/http';
+                        export const options = {
+                          scenarios: {
+                            constant: {
+                              executor: 'constant-arrival-rate',
+                              rate: 400, timeUnit: '1s', duration: '12h',
+                              preAllocatedVUs: 100, maxVUs: 400,
+                            },
+                          },
+                        };
+                        export default function () {
+                          http.get('http://envoy/');
+                        }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-k6-script" } }] }
+
+          - name: k6-deployment
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: apps/v1
+                    kind: Deployment
+                    metadata: { name: k6, namespace: "", labels: { app: k6 } }
+                    spec:
+                      replicas: 1
+                      selector: { matchLabels: { app: k6 } }
+                      template:
+                        metadata: { labels: { app: k6 } }
+                        spec:
+                          containers:
+                            - name: k6
+                              image: grafana/k6:0.53.0
+                              args: ["run", "--quiet", "/scripts/script.js"]
+                              resources:
+                                requests: { cpu: 100m, memory: 128Mi }
+                                limits: { cpu: 600m, memory: 256Mi }
+                              volumeMounts: [{ name: script, mountPath: /scripts }]
+                          volumes: [{ name: script, configMap: { name: k6-script } }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-k6" } }] }

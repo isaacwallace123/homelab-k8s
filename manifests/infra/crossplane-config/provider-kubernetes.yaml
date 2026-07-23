@@ -57,7 +57,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 rules:
   - apiGroups: [""]
-    resources: ["namespaces", "resourcequotas", "limitranges", "services"]
+    resources: ["namespaces", "resourcequotas", "limitranges", "services", "configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
