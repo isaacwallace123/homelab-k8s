@@ -60,13 +60,20 @@ App-of-Apps descriptors:
 | Config | `manifests/infra/crossplane-config/` | -3 | provider-kubernetes, patch-and-transform function, scoped RBAC, in-cluster `ProviderConfig` |
 | Platform API | `manifests/infra/homeops-platform/` | -2 | `LabRun` XRD (Crossplane v2, scope: Cluster), the `labrun-isolated-namespace` Composition, and the run-broker RBAC |
 
-A `LabRun` carries only an allowlisted `scenarioId`, the broker-issued `runId`, a
-`resourceClass`, and a `ttlSeconds`. The Composition renders a disposable namespace named after the
-run id, plus a `ResourceQuota` (4 vCPU / 6 GiB, capped pods), a `LimitRange`, and a default-deny
-(ingress + egress) `NetworkPolicy` — the isolation primitives exist before any workload. The provider
-runs with a ServiceAccount whose ClusterRole can manage only namespaces, quotas, limit ranges, and
-network policies. Teardown is broker-owned: deleting the claim garbage-collects the namespace, and a
-failed collector cannot block that deletion.
+A `LabRun` carries only an allowlisted `scenarioId`, the broker-issued `runId`, a `resourceClass`, a
+`ttlSeconds`, and an `apiReplicas` count. The `checkout-traffic-spike` Composition renders a disposable
+namespace named after the run id with the isolation primitives first — a `ResourceQuota` (4 vCPU /
+6 GiB, capped pods), a `LimitRange`, and a default-deny (ingress + egress) `NetworkPolicy` — then the
+scenario workload inside that boundary: a `checkout` HTTP service (replica count driven by
+`apiReplicas`, so the "scale" decision is a one-field patch) and a load generator driving traffic at
+it, with two scoped allow-rules opening exactly what it needs (intra-namespace pod traffic and DNS).
+All other egress stays denied. The provider runs with a ServiceAccount whose ClusterRole can manage
+only namespaces, quotas, limit ranges, network policies, services, and deployments — never secrets,
+RBAC, or a personal namespace. Teardown is broker-owned: deleting the `LabRun` garbage-collects the
+namespace, and a failed collector cannot block that deletion.
+
+One scenario maps to one Composition today; a second scenario adds its own Composition (named for its
+scenario id) that the broker selects by id.
 
 ## Delivery Slices
 

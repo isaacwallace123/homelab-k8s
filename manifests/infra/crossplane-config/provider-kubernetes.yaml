@@ -46,9 +46,9 @@ metadata:
 spec:
   package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.10.7
 ---
-# Scoped permissions for the provider's ServiceAccount. It only manages the isolation
-# primitives the Composition renders — deliberately NOT deployments, secrets, RBAC, or
-# any personal-namespace resource. Scenario workloads will extend this list explicitly.
+# Scoped permissions for the provider's ServiceAccount. It manages the isolation primitives
+# plus the scenario workload objects (Deployments/Services) the Composition renders —
+# deliberately NOT secrets, RBAC, configmaps, pods/exec, or anything in a personal namespace.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -57,7 +57,10 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 rules:
   - apiGroups: [""]
-    resources: ["namespaces", "resourcequotas", "limitranges"]
+    resources: ["namespaces", "resourcequotas", "limitranges", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]

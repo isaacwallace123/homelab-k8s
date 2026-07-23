@@ -18,7 +18,7 @@ spec:
     kind: LabRun
     plural: labruns
   defaultCompositionRef:
-    name: labrun-isolated-namespace
+    name: checkout-traffic-spike
   versions:
     - name: v1alpha1
       served: true
@@ -44,6 +44,13 @@ spec:
                   type: string
                   enum: ["light", "standard", "heavy"]
                   default: standard
+                apiReplicas:
+                  type: integer
+                  description: Checkout API replica count. The broker patches this for the "scale"
+                    operator decision; defaults to the baseline.
+                  default: 3
+                  minimum: 1
+                  maximum: 6
                 ttlSeconds:
                   type: integer
                   description: Hard time-to-live. Teardown is broker-owned; the broker deletes the
