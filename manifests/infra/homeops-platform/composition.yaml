@@ -509,7 +509,7 @@ spec:
                               // representative. Scaling to 6 halves utilisation and p95 falls.
                               executor: 'constant-arrival-rate',
                               rate: 270, timeUnit: '1s', duration: '12h',
-                              preAllocatedVUs: 120, maxVUs: 400,
+                              preAllocatedVUs: 300, maxVUs: 1200,
                             },
                           },
                         };
@@ -543,8 +543,8 @@ spec:
                               image: grafana/k6:0.53.0
                               args: ["run", "--quiet", "/scripts/script.js"]
                               resources:
-                                requests: { cpu: 100m, memory: 128Mi }
-                                limits: { cpu: 600m, memory: 256Mi }
+                                requests: { cpu: 100m, memory: 192Mi }
+                                limits: { cpu: 800m, memory: 512Mi }
                               volumeMounts: [{ name: script, mountPath: /scripts }]
                           volumes: [{ name: script, configMap: { name: k6-script } }]
             patches:
