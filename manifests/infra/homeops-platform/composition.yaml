@@ -386,6 +386,10 @@ spec:
                     metadata: { name: envoy-config, namespace: "" }
                     data:
                       envoy.yaml: |
+                        # Flush stats every second so the latency histogram buckets update within the
+                        # broker's short scrape window (otherwise the default 5s flush makes windowed
+                        # p95 read zero between flushes).
+                        stats_flush_interval: 1s
                         admin:
                           address:
                             socket_address: { address: 0.0.0.0, port_value: 9901 }
