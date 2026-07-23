@@ -501,16 +501,15 @@ spec:
                     data:
                       script.js: |
                         import http from 'k6/http';
+                        // Closed-loop load: a fixed pool of concurrent users, each firing the next
+                        // request as soon as the previous returns. Throughput self-limits to the
+                        // service's capacity and latency stably reflects the queue depth — so doubling
+                        // checkout replicas (the scale decision) visibly ~halves p95 and lifts
+                        // throughput, and enabling the cache collapses both. An open arrival-rate model
+                        // instead death-spirals to the timeout under overload and can't recover.
                         export const options = {
                           scenarios: {
-                            constant: {
-                              // ~90% of the 3-replica DB capacity (3 x 4 conns / 40ms = 300 rq/s):
-                              // high utilisation → elevated but STABLE latency, so the window is
-                              // representative. Scaling to 6 halves utilisation and p95 falls.
-                              executor: 'constant-arrival-rate',
-                              rate: 270, timeUnit: '1s', duration: '12h',
-                              preAllocatedVUs: 300, maxVUs: 1200,
-                            },
+                            load: { executor: 'constant-vus', vus: 150, duration: '12h' },
                           },
                         };
                         export default function () {
