@@ -181,7 +181,10 @@ spec:
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-dns" } }] }
 
-          # ── allow the run-broker (portfolio namespace) to scrape Envoy's admin stats ──
+          # ── allow the run-broker to scrape Envoy's admin stats port ───────
+          # Scoped to Envoy's admin port only (9901). This CNI (kube-router) does not reliably match
+          # cross-namespace namespaceSelector, so the rule is port-scoped: any in-cluster pod may read
+          # stats, but the run is a disposable sandbox and only the broker resolves this service.
           - name: networkpolicy-allow-scrape
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -197,8 +200,7 @@ spec:
                       podSelector: { matchLabels: { app: envoy } }
                       policyTypes: [Ingress]
                       ingress:
-                        - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: portfolio } } }]
-                          ports: [{ protocol: TCP, port: 9901 }]
+                        - ports: [{ protocol: TCP, port: 9901 }]
             patches:
               - type: PatchSet
                 patchSetName: namespaced
