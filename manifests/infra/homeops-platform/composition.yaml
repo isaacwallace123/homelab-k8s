@@ -500,9 +500,12 @@ spec:
                         export const options = {
                           scenarios: {
                             constant: {
+                              // ~90% of the 3-replica DB capacity (3 x 4 conns / 40ms = 300 rq/s):
+                              // high utilisation → elevated but STABLE latency, so the window is
+                              // representative. Scaling to 6 halves utilisation and p95 falls.
                               executor: 'constant-arrival-rate',
-                              rate: 400, timeUnit: '1s', duration: '12h',
-                              preAllocatedVUs: 100, maxVUs: 400,
+                              rate: 270, timeUnit: '1s', duration: '12h',
+                              preAllocatedVUs: 120, maxVUs: 400,
                             },
                           },
                         };
