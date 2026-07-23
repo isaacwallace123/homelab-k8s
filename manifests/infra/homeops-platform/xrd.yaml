@@ -1,0 +1,69 @@
+# LabRun — the HomeOps platform API (Crossplane v2 model).
+#
+# The run-broker for homelab.isaacwallace.dev creates one `LabRun` composite per admitted drill;
+# Crossplane composes it into an isolated, disposable namespace (see composition.yaml). Crossplane v2
+# drops the separate claim, so the broker creates the composite directly. It is `scope: Cluster`
+# because it composes a cluster-scoped Namespace (a Namespaced composite may only compose resources in
+# its own namespace). The public contract stays independent of Kubernetes — a LabRun carries only an
+# allowlisted scenario id, the broker-issued run id, a resource class, and a TTL. Images, commands,
+# and manifests are never caller supplied; they live in the Composition, in this repository.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: labruns.platform.homelab.isaacwallace.dev
+spec:
+  scope: Cluster
+  group: platform.homelab.isaacwallace.dev
+  names:
+    kind: LabRun
+    plural: labruns
+  defaultCompositionRef:
+    name: labrun-isolated-namespace
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                scenarioId:
+                  type: string
+                  description: Allowlisted scenario identifier (e.g. checkout-traffic-spike).
+                  pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                  maxLength: 63
+                runId:
+                  type: string
+                  description: Broker-issued run id; becomes the disposable namespace name.
+                  pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                  maxLength: 63
+                resourceClass:
+                  type: string
+                  enum: ["light", "standard", "heavy"]
+                  default: standard
+                ttlSeconds:
+                  type: integer
+                  description: Hard time-to-live. Teardown is broker-owned; the broker deletes the
+                    claim by this deadline and Crossplane garbage-collects the namespace.
+                  default: 900
+                  minimum: 60
+                  maximum: 3600
+              required:
+                - scenarioId
+                - runId
+            status:
+              type: object
+              properties:
+                namespace:
+                  type: string
+                  description: The disposable namespace composed for this run.
+      additionalPrinterColumns:
+        - name: Scenario
+          type: string
+          jsonPath: .spec.scenarioId
+        - name: Namespace
+          type: string
+          jsonPath: .status.namespace

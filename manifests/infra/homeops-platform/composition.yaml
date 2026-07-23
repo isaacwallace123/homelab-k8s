@@ -1,0 +1,171 @@
+# labrun-isolated-namespace — the first HomeOps Composition (delivery slice 4).
+#
+# Turns an XLabRun into a controller-owned, disposable namespace with the isolation primitives in
+# place BEFORE any workload: a ResourceQuota, a LimitRange, and a default-deny (ingress + egress)
+# NetworkPolicy. There is no workload and no public decision here yet — this proves the boundary
+# first. Scenario workloads (slice 5) will add resources to this pipeline, each with an explicit,
+# reviewed NetworkPolicy allow rule.
+#
+# Every child is a provider-kubernetes Object reconciled through the `homeops` ProviderConfig. The
+# run id becomes the namespace name; child Objects are named `<runId>-<kind>` to stay unique
+# (Object is cluster-scoped). Teardown deletes the claim → Crossplane deletes these Objects →
+# provider-kubernetes deletes the namespace and everything in it.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: labrun-isolated-namespace
+  labels:
+    platform.homelab.isaacwallace.dev/scenario: any
+spec:
+  compositeTypeRef:
+    apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+    kind: LabRun
+  mode: Pipeline
+  pipeline:
+    - step: render-isolation-primitives
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # ── disposable namespace ──────────────────────────────────────────
+          - name: namespace
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: homeops
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Namespace
+                    metadata:
+                      name: "" # patched from spec.runId
+                      labels:
+                        homeops.isaacwallace.dev/managed: "true"
+                        homeops.isaacwallace.dev/kind: run
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-ns" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.scenarioId
+                toFieldPath: spec.forProvider.manifest.metadata.labels[homeops.isaacwallace.dev/scenario]
+              # publish the composed namespace back onto the claim status
+              - type: ToCompositeFieldPath
+                fromFieldPath: spec.forProvider.manifest.metadata.name
+                toFieldPath: status.namespace
+
+          # ── resource envelope: 4 vCPU / 6 GiB, capped pod count ───────────
+          - name: resourcequota
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: homeops
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: ResourceQuota
+                    metadata:
+                      name: run-quota
+                      namespace: "" # patched from spec.runId
+                    spec:
+                      hard:
+                        requests.cpu: "4"
+                        requests.memory: 6Gi
+                        limits.cpu: "4"
+                        limits.memory: 6Gi
+                        pods: "20"
+                        count/services: "10"
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-quota" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+
+          # ── per-container defaults + ceilings ─────────────────────────────
+          - name: limitrange
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: homeops
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: LimitRange
+                    metadata:
+                      name: run-limits
+                      namespace: "" # patched from spec.runId
+                    spec:
+                      limits:
+                        - type: Container
+                          default:
+                            cpu: 500m
+                            memory: 512Mi
+                          defaultRequest:
+                            cpu: 100m
+                            memory: 128Mi
+                          max:
+                            cpu: "2"
+                            memory: 2Gi
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-limits" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+
+          # ── default-deny ingress AND egress ───────────────────────────────
+          # Empty pod selector + no rules = deny everything. Egress stays denied
+          # until a scenario adds a reviewed allow rule (isolation rule: egress
+          # is denied unless one reviewed destination is explicitly needed).
+          - name: networkpolicy-default-deny
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: homeops
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata:
+                      name: default-deny
+                      namespace: "" # patched from spec.runId
+                    spec:
+                      podSelector: {}
+                      policyTypes:
+                        - Ingress
+                        - Egress
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-default-deny" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: spec.forProvider.manifest.metadata.namespace

@@ -1,0 +1,14 @@
+# Crossplane runtime configuration: the provider-kubernetes provider (with a fixed ServiceAccount so
+# it can be granted scoped RBAC), the patch-and-transform function, and the in-cluster ProviderConfig.
+#
+# Sync wave -3: after Crossplane core (-4) so the Provider/Function/DeploymentRuntimeConfig CRDs
+# exist. The ProviderConfig CRD ships inside the provider package and is installed asynchronously,
+# so ArgoCD may report this app Progressing until the package finishes; SkipDryRunOnMissingResource
+# + selfHeal reconcile it once the CRD appears.
+name: crossplane-config
+namespace: crossplane-system
+project: infrastructure
+syncWave: "-3"
+repoURL: https://github.com/isaacwallace123/homelab-k8s.git
+targetRevision: main
+appPath: manifests/infra/crossplane-config

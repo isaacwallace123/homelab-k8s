@@ -27,7 +27,9 @@ This homelab should adopt the parts that improve reliability now:
 - documented onboarding rules
 - shared observability across labs
 
-Do not copy the full operator Helm engine or Crossplane model yet. The current repo is smaller, easier to reason about, and already running stable services. A larger deployment engine is worth revisiting only when there are multiple environments or enough operators to justify templating the generator itself.
+Do not copy the full operator Helm engine yet. The current repo is smaller, easier to reason about, and already running stable services. A larger deployment engine is worth revisiting only when there are multiple environments or enough operators to justify templating the generator itself.
+
+Crossplane, by contrast, is now a deliberate and narrowly scoped platform layer: it backs the public Operations Arena's `LabRun` API and nothing else (see [Public operations arena](public-operations-arena.md)). It is deployed through the same App-of-Apps descriptors as everything else — `crossplane` (Helm, wave -4), `crossplane-config` (git, wave -3), `homeops-platform` (git, wave -2) — so it stays inside the existing GitOps contract rather than introducing a second engine.
 
 ## Descriptor Contract
 

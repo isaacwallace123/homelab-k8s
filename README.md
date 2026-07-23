@@ -18,6 +18,10 @@ cyberlab and AI lab keep their own repositories and operational boundaries. See
 [Shared server context](docs/shared-server-context.md) and
 [Lab organization and Kubernetes strategy](docs/lab-organization-and-kubernetes-strategy.md).
 
+The public `homelab.isaacwallace.dev` frontend lives in the portfolio repository. This repository
+will provide its isolated scenario runtime and sanitized event feed; see
+[Public operations arena](docs/public-operations-arena.md).
+
 ### Infrastructure Layer
 
 | Area | Implementation | Notes |
@@ -134,7 +138,9 @@ bootstrap/root-app.yaml          ← apply once manually after ArgoCD install
 
 **Sync waves ensure ordering:**
 - Wave `-5` — infrastructure (MetalLB, Longhorn, cert-manager, Envoy Gateway)
-- Wave `-3` — ArgoCD config, namespaces, network policies
+- Wave `-4` — Crossplane core
+- Wave `-3` — ArgoCD config, namespaces, network policies, Crossplane providers/functions/config
+- Wave `-2` — HomeOps platform API (`LabRun` XRD + Composition)
 - Wave `-1` — Sealed Secrets (secrets exist before workloads start)
 - Wave `0`  — Applications
 - Wave `1`  — Monitoring
@@ -277,6 +283,8 @@ kubectl create secret generic my-secret --from-literal=key=value \
 | `manifests/apps/` | Raw Kubernetes manifests for homelab applications |
 | `manifests/infra/` | Raw Kubernetes manifests for platform infrastructure |
 | `provisioning/` | Ansible playbooks for k3s install and node setup |
+| `manifests/infra/crossplane-config/` | Crossplane provider-kubernetes, function, and scoped RBAC/ProviderConfig |
+| `manifests/infra/homeops-platform/` | `LabRun` platform API (XRD + Composition) backing the public Operations Arena |
 | `schemas/` | Validation schemas for custom GitOps descriptor files |
 | `scripts/` | Utility scripts (ArgoCD CLI helpers) |
 

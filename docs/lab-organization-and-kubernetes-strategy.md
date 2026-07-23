@@ -24,15 +24,23 @@ If the AI lab later gets its own k3s cluster, either run a separate AI-owned Arg
 
 ## Crossplane Position
 
-Do not adopt Crossplane as the main lab control plane yet.
+Crossplane is adopted for exactly one thing: the HomeOps platform API behind the public Operations
+Arena (`homelab.isaacwallace.dev`). This is the "one low-risk claim" the earlier posture reserved for
+a first test — the `LabRun` composite (Crossplane v2, scope: Cluster) composes only in-cluster Kubernetes objects (a disposable
+namespace, quota, limit range, and default-deny NetworkPolicy), never Proxmox, VMs, DNS, or secrets.
+See [Public operations arena](public-operations-arena.md) and the `manifests/infra/homeops-platform`
+and `manifests/infra/crossplane-config` layers.
 
-Crossplane is a good fit when the lab needs Kubernetes-native self-service APIs such as `AINode`, `LabService`, or `CyberScenario` that compose VMs, DNS, Kubernetes resources, secrets, and monitoring. The current labs are not ready for that abstraction because Terraform, Packer, and Ansible are still the clearer source of truth for Proxmox and guest lifecycle.
+Crossplane is NOT the main lab control plane. Broader self-service APIs such as `AINode`,
+`LabService`, or `CyberScenario` that compose VMs, DNS, secrets, and monitoring remain out of scope —
+Terraform, Packer, and Ansible are still the clearer source of truth for Proxmox and guest lifecycle.
 
 Current posture:
 
-- Keep Terraform as the Proxmox source of truth.
-- Keep Crossplane as a future sandbox experiment.
-- Test Crossplane later with one low-risk claim before considering adoption.
+- Keep Terraform as the Proxmox source of truth. Crossplane never manages Proxmox or guest lifecycle.
+- Crossplane's blast radius is capped by scoped provider RBAC (`homeops:provider-kubernetes`) — it can
+  only manage namespaces, quotas, limit ranges, and network policies.
+- Grow the platform API only when a new claim is as low-risk and in-cluster as `LabRun`.
 - Never use Crossplane to bypass cyberlab isolation review.
 
 ## Homelab Improvement Track

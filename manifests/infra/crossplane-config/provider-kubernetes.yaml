@@ -1,0 +1,73 @@
+# ── provider-kubernetes ───────────────────────────────────────────────────────
+# Lets Crossplane manage in-cluster Kubernetes objects (namespaces, quotas, limit
+# ranges, network policies) as composed resources. It provisions into THIS cluster,
+# so it authenticates with an injected in-cluster identity — no kubeconfig secret.
+#
+# Package versions are Crossplane Package refs (OCI images pulled by Crossplane, not
+# Helm). Verify against the crossplane-contrib releases before a fresh bootstrap.
+
+# Fix the provider's runtime ServiceAccount name so the ClusterRoleBinding below can
+# grant it exactly the permissions it needs (the default SA name is generated).
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-kubernetes
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: provider-kubernetes
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-kubernetes
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes:v1.2.1
+  runtimeConfigRef:
+    name: provider-kubernetes
+---
+# Composition function used by the HomeOps Composition pipeline (patch & transform).
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-patch-and-transform
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.10.7
+---
+# Scoped permissions for the provider's ServiceAccount. It only manages the isolation
+# primitives the Composition renders — deliberately NOT deployments, secrets, RBAC, or
+# any personal-namespace resource. Scenario workloads will extend this list explicitly.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: homeops:provider-kubernetes
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: homeops:provider-kubernetes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: homeops:provider-kubernetes
+subjects:
+  - kind: ServiceAccount
+    name: provider-kubernetes
+    namespace: crossplane-system
+---
+# In-cluster ProviderConfig referenced by every composed Object. InjectedIdentity uses
+# the provider Pod's mounted ServiceAccount token (the SA bound above).
+apiVersion: kubernetes.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: homeops
+spec:
+  credentials:
+    source: InjectedIdentity

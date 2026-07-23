@@ -1,0 +1,26 @@
+# Crossplane core control plane. Installs the Crossplane CRDs (Provider, Function,
+# CompositeResourceDefinition, Composition, DeploymentRuntimeConfig) and the package manager.
+#
+# Providers, functions, the ProviderConfig, and the platform API (XRD + Composition) are applied
+# separately by the crossplane-config and homeops-platform git descriptors, at later sync waves.
+#
+# Chart version == Crossplane version; Renovate keeps it current. Crossplane 2.x: the platform API
+# here uses the v2 model (a scope: Cluster CompositeResourceDefinition, no claims) composed by
+# function-patch-and-transform. Verify the pin against https://charts.crossplane.io/stable.
+name: crossplane
+namespace: crossplane-system
+project: infrastructure
+syncWave: "-4"
+repoURL: https://charts.crossplane.io/stable
+chart: crossplane
+targetRevision: "2.3.3"
+values: |
+  metrics:
+    enabled: true
+  resourcesCrossplane:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 256Mi

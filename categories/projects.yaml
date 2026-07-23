@@ -11,6 +11,7 @@ spec:
     - https://github.com/isaacwallace123/homelab-k8s.git
     - https://argoproj.github.io/argo-helm
     - https://bitnami.github.io/sealed-secrets
+    - https://charts.crossplane.io/stable
     - https://charts.jetstack.io
     - https://charts.longhorn.io
     - https://intel.github.io/helm-charts/
