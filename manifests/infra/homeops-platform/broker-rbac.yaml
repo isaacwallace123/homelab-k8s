@@ -16,9 +16,10 @@ kind: ClusterRole
 metadata:
   name: homeops-broker
 rules:
+  # patch/update are required for operator decisions (the broker patches spec fields like apiReplicas).
   - apiGroups: ["platform.homelab.isaacwallace.dev"]
     resources: ["labruns"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["platform.homelab.isaacwallace.dev"]
     resources: ["labruns/status"]
     verbs: ["get"]
