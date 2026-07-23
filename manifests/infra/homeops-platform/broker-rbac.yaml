@@ -37,6 +37,12 @@ roleRef:
   kind: ClusterRole
   name: homeops-broker
 subjects:
+  # In-homeops identity (reserved for a future in-namespace broker).
   - kind: ServiceAccount
     name: homeops-broker
     namespace: homeops
+  # The api.isaacwallace.dev pod (portfolio namespace) IS the broker today — its ServiceAccount runs
+  # the run-broker in-cluster, scoped to LabRun CRUD + metrics read only.
+  - kind: ServiceAccount
+    name: homeops-broker
+    namespace: portfolio
