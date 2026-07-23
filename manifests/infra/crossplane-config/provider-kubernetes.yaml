@@ -5,6 +5,12 @@
 #
 # Package versions are Crossplane Package refs (OCI images pulled by Crossplane, not
 # Helm). Verify against the crossplane-contrib releases before a fresh bootstrap.
+#
+# Sync ordering matters here: the ProviderConfig's CRD ships *inside* the provider
+# package, so it does not exist until the provider installs. Intra-app sync-waves make
+# ArgoCD apply the Provider/Function/RBAC first (wave 1); the ProviderConfig (wave 2)
+# then reconciles on a later pass once its CRD is registered. Without this the whole
+# sync aborts atomically on the missing ProviderConfig kind and nothing installs.
 
 # Fix the provider's runtime ServiceAccount name so the ClusterRoleBinding below can
 # grant it exactly the permissions it needs (the default SA name is generated).
@@ -12,6 +18,8 @@ apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
   name: provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   serviceAccountTemplate:
     metadata:
@@ -21,6 +29,8 @@ apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes:v1.2.1
   runtimeConfigRef:
@@ -31,6 +41,8 @@ apiVersion: pkg.crossplane.io/v1
 kind: Function
 metadata:
   name: function-patch-and-transform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.10.7
 ---
@@ -41,6 +53,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: homeops:provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 rules:
   - apiGroups: [""]
     resources: ["namespaces", "resourcequotas", "limitranges"]
@@ -53,6 +67,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: homeops:provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -63,11 +79,15 @@ subjects:
     namespace: crossplane-system
 ---
 # In-cluster ProviderConfig referenced by every composed Object. InjectedIdentity uses
-# the provider Pod's mounted ServiceAccount token (the SA bound above).
+# the provider Pod's mounted ServiceAccount token (the SA bound above). Wave 2 + the
+# skip-dry-run option let it reconcile after the provider package registers its CRD.
 apiVersion: kubernetes.crossplane.io/v1alpha1
 kind: ProviderConfig
 metadata:
   name: homeops
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   credentials:
     source: InjectedIdentity
