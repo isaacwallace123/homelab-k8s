@@ -59,6 +59,35 @@ spec:
                   default: 0
                   minimum: 0
                   maximum: 1
+                releaseTrack:
+                  type: string
+                  description: Broker-selected checkout release. Candidate is intentionally
+                    regressed; the rollback decision changes this to stable.
+                  enum: ["stable", "candidate"]
+                  default: stable
+                dataState:
+                  type: string
+                  description: Broker-selected disposable catalogue condition for the recovery drill.
+                  enum: ["healthy", "degraded", "recovered"]
+                  default: healthy
+                targetPool:
+                  type: string
+                  description: Allowlisted worker pool for scenario-owned checkout replicas.
+                  enum: ["apps", "infra"]
+                  default: apps
+                loadReplicas:
+                  type: integer
+                  description: Bounded k6 load generator state. Practice controls may set this to
+                    zero or one; scenario runs start with one.
+                  default: 1
+                  minimum: 0
+                  maximum: 1
+                restartToken:
+                  type: string
+                  description: Broker-issued rollout token. Changing it restarts only the
+                    scenario-owned checkout Deployment.
+                  default: baseline
+                  maxLength: 64
                 ttlSeconds:
                   type: integer
                   description: Hard time-to-live. Teardown is broker-owned; the broker deletes the
