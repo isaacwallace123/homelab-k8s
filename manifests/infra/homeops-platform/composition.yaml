@@ -12,7 +12,8 @@
 # connections), and the cache brings up Redis (spec.cacheReplicas) which the app serves from,
 # skipping the DB. Nothing here is modelled — the arena reads Envoy's numbers.
 #
-# One scenario == one Composition today; a second scenario adds its own, selected by scenario id.
+# The audited substrate is shared by four scenarios. The broker selects bounded initial values;
+# decisions patch only the allowlisted fields exposed by the LabRun XRD.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -206,6 +207,28 @@ spec:
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-scrape" } }] }
 
+          # The broker reads one sanitized OpenTelemetry trace from checkout's internal endpoint.
+          - name: networkpolicy-allow-trace-scrape
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: allow-trace-scrape, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { app: checkout } }
+                      policyTypes: [Ingress]
+                      ingress:
+                        - ports: [{ protocol: TCP, port: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-trace-scrape" } }] }
+
           # ── Postgres (the data tier the checkout query hits) ──────────────
           - name: postgres-deployment
             base:
@@ -328,8 +351,13 @@ spec:
                       replicas: 3
                       selector: { matchLabels: { app: checkout } }
                       template:
-                        metadata: { labels: { app: checkout } }
+                        metadata:
+                          labels: { app: checkout }
+                          annotations:
+                            homeops.isaacwallace.dev/restart-token: baseline
                         spec:
+                          nodeSelector:
+                            kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
                               image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
@@ -339,6 +367,8 @@ spec:
                                 - { name: CACHE_ENABLED, value: "true" }
                                 - { name: DB_QUERY_MS, value: "40" }
                                 - { name: DB_MAX_CONNS, value: "4" }
+                                - { name: RELEASE_TRACK, value: stable }
+                                - { name: DATA_STATE, value: healthy }
                               ports: [{ containerPort: 8080 }]
                               readinessProbe:
                                 httpGet: { path: /healthz, port: 8080 }
@@ -352,6 +382,31 @@ spec:
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout" } }] }
               - { type: FromCompositeFieldPath, fromFieldPath: spec.apiReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.releaseTrack
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[5].value"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.dataState
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.targetPool
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.nodeSelector[kubernetes.io/hostname]"
+                transforms:
+                  - type: map
+                    map:
+                      apps: k3s-worker-apps
+                      infra: k3s-worker-infra
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.restartToken
+                toFieldPath: "spec.forProvider.manifest.spec.template.metadata.annotations[homeops.isaacwallace.dev/restart-token]"
+                policy:
+                  fromFieldPath: Required
 
           - name: checkout-service
             base:
@@ -550,3 +605,4 @@ spec:
               - type: PatchSet
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-k6" } }] }
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.loadReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
