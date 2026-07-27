@@ -88,6 +88,20 @@ spec:
                     scenario-owned checkout Deployment.
                   default: baseline
                   maxLength: 64
+                drillId:
+                  type: string
+                  description: Allowlisted drill currently running ON this cluster, or empty when the
+                    cluster is an open sandbox. A drill layers an objective, a clock, and a decision
+                    set over the same live workload — it does not reprovision the namespace.
+                  pattern: "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                  default: ""
+                  maxLength: 63
+                drillStartedAt:
+                  type: string
+                  description: RFC3339 time the active drill began, so its clock is independent of
+                    when the cluster itself was provisioned.
+                  default: ""
+                  maxLength: 40
                 ttlSeconds:
                   type: integer
                   description: Hard time-to-live. Teardown is broker-owned; the broker deletes the

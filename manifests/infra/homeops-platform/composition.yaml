@@ -365,8 +365,11 @@ spec:
                                 - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
                                 - { name: REDIS_ADDR, value: "redis:6379" }
                                 - { name: CACHE_ENABLED, value: "true" }
-                                - { name: DB_QUERY_MS, value: "40" }
-                                - { name: DB_MAX_CONNS, value: "4" }
+                                # Fixed CPU work per request. Capacity therefore scales with replica
+                                # count (each replica has its own CPU limit), which is what makes the
+                                # scale decision measurably lower p95. Tunable without a rebuild.
+                                - { name: WORK_ITERATIONS, value: "3000" }
+                                - { name: DB_MAX_CONNS, value: "8" }
                                 - { name: RELEASE_TRACK, value: stable }
                                 - { name: DATA_STATE, value: healthy }
                               ports: [{ containerPort: 8080 }]
