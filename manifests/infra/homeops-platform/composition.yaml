@@ -247,6 +247,7 @@ spec:
                       template:
                         metadata: { labels: { app: postgres } }
                         spec:
+                          terminationGracePeriodSeconds: 3
                           containers:
                             - name: postgres
                               image: postgres:16-alpine
@@ -256,6 +257,13 @@ spec:
                                 - { name: POSTGRES_DB, value: checkout }
                                 - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
                               ports: [{ containerPort: 5432 }]
+                              readinessProbe:
+                                exec:
+                                  command: ["pg_isready", "-U", "checkout", "-d", "checkout"]
+                                initialDelaySeconds: 1
+                                periodSeconds: 1
+                                timeoutSeconds: 2
+                                failureThreshold: 30
                               resources:
                                 requests: { cpu: 100m, memory: 128Mi }
                                 limits: { cpu: 500m, memory: 512Mi }
@@ -303,6 +311,7 @@ spec:
                       template:
                         metadata: { labels: { app: redis } }
                         spec:
+                          terminationGracePeriodSeconds: 3
                           containers:
                             - name: redis
                               image: redis:7-alpine
@@ -373,10 +382,15 @@ spec:
                                 - { name: RELEASE_TRACK, value: stable }
                                 - { name: DATA_STATE, value: healthy }
                               ports: [{ containerPort: 8080 }]
+                              # The app serves immediately and reports 503 until its pool is live, so
+                              # poll fast: readiness then flips within ~a second of the DB coming up
+                              # instead of waiting out a 5s window.
                               readinessProbe:
                                 httpGet: { path: /healthz, port: 8080 }
-                                initialDelaySeconds: 5
-                                periodSeconds: 5
+                                initialDelaySeconds: 1
+                                periodSeconds: 1
+                                timeoutSeconds: 2
+                                failureThreshold: 30
                               resources:
                                 requests: { cpu: 50m, memory: 32Mi }
                                 limits: { cpu: 250m, memory: 64Mi }
@@ -548,6 +562,7 @@ spec:
                       template:
                         metadata: { labels: { app: envoy } }
                         spec:
+                          terminationGracePeriodSeconds: 3
                           containers:
                             - name: envoy
                               image: envoyproxy/envoy:v1.31-latest
@@ -636,6 +651,7 @@ spec:
                       template:
                         metadata: { labels: { app: k6 } }
                         spec:
+                          terminationGracePeriodSeconds: 3
                           containers:
                             - name: k6
                               image: grafana/k6:0.53.0
