@@ -77,9 +77,10 @@ spec:
                   default: apps
                 loadReplicas:
                   type: integer
-                  description: Bounded k6 load generator count. Each generator runs the same closed-loop
-                    script, so this is the load-intensity dial: zero is quiet, four saturates the
-                    checkout tier. Scenario runs start with one.
+                  description: >-
+                    Bounded k6 load generator count. Each generator runs the same closed-loop script,
+                    so this is the load-intensity dial — zero is quiet, four saturates the checkout
+                    tier. Scenario runs start with one.
                   default: 1
                   minimum: 0
                   maximum: 4
