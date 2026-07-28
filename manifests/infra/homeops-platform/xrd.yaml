@@ -88,6 +88,15 @@ spec:
                     scenario-owned checkout Deployment.
                   default: baseline
                   maxLength: 64
+                owner:
+                  description: Opaque per-user key (a hash of the signed-in account id, never the id
+                    itself) identifying who provisioned this cluster. The broker refuses to read or
+                    mutate a cluster whose owner does not match the caller, and caps how many
+                    clusters one owner may hold.
+                  type: string
+                  pattern: "^$|^[a-f0-9]{16,64}$"
+                  default: ""
+                  maxLength: 64
                 drillId:
                   type: string
                   description: Allowlisted drill currently running ON this cluster, or empty when the
