@@ -85,11 +85,17 @@ spec:
                     apiVersion: v1
                     kind: ResourceQuota
                     metadata: { name: run-quota, namespace: "" }
+                    # Sized so that every position of every control the UI exposes actually fits.
+                    # At maximum — 6 checkout (250m each), 4 k6 generators (800m each), Postgres
+                    # 500m, Envoy 300m, Redis 200m — a run asks for 5700m of limits, so a 4-core
+                    # ceiling silently refused the last three load generators with FailedCreate and
+                    # they sat pending forever. Scheduling is unaffected: the same run requests only
+                    # 900m, and limits are a ceiling rather than a reservation.
                     spec:
                       hard:
                         requests.cpu: "4"
                         requests.memory: 6Gi
-                        limits.cpu: "4"
+                        limits.cpu: "6"
                         limits.memory: 6Gi
                         pods: "20"
                         count/services: "10"
