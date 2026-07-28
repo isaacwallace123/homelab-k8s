@@ -77,11 +77,12 @@ spec:
                   default: apps
                 loadReplicas:
                   type: integer
-                  description: Bounded k6 load generator state. Practice controls may set this to
-                    zero or one; scenario runs start with one.
+                  description: Bounded k6 load generator count. Each generator runs the same closed-loop
+                    script, so this is the load-intensity dial: zero is quiet, four saturates the
+                    checkout tier. Scenario runs start with one.
                   default: 1
                   minimum: 0
-                  maximum: 1
+                  maximum: 4
                 restartToken:
                   type: string
                   description: Broker-issued rollout token. Changing it restarts only the
