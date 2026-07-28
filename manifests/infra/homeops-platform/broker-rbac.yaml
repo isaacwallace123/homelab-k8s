@@ -33,14 +33,22 @@ rules:
     resources: ["events"]
     verbs: ["get", "list"]
   # Read-only pod and deployment state for the request-path flowchart (readiness, restarts, and the
-  # per-pod CPU/memory each tier is using). Read-only: the broker never mutates workloads directly —
-  # all changes go through the LabRun spec and Crossplane.
+  # per-pod CPU/memory each tier is using). The broker never writes to workloads directly.
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]
+  # Write-through on the composed Object, for replica counts only. Crossplane v2's realtime circuit
+  # breaker trips constantly under the composed resources' own status churn, so a LabRun spec change
+  # can sit for up to a minute before it reaches the Deployment. The broker therefore also writes the
+  # replica count the LabRun already carries straight to the composed Object, which provider-kubernetes
+  # applies in ~200ms. The LabRun stays the source of truth: Crossplane's later reconcile writes the
+  # identical value, so the two never diverge and the workload never flaps back.
+  - apiGroups: ["kubernetes.crossplane.io"]
+    resources: ["objects"]
+    verbs: ["get", "patch"]
   # Sanitized platform status: ready-node counts only. The API never returns node names or labels.
   - apiGroups: [""]
     resources: ["nodes"]
