@@ -32,6 +32,15 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["get", "list"]
+  # Read-only pod and deployment state for the request-path flowchart (readiness, restarts, and the
+  # per-pod CPU/memory each tier is using). Read-only: the broker never mutates workloads directly —
+  # all changes go through the LabRun spec and Crossplane.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
   # Sanitized platform status: ready-node counts only. The API never returns node names or labels.
   - apiGroups: [""]
     resources: ["nodes"]
