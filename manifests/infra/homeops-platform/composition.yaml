@@ -431,6 +431,39 @@ spec:
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-svc" } }] }
 
           # ── Envoy gateway — the metrics source (admin :9901 exposes stats) ─
+          # Headless service: DNS resolves to every checkout pod IP so the gateway can load-balance
+          # per request across replicas (see the envoy cluster config below).
+          - name: checkout-headless-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata: { name: checkout-headless, namespace: "" }
+                    spec:
+                      clusterIP: None
+                      selector: { app: checkout }
+                      ports: [{ port: 8080, targetPort: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - {
+                  type: FromCompositeFieldPath,
+                  fromFieldPath: spec.runId,
+                  toFieldPath: metadata.name,
+                  transforms:
+                    [
+                      {
+                        type: string,
+                        string: { type: Format, fmt: "%s-checkout-headless" },
+                      },
+                    ],
+                }
+
           - name: envoy-config
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -476,15 +509,23 @@ spec:
                                               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                           clusters:
                             - name: checkout
+                              # STRICT_DNS against the HEADLESS service: DNS returns every checkout
+                              # pod IP, so Envoy round-robins per request across all replicas. Against
+                              # the ClusterIP service it would instead hold a few persistent
+                              # connections that kube-proxy pins to one or two pods, leaving the rest
+                              # idle — which would make scaling have no measurable effect.
                               type: STRICT_DNS
                               connect_timeout: 2s
+                              dns_refresh_rate: 5s
+                              lb_policy: ROUND_ROBIN
                               load_assignment:
                                 cluster_name: checkout
                                 endpoints:
                                   - lb_endpoints:
                                       - endpoint:
                                           address:
-                                            socket_address: { address: checkout, port_value: 80 }
+                                            socket_address:
+                                              { address: checkout-headless, port_value: 8080 }
             patches:
               - type: PatchSet
                 patchSetName: namespaced
