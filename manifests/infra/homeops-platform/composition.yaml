@@ -363,7 +363,9 @@ spec:
                     kind: Deployment
                     metadata: { name: checkout, namespace: "", labels: { app: checkout } }
                     spec:
-                      replicas: 3
+                      # Overwritten from spec.apiReplicas on every reconcile; this only matters
+                      # before the first patch lands, so it matches the sandbox baseline.
+                      replicas: 1
                       selector: { matchLabels: { app: checkout } }
                       template:
                         metadata:
