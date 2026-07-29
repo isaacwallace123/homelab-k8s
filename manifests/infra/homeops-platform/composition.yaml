@@ -713,7 +713,7 @@ spec:
                     data:
                       script.js: |
                         import http from 'k6/http';
-                        // Open-loop load: every generator OFFERS a fixed 500 requests per second no
+                        // Open-loop load: every generator OFFERS a fixed 400 requests per second no
                         // matter how fast the stack answers. The dial therefore means demand, and the
                         // gap between offered and served load is a real, scoreable signal.
                         //
@@ -734,7 +734,7 @@ spec:
                           scenarios: {
                             load: {
                               executor: 'constant-arrival-rate',
-                              rate: 500,
+                              rate: 400,
                               timeUnit: '1s',
                               duration: '12h',
                               preAllocatedVUs: 50,
