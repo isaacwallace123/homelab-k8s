@@ -86,18 +86,20 @@ spec:
                     kind: ResourceQuota
                     metadata: { name: run-quota, namespace: "" }
                     # Sized so that every position of every control the UI exposes actually fits.
-                    # At maximum — 6 checkout (250m each), 4 k6 generators (800m each), Postgres
-                    # 500m, Envoy 300m, Redis 200m — a run asks for 5700m of limits, so a 4-core
-                    # ceiling silently refused the last three load generators with FailedCreate and
-                    # they sat pending forever. Scheduling is unaffected: the same run requests only
-                    # 900m, and limits are a ceiling rather than a reservation.
+                    # At maximum — 6 checkout + 3 canary (250m each), 4 k6 generators (800m each),
+                    # Postgres 500m, 3 Envoy gateways (300m each), Redis 200m — a run asks for 7050m
+                    # of limits, so a 4-core ceiling silently refused the last three load generators
+                    # with FailedCreate and they sat pending forever. Scheduling is unaffected: the
+                    # same run requests about 1200m, and limits are a ceiling, not a reservation.
+                    # Memory follows the open-loop k6 script: 200 max VUs need headroom above the
+                    # old 512Mi, so four generators alone can claim 3Gi of the ceiling.
                     spec:
                       hard:
                         requests.cpu: "4"
                         requests.memory: 6Gi
-                        limits.cpu: "6"
-                        limits.memory: 6Gi
-                        pods: "20"
+                        limits.cpu: "8"
+                        limits.memory: 8Gi
+                        pods: "24"
                         count/services: "10"
             patches:
               - type: PatchSet
@@ -369,7 +371,10 @@ spec:
                       selector: { matchLabels: { app: checkout } }
                       template:
                         metadata:
-                          labels: { app: checkout }
+                          # `tier` is what the gateway's backend pool selects on, so the canary
+                          # Deployment can put pods into the same pool without this Deployment's
+                          # (immutable) selector changing.
+                          labels: { app: checkout, tier: checkout }
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
@@ -452,9 +457,89 @@ spec:
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-svc" } }] }
 
+          # ── Canary tier — the candidate build, beside the stable one ──────
+          # Same backend pool as checkout (label tier: checkout), so the gateway round-robins across
+          # stable AND canary pods and the new build's share of traffic is simply its share of the
+          # replicas. That is what a canary is, and it needs no routing rules to express.
+          #
+          # Zero replicas by default: a run that never touches the canary tier behaves exactly as it
+          # did before this existed.
+          - name: checkout-canary-deployment
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: apps/v1
+                    kind: Deployment
+                    metadata:
+                      { name: checkout-canary, namespace: "", labels: { app: checkout-canary } }
+                    spec:
+                      replicas: 0
+                      selector: { matchLabels: { app: checkout-canary } }
+                      template:
+                        metadata:
+                          labels: { app: checkout-canary, tier: checkout }
+                          annotations:
+                            homeops.isaacwallace.dev/restart-token: baseline
+                        spec:
+                          nodeSelector:
+                            kubernetes.io/hostname: k3s-worker-apps
+                          containers:
+                            - name: checkout
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
+                              env:
+                                - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
+                                - { name: REDIS_ADDR, value: "redis:6379" }
+                                - { name: CACHE_ENABLED, value: "true" }
+                                - { name: WORK_ITERATIONS, value: "3000" }
+                                - { name: DB_MAX_CONNS, value: "8" }
+                                # Fixed: the canary tier IS the candidate build. Rolling the release
+                                # track back does not make the canary stable — pulling it does.
+                                - { name: RELEASE_TRACK, value: candidate }
+                                - { name: DATA_STATE, value: healthy }
+                              ports: [{ containerPort: 8080 }]
+                              readinessProbe:
+                                httpGet: { path: /healthz, port: 8080 }
+                                initialDelaySeconds: 1
+                                periodSeconds: 1
+                                timeoutSeconds: 2
+                                failureThreshold: 30
+                              resources:
+                                requests: { cpu: 50m, memory: 32Mi }
+                                limits: { cpu: 250m, memory: 64Mi }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-canary" } }] }
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.canaryReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.dataState
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.targetPool
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.nodeSelector[kubernetes.io/hostname]"
+                transforms:
+                  - type: map
+                    map:
+                      apps: k3s-worker-apps
+                      infra: k3s-worker-infra
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.restartToken
+                toFieldPath: "spec.forProvider.manifest.spec.template.metadata.annotations[homeops.isaacwallace.dev/restart-token]"
+                policy:
+                  fromFieldPath: Required
+
           # ── Envoy gateway — the metrics source (admin :9901 exposes stats) ─
-          # Headless service: DNS resolves to every checkout pod IP so the gateway can load-balance
-          # per request across replicas (see the envoy cluster config below).
+          # Headless service: DNS resolves to every backend pod IP so the gateway can load-balance
+          # per request across replicas (see the envoy cluster config below). Selecting on `tier`
+          # rather than `app` is what puts the stable and canary Deployments into one pool.
           - name: checkout-headless-service
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -468,7 +553,7 @@ spec:
                     metadata: { name: checkout-headless, namespace: "" }
                     spec:
                       clusterIP: None
-                      selector: { app: checkout }
+                      selector: { tier: checkout }
                       ports: [{ port: 8080, targetPort: 8080 }]
             patches:
               - type: PatchSet
@@ -565,6 +650,10 @@ spec:
                     kind: Deployment
                     metadata: { name: envoy, namespace: "", labels: { app: envoy } }
                     spec:
+                      # Overwritten from spec.gatewayReplicas on every reconcile. The gateway is a
+                      # scalable tier because it is CPU-limited like everything else: one replica
+                      # tops out near 2000 rps, so under the heaviest offered load it becomes the
+                      # queue and no amount of checkout capacity behind it helps.
                       replicas: 1
                       selector: { matchLabels: { app: envoy } }
                       template:
@@ -585,6 +674,7 @@ spec:
               - type: PatchSet
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy" } }] }
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.gatewayReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
               # the mounted ConfigMap is namespace-local, so its name stays "envoy-config"
 
           - name: envoy-service
@@ -623,15 +713,34 @@ spec:
                     data:
                       script.js: |
                         import http from 'k6/http';
-                        // Closed-loop load: a fixed pool of concurrent users, each firing the next
-                        // request as soon as the previous returns. Throughput self-limits to the
-                        // service's capacity and latency stably reflects the queue depth — so doubling
-                        // checkout replicas (the scale decision) visibly ~halves p95 and lifts
-                        // throughput, and enabling the cache collapses both. An open arrival-rate model
-                        // instead death-spirals to the timeout under overload and can't recover.
+                        // Open-loop load: every generator OFFERS a fixed 500 requests per second no
+                        // matter how fast the stack answers. The dial therefore means demand, and the
+                        // gap between offered and served load is a real, scoreable signal.
+                        //
+                        // It used to be closed-loop (constant-vus: 150), where each user fired again
+                        // only once the previous request returned. That makes throughput a measure of
+                        // the SERVICE's capacity rather than of the load asked for, which inverts the
+                        // number the arena shows: one generator against a healthy cached stack read
+                        // ~2000/s while four against a saturated one read ~750/s. Adding load appeared
+                        // to remove traffic, and no capacity-planning drill can be built on that.
+                        //
+                        // maxVUs is the bound that makes open-loop safe. Overload cannot spiral into
+                        // unlimited concurrency: k6 runs out of VUs, drops the iterations it cannot
+                        // start, and served load visibly falls short of offered — which is exactly the
+                        // "you are under-provisioned" signal. Add capacity and it recovers on the next
+                        // arrival, because the arrival rate never changed.
                         export const options = {
+                          discardResponseBodies: true,
                           scenarios: {
-                            load: { executor: 'constant-vus', vus: 150, duration: '12h' },
+                            load: {
+                              executor: 'constant-arrival-rate',
+                              rate: 500,
+                              timeUnit: '1s',
+                              duration: '12h',
+                              preAllocatedVUs: 50,
+                              maxVUs: 200,
+                              gracefulStop: '0s',
+                            },
                           },
                         };
                         export default function () {
@@ -664,9 +773,12 @@ spec:
                             - name: k6
                               image: grafana/k6:0.53.0
                               args: ["run", "--quiet", "/scripts/script.js"]
+                              # 768Mi because the open-loop script may hold up to 200 VUs when the
+                              # stack is slow; at 512Mi a saturated run OOM-killed the generator,
+                              # which reads on screen as the incident fixing itself.
                               resources:
                                 requests: { cpu: 100m, memory: 192Mi }
-                                limits: { cpu: 800m, memory: 512Mi }
+                                limits: { cpu: 800m, memory: 768Mi }
                               volumeMounts: [{ name: script, mountPath: /scripts }]
                           volumes: [{ name: script, configMap: { name: k6-script } }]
             patches:

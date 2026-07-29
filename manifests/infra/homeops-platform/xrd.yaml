@@ -80,12 +80,35 @@ spec:
                 loadReplicas:
                   type: integer
                   description: >-
-                    Bounded k6 load generator count. Each generator runs the same closed-loop script,
-                    so this is the load-intensity dial — zero is quiet, four saturates the checkout
-                    tier. Scenario runs start with one.
+                    Bounded k6 load generator count. Each generator OFFERS a fixed 500 requests per
+                    second (an open-loop constant-arrival-rate script), so this dial is demand, not
+                    capacity: zero is quiet and four asks the stack for 2000 rps whether or not it
+                    can serve them. The shortfall between offered and served load is what the
+                    capacity drills are scored on. Scenario runs start with one.
                   default: 1
                   minimum: 0
                   maximum: 4
+                canaryReplicas:
+                  type: integer
+                  description: >-
+                    Checkout replicas running the CANDIDATE build alongside the stable ones. They
+                    share the gateway's backend pool, so the share of traffic the new build sees is
+                    simply its share of the replicas — which is how a canary actually behaves. Zero
+                    means no canary is deployed, and that is the default: a drill that does not
+                    mention the canary tier is unaffected by it.
+                  default: 0
+                  minimum: 0
+                  maximum: 3
+                gatewayReplicas:
+                  type: integer
+                  description: >-
+                    Envoy gateway replica count. The gateway is CPU-limited like every other tier, so
+                    past roughly 2000 rps it — not the checkout tier behind it — becomes the queue.
+                    Scaling it is the only lever that helps there, which is the whole point of the
+                    gateway drills.
+                  default: 1
+                  minimum: 1
+                  maximum: 3
                 restartToken:
                   type: string
                   description: Broker-issued rollout token. Changing it restarts only the
