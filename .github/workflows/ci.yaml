@@ -15,8 +15,12 @@ jobs:
 
       - name: Install kubeconform
         run: |
-          curl -sL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
-            | tar xz -C /tmp
+          curl -fsSL \
+            -o /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          echo "95f14e87aa28c09d5941f11bd024c1d02fdc0303ccaa23f61cef67bc92619d73  /tmp/kubeconform.tar.gz" \
+            | sha256sum -c -
+          tar xzf /tmp/kubeconform.tar.gz -C /tmp
           sudo mv /tmp/kubeconform /usr/local/bin/
 
       - name: Install Python validators
@@ -40,3 +44,28 @@ jobs:
             -ignore-filename-pattern '\.argocd-source-.*\.yaml' \
             -kubernetes-version 1.31.0 \
             bootstrap/ categories/ manifests/
+
+  scan-homeops-images:
+    name: trivy — ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: postgres
+            image: cgr.dev/chainguard/postgres:latest@sha256:dc2f04037c1044a22af76cee4de70b9111885b17c561b939d7ed70103d100759
+          - name: redis
+            image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+          - name: checkout
+            image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+          - name: envoy
+            image: envoyproxy/envoy:distroless-v1.38.0@sha256:a7a56545102f7a682e0cafea2c9b8448af1b09ebb710eab688dfb931e3ec7ff6
+          - name: k6
+            image: grafana/k6:master@sha256:2f8f626bb998d8d73c22d741278e48dd591208f07926960935c7eaf63691fd8b
+    steps:
+      - name: Reject fixable high and critical vulnerabilities
+        run: |
+          docker run --rm \
+            aquasec/trivy@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa \
+            image --quiet --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 \
+            "${{ matrix.image }}"

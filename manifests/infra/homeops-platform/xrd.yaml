@@ -72,10 +72,21 @@ spec:
                   description: Broker-selected disposable catalogue condition for the recovery drill.
                   enum: ["healthy", "degraded", "recovered"]
                   default: healthy
+                dbMaxConns:
+                  type: integer
+                  description: Bounded pgx connection pool size per checkout pod.
+                  default: 8
+                  minimum: 1
+                  maximum: 16
+                networkMode:
+                  type: string
+                  description: Allowlisted checkout-to-Postgres network path state.
+                  enum: ["normal", "db-blocked"]
+                  default: normal
                 targetPool:
                   type: string
                   description: Allowlisted worker pool for scenario-owned checkout replicas.
-                  enum: ["apps", "infra"]
+                  enum: ["apps", "infra", "unavailable"]
                   default: apps
                 loadReplicas:
                   type: integer

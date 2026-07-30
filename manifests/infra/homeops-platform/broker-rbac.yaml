@@ -28,15 +28,8 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
     verbs: ["get", "list"]
-  # Read Kubernetes Events in run namespaces for the arena's real event stream.
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["get", "list"]
-  # Read-only pod and deployment state for the request-path flowchart (readiness, restarts, and the
-  # per-pod CPU/memory each tier is using). The broker never writes to workloads directly.
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list"]
+  # Namespace-sensitive reads (pods, events, and logs) are granted by a Role composed inside each
+  # disposable run namespace. They are deliberately absent from this cluster-wide identity.
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]

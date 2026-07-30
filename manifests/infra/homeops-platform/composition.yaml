@@ -73,6 +73,53 @@ spec:
                 fromFieldPath: spec.forProvider.manifest.metadata.name
                 toFieldPath: status.namespace
 
+          # Namespace-sensitive observability is granted only inside this disposable run.
+          - name: broker-observer-role
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: rbac.authorization.k8s.io/v1
+                    kind: Role
+                    metadata: { name: homeops-run-observer, namespace: "" }
+                    rules:
+                      - apiGroups: [""]
+                        resources: [pods, events]
+                        verbs: [get, list]
+                      - apiGroups: [""]
+                        resources: [pods/log]
+                        verbs: [get]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-observer-role" } }] }
+
+          - name: broker-observer-binding
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: rbac.authorization.k8s.io/v1
+                    kind: RoleBinding
+                    metadata: { name: homeops-run-observer, namespace: "" }
+                    roleRef:
+                      apiGroup: rbac.authorization.k8s.io
+                      kind: Role
+                      name: homeops-run-observer
+                    subjects:
+                      - { kind: ServiceAccount, name: homeops-broker, namespace: portfolio }
+                      - { kind: ServiceAccount, name: homeops-broker, namespace: homeops }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-observer-binding" } }] }
+
           # ── resource envelope + per-container ceilings + network baseline ──
           - name: resourcequota
             base:
@@ -160,13 +207,105 @@ spec:
                     metadata: { name: allow-intra, namespace: "" }
                     spec:
                       podSelector: {}
-                      policyTypes: [Ingress, Egress]
+                      policyTypes: [Ingress]
                       ingress: [{ from: [{ podSelector: {} }] }]
-                      egress: [{ to: [{ podSelector: {} }] }]
             patches:
               - type: PatchSet
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-intra" } }] }
+
+          # Egress is expressed per request-path edge instead of one namespace-wide allow. That
+          # makes the networkMode dial a real NetworkPolicy fault: db-blocked removes only the
+          # checkout -> Postgres edge while DNS, Redis, gateway, and load-generator traffic remain.
+          - name: networkpolicy-checkout-redis-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: checkout-redis-egress, namespace: "" }
+                    spec:
+                      podSelector:
+                        matchExpressions:
+                          - { key: app, operator: In, values: [checkout, checkout-canary] }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { app: redis } } }]
+                          ports: [{ protocol: TCP, port: 6379 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-redis-egress" } }] }
+
+          - name: networkpolicy-checkout-postgres-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: checkout-postgres-egress, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { homeops-db-network: normal } }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { app: postgres } } }]
+                          ports: [{ protocol: TCP, port: 5432 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-postgres-egress" } }] }
+
+          - name: networkpolicy-envoy-checkout-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: envoy-checkout-egress, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { app: envoy } }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { tier: checkout } } }]
+                          ports: [{ protocol: TCP, port: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-checkout-egress" } }] }
+
+          - name: networkpolicy-k6-envoy-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: k6-envoy-egress, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { app: k6 } }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { app: envoy } } }]
+                          ports: [{ protocol: TCP, port: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-k6-envoy-egress" } }] }
 
           - name: networkpolicy-allow-dns
             base:
@@ -255,10 +394,13 @@ spec:
                       template:
                         metadata: { labels: { app: postgres } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: postgres
-                              image: postgres:16-alpine
+                              image: cgr.dev/chainguard/postgres:latest@sha256:dc2f04037c1044a22af76cee4de70b9111885b17c561b939d7ed70103d100759
+                              securityContext: { allowPrivilegeEscalation: false }
                               env:
                                 - { name: POSTGRES_USER, value: checkout }
                                 - { name: POSTGRES_PASSWORD, value: checkout }
@@ -319,10 +461,13 @@ spec:
                       template:
                         metadata: { labels: { app: redis } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: redis
-                              image: redis:7-alpine
+                              image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+                              securityContext: { allowPrivilegeEscalation: false }
                               ports: [{ containerPort: 6379 }]
                               resources:
                                 requests: { cpu: 50m, memory: 32Mi }
@@ -374,15 +519,23 @@ spec:
                           # `tier` is what the gateway's backend pool selects on, so the canary
                           # Deployment can put pods into the same pool without this Deployment's
                           # (immutable) selector changing.
-                          labels: { app: checkout, tier: checkout }
+                          labels:
+                            { app: checkout, tier: checkout, homeops-db-network: normal }
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           nodeSelector:
                             kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
-                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                readOnlyRootFilesystem: true
+                                capabilities: { drop: [ALL] }
                               env:
                                 - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
                                 - { name: REDIS_ADDR, value: "redis:6379" }
@@ -413,6 +566,13 @@ spec:
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout" } }] }
               - { type: FromCompositeFieldPath, fromFieldPath: spec.apiReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.dbMaxConns
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value"
+                transforms:
+                  - { type: convert, convert: { toType: string } }
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
                 fromFieldPath: spec.releaseTrack
                 toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[5].value"
                 policy:
@@ -423,6 +583,11 @@ spec:
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.networkMode
+                toFieldPath: "spec.forProvider.manifest.spec.template.metadata.labels[homeops-db-network]"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
                 fromFieldPath: spec.targetPool
                 toFieldPath: "spec.forProvider.manifest.spec.template.spec.nodeSelector[kubernetes.io/hostname]"
                 transforms:
@@ -430,6 +595,7 @@ spec:
                     map:
                       apps: k3s-worker-apps
                       infra: k3s-worker-infra
+                      unavailable: homeops-no-such-worker
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
@@ -481,15 +647,29 @@ spec:
                       selector: { matchLabels: { app: checkout-canary } }
                       template:
                         metadata:
-                          labels: { app: checkout-canary, tier: checkout }
+                          # The database egress policy selects this label. Changing networkMode
+                          # therefore changes a real NetworkPolicy edge, not an application flag.
+                          labels:
+                            {
+                              app: checkout-canary,
+                              tier: checkout,
+                              homeops-db-network: normal,
+                            }
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           nodeSelector:
                             kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
-                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                readOnlyRootFilesystem: true
+                                capabilities: { drop: [ALL] }
                               env:
                                 - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
                                 - { name: REDIS_ADDR, value: "redis:6379" }
@@ -516,8 +696,20 @@ spec:
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-canary" } }] }
               - { type: FromCompositeFieldPath, fromFieldPath: spec.canaryReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.dbMaxConns
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value"
+                transforms:
+                  - { type: convert, convert: { toType: string } }
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
                 fromFieldPath: spec.dataState
                 toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.networkMode
+                toFieldPath: "spec.forProvider.manifest.spec.template.metadata.labels[homeops-db-network]"
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
@@ -528,6 +720,7 @@ spec:
                     map:
                       apps: k3s-worker-apps
                       infra: k3s-worker-infra
+                      unavailable: homeops-no-such-worker
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
@@ -558,18 +751,12 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: namespaced
-              - {
-                  type: FromCompositeFieldPath,
-                  fromFieldPath: spec.runId,
-                  toFieldPath: metadata.name,
-                  transforms:
-                    [
-                      {
-                        type: string,
-                        string: { type: Format, fmt: "%s-checkout-headless" },
-                      },
-                    ],
-                }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-checkout-headless" }
 
           - name: envoy-config
             base:
@@ -595,7 +782,7 @@ spec:
                           listeners:
                             - name: ingress
                               address:
-                                socket_address: { address: 0.0.0.0, port_value: 80 }
+                                socket_address: { address: 0.0.0.0, port_value: 8080 }
                               filter_chains:
                                 - filters:
                                     - name: envoy.filters.network.http_connection_manager
@@ -659,12 +846,31 @@ spec:
                       template:
                         metadata: { labels: { app: envoy } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: envoy
-                              image: envoyproxy/envoy:v1.31-latest
+                              image: envoyproxy/envoy:distroless-v1.38.0@sha256:a7a56545102f7a682e0cafea2c9b8448af1b09ebb710eab688dfb931e3ec7ff6
                               args: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "checkout"]
-                              ports: [{ containerPort: 80 }, { containerPort: 9901 }]
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                readOnlyRootFilesystem: true
+                                capabilities: { drop: [ALL] }
+                              ports: [{ containerPort: 8080 }, { containerPort: 9901 }]
+                              # Without a probe, "Ready" means the container process started, which is
+                              # a moment before Envoy has bound its listener — and the headless service
+                              # publishes a ready pod immediately. A scale-out would therefore put an
+                              # address into DNS that refuses connections for a beat, so the operator's
+                              # correct move (widen the gateway) would spike the error rate it is being
+                              # scored on. The admin server answers /ready once the listener is live.
+                              readinessProbe:
+                                httpGet: { path: /ready, port: 9901 }
+                                initialDelaySeconds: 1
+                                periodSeconds: 1
+                                timeoutSeconds: 2
+                                failureThreshold: 30
                               resources:
                                 requests: { cpu: 50m, memory: 64Mi }
                                 limits: { cpu: 300m, memory: 192Mi }
@@ -691,12 +897,36 @@ spec:
                     spec:
                       selector: { app: envoy }
                       ports:
-                        - { name: http, port: 80, targetPort: 80 }
+                        - { name: http, port: 80, targetPort: 8080 }
                         - { name: admin, port: 9901, targetPort: 9901 }
             patches:
               - type: PatchSet
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-svc" } }] }
+
+          # The generators dial the gateway through THIS service, not the ClusterIP one above, for the
+          # same reason Envoy reaches checkout through a headless service: DNS returns every gateway
+          # pod IP, so each new connection is dialled at a specific replica and the fan-out is
+          # round-robin rather than whatever kube-proxy does with a single address.
+          - name: envoy-headless-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata: { name: envoy-headless, namespace: "" }
+                    spec:
+                      clusterIP: None
+                      selector: { app: envoy }
+                      ports: [{ name: http, port: 80, targetPort: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-headless" } }] }
 
           # ── k6 — real load generator hitting Envoy ────────────────────────
           - name: k6-config
@@ -713,6 +943,7 @@ spec:
                     data:
                       script.js: |
                         import http from 'k6/http';
+                        import exec from 'k6/execution';
                         // Open-loop load: every generator OFFERS a fixed 400 requests per second no
                         // matter how fast the stack answers. The dial therefore means demand, and the
                         // gap between offered and served load is a real, scoreable signal.
@@ -731,6 +962,11 @@ spec:
                         // arrival, because the arrival rate never changed.
                         export const options = {
                           discardResponseBodies: true,
+                          // Re-resolve the gateway constantly and take a different pod IP each time a
+                          // connection is dialled. A one-second TTL is what makes a gateway scale-out
+                          // visible to the generator at all: the default is five minutes, so a replica
+                          // added mid-run would not be in this VU's rotation before the run expired.
+                          dns: { ttl: '1s', select: 'roundRobin', policy: 'preferIPv4' },
                           scenarios: {
                             load: {
                               executor: 'constant-arrival-rate',
@@ -743,8 +979,29 @@ spec:
                             },
                           },
                         };
+                        // How many iterations a VU keeps a connection before throwing it away.
+                        //
+                        // Without this, scaling the gateway measurably did NOTHING. HTTP keep-alive
+                        // pins each VU to the pod it first connected to, and neither DNS nor kube-proxy
+                        // can move an established connection — so replicas two and three came up, sat
+                        // at idle CPU, and every request stayed queued at the original pod. On screen
+                        // that is one hot Envoy card beside two cold ones, and it made the gateway
+                        // drills' correct answer a no-op: the arena said "widen the front door" and
+                        // widening it changed no measured signal.
+                        //
+                        // Recycling a slice of the pool continuously fixes it without pretending
+                        // browsers reconnect per request: connections are still reused ten times over,
+                        // a scale-out is absorbed within a second or two, and the cost is a few dozen
+                        // extra handshakes a second per generator instead of four hundred.
+                        const RECYCLE_EVERY = 10;
+                        // Envoy honours `Connection: close` and hangs up after answering, so the next
+                        // iteration dials again — and dialling again is what consults DNS.
+                        const RECYCLE = { headers: { Connection: 'close' } };
                         export default function () {
-                          http.get('http://envoy/');
+                          const iteration = exec.vu.iterationInInstance;
+                          http.get(
+                            'http://envoy-headless/',
+                            iteration % RECYCLE_EVERY === 0 ? RECYCLE : undefined);
                         }
             patches:
               - type: PatchSet
@@ -768,11 +1025,17 @@ spec:
                       template:
                         metadata: { labels: { app: k6 } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: k6
-                              image: grafana/k6:0.53.0
+                              image: grafana/k6:master@sha256:2f8f626bb998d8d73c22d741278e48dd591208f07926960935c7eaf63691fd8b
                               args: ["run", "--quiet", "/scripts/script.js"]
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                capabilities: { drop: [ALL] }
                               # 768Mi because the open-loop script may hold up to 200 VUs when the
                               # stack is slow; at 512Mi a saturated run OOM-killed the generator,
                               # which reads on screen as the incident fixing itself.
