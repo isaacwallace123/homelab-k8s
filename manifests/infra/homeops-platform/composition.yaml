@@ -73,6 +73,53 @@ spec:
                 fromFieldPath: spec.forProvider.manifest.metadata.name
                 toFieldPath: status.namespace
 
+          # Namespace-sensitive observability is granted only inside this disposable run.
+          - name: broker-observer-role
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: rbac.authorization.k8s.io/v1
+                    kind: Role
+                    metadata: { name: homeops-run-observer, namespace: "" }
+                    rules:
+                      - apiGroups: [""]
+                        resources: [pods, events]
+                        verbs: [get, list]
+                      - apiGroups: [""]
+                        resources: [pods/log]
+                        verbs: [get]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-observer-role" } }] }
+
+          - name: broker-observer-binding
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: rbac.authorization.k8s.io/v1
+                    kind: RoleBinding
+                    metadata: { name: homeops-run-observer, namespace: "" }
+                    roleRef:
+                      apiGroup: rbac.authorization.k8s.io
+                      kind: Role
+                      name: homeops-run-observer
+                    subjects:
+                      - { kind: ServiceAccount, name: homeops-broker, namespace: portfolio }
+                      - { kind: ServiceAccount, name: homeops-broker, namespace: homeops }
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-observer-binding" } }] }
+
           # ── resource envelope + per-container ceilings + network baseline ──
           - name: resourcequota
             base:
@@ -347,10 +394,13 @@ spec:
                       template:
                         metadata: { labels: { app: postgres } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: postgres
-                              image: postgres:16-alpine
+                              image: cgr.dev/chainguard/postgres:latest@sha256:dc2f04037c1044a22af76cee4de70b9111885b17c561b939d7ed70103d100759
+                              securityContext: { allowPrivilegeEscalation: false }
                               env:
                                 - { name: POSTGRES_USER, value: checkout }
                                 - { name: POSTGRES_PASSWORD, value: checkout }
@@ -411,10 +461,13 @@ spec:
                       template:
                         metadata: { labels: { app: redis } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: redis
-                              image: redis:7-alpine
+                              image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+                              securityContext: { allowPrivilegeEscalation: false }
                               ports: [{ containerPort: 6379 }]
                               resources:
                                 requests: { cpu: 50m, memory: 32Mi }
@@ -471,11 +524,18 @@ spec:
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           nodeSelector:
                             kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
-                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                readOnlyRootFilesystem: true
+                                capabilities: { drop: [ALL] }
                               env:
                                 - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
                                 - { name: REDIS_ADDR, value: "redis:6379" }
@@ -598,11 +658,18 @@ spec:
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           nodeSelector:
                             kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
-                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:latest
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                readOnlyRootFilesystem: true
+                                capabilities: { drop: [ALL] }
                               env:
                                 - { name: DATABASE_URL, value: "postgres://checkout:checkout@postgres:5432/checkout?sslmode=disable" }
                                 - { name: REDIS_ADDR, value: "redis:6379" }
@@ -721,7 +788,7 @@ spec:
                           listeners:
                             - name: ingress
                               address:
-                                socket_address: { address: 0.0.0.0, port_value: 80 }
+                                socket_address: { address: 0.0.0.0, port_value: 8080 }
                               filter_chains:
                                 - filters:
                                     - name: envoy.filters.network.http_connection_manager
@@ -785,12 +852,19 @@ spec:
                       template:
                         metadata: { labels: { app: envoy } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: envoy
-                              image: envoyproxy/envoy:v1.31-latest
+                              image: envoyproxy/envoy:distroless-v1.38.0@sha256:a7a56545102f7a682e0cafea2c9b8448af1b09ebb710eab688dfb931e3ec7ff6
                               args: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "checkout"]
-                              ports: [{ containerPort: 80 }, { containerPort: 9901 }]
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                readOnlyRootFilesystem: true
+                                capabilities: { drop: [ALL] }
+                              ports: [{ containerPort: 8080 }, { containerPort: 9901 }]
                               # Without a probe, "Ready" means the container process started, which is
                               # a moment before Envoy has bound its listener — and the headless service
                               # publishes a ready pod immediately. A scale-out would therefore put an
@@ -829,7 +903,7 @@ spec:
                     spec:
                       selector: { app: envoy }
                       ports:
-                        - { name: http, port: 80, targetPort: 80 }
+                        - { name: http, port: 80, targetPort: 8080 }
                         - { name: admin, port: 9901, targetPort: 9901 }
             patches:
               - type: PatchSet
@@ -854,7 +928,7 @@ spec:
                     spec:
                       clusterIP: None
                       selector: { app: envoy }
-                      ports: [{ name: http, port: 80, targetPort: 80 }]
+                      ports: [{ name: http, port: 80, targetPort: 8080 }]
             patches:
               - type: PatchSet
                 patchSetName: namespaced
@@ -957,11 +1031,17 @@ spec:
                       template:
                         metadata: { labels: { app: k6 } }
                         spec:
+                          automountServiceAccountToken: false
+                          securityContext: { seccompProfile: { type: RuntimeDefault } }
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: k6
-                              image: grafana/k6:0.53.0
+                              image: grafana/k6:master@sha256:2f8f626bb998d8d73c22d741278e48dd591208f07926960935c7eaf63691fd8b
                               args: ["run", "--quiet", "/scripts/script.js"]
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                runAsNonRoot: true
+                                capabilities: { drop: [ALL] }
                               # 768Mi because the open-loop script may hold up to 200 VUs when the
                               # stack is slow; at 512Mi a saturated run OOM-killed the generator,
                               # which reads on screen as the incident fixing itself.

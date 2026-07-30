@@ -8,6 +8,7 @@ schema tools cannot validate these because they are parameter files, not manifes
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,8 @@ APPS_CATEGORY_PATH = ROOT / "categories" / "applications.yaml"
 ROOT_APP_PATH = ROOT / "bootstrap" / "root-app.yaml"
 APP_DESCRIPTOR_ROOT = ROOT / "argocd-apps"
 HOMELAB_REPO = "https://github.com/isaacwallace123/homelab-k8s.git"
+HOMEOPS_COMPOSITION_PATH = ROOT / "manifests" / "infra" / "homeops-platform" / "composition.yaml"
+HOMEOPS_BROKER_RBAC_PATH = ROOT / "manifests" / "infra" / "homeops-platform" / "broker-rbac.yaml"
 
 
 def load_yaml_documents(path: Path) -> list[dict[str, Any]]:
@@ -166,6 +169,61 @@ def validate_categories() -> list[str]:
     return errors
 
 
+def validate_homeops_security() -> list[str]:
+    errors: list[str] = []
+    composition = load_single_yaml(HOMEOPS_COMPOSITION_PATH)
+    resources = composition.get("spec", {}).get("pipeline", [{}])[0].get("input", {}).get("resources", [])
+    manifests = {
+        resource.get("name"): resource.get("base", {}).get("spec", {}).get("forProvider", {}).get("manifest", {})
+        for resource in resources
+    }
+
+    deployments = [manifest for manifest in manifests.values() if manifest.get("kind") == "Deployment"]
+    if len(deployments) != 6:
+        errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: expected six composed Deployments")
+    for deployment in deployments:
+        name = deployment.get("metadata", {}).get("name", "<unknown>")
+        pod = deployment.get("spec", {}).get("template", {}).get("spec", {})
+        if pod.get("automountServiceAccountToken") is not False:
+            errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: {name} must disable service-account token mounting")
+        if pod.get("securityContext", {}).get("seccompProfile", {}).get("type") != "RuntimeDefault":
+            errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: {name} must use RuntimeDefault seccomp")
+        for container in pod.get("containers", []):
+            image = container.get("image", "")
+            if not re.search(r"@sha256:[0-9a-f]{64}$", image):
+                errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: {name} image must be digest-pinned")
+            if container.get("securityContext", {}).get("allowPrivilegeEscalation") is not False:
+                errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: {name} must disable privilege escalation")
+            if name in {"checkout", "checkout-canary", "envoy", "k6"}:
+                security = container.get("securityContext", {})
+                if security.get("runAsNonRoot") is not True:
+                    errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: {name} must run as non-root")
+                if "ALL" not in security.get("capabilities", {}).get("drop", []):
+                    errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: {name} must drop all capabilities")
+
+    observer_role = manifests.get("broker-observer-role", {})
+    observer_binding = manifests.get("broker-observer-binding", {})
+    if observer_role.get("kind") != "Role" or observer_binding.get("kind") != "RoleBinding":
+        errors.append(f"{HOMEOPS_COMPOSITION_PATH.relative_to(ROOT)}: each run must compose its observer Role and RoleBinding")
+
+    rbac = load_yaml_documents(HOMEOPS_BROKER_RBAC_PATH)
+    cluster_role = next((doc for doc in rbac if doc.get("kind") == "ClusterRole"), {})
+    forbidden = {"pods", "pods/log", "events"}
+    cluster_resources = {
+        resource
+        for rule in cluster_role.get("rules", [])
+        if rule.get("apiGroups") == [""]
+        for resource in rule.get("resources", [])
+    }
+    leaked = sorted(cluster_resources & forbidden)
+    if leaked:
+        errors.append(
+            f"{HOMEOPS_BROKER_RBAC_PATH.relative_to(ROOT)}: cluster role must not grant namespace-sensitive reads: {leaked}"
+        )
+
+    return errors
+
+
 def main() -> int:
     with SCHEMA_PATH.open("r", encoding="utf-8") as handle:
         schema = json.load(handle)
@@ -180,6 +238,7 @@ def main() -> int:
         errors.extend(validate_descriptor(descriptor_path, schema, projects))
 
     errors.extend(validate_categories())
+    errors.extend(validate_homeops_security())
 
     if errors:
         print("GitOps validation failed:")
