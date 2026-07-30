@@ -751,18 +751,12 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: namespaced
-              - {
-                  type: FromCompositeFieldPath,
-                  fromFieldPath: spec.runId,
-                  toFieldPath: metadata.name,
-                  transforms:
-                    [
-                      {
-                        type: string,
-                        string: { type: Format, fmt: "%s-checkout-headless" },
-                      },
-                    ],
-                }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runId
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-checkout-headless" }
 
           - name: envoy-config
             base:
