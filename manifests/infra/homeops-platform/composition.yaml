@@ -665,6 +665,18 @@ spec:
                               image: envoyproxy/envoy:v1.31-latest
                               args: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "checkout"]
                               ports: [{ containerPort: 80 }, { containerPort: 9901 }]
+                              # Without a probe, "Ready" means the container process started, which is
+                              # a moment before Envoy has bound its listener — and the headless service
+                              # publishes a ready pod immediately. A scale-out would therefore put an
+                              # address into DNS that refuses connections for a beat, so the operator's
+                              # correct move (widen the gateway) would spike the error rate it is being
+                              # scored on. The admin server answers /ready once the listener is live.
+                              readinessProbe:
+                                httpGet: { path: /ready, port: 9901 }
+                                initialDelaySeconds: 1
+                                periodSeconds: 1
+                                timeoutSeconds: 2
+                                failureThreshold: 30
                               resources:
                                 requests: { cpu: 50m, memory: 64Mi }
                                 limits: { cpu: 300m, memory: 192Mi }
@@ -698,6 +710,30 @@ spec:
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-svc" } }] }
 
+          # The generators dial the gateway through THIS service, not the ClusterIP one above, for the
+          # same reason Envoy reaches checkout through a headless service: DNS returns every gateway
+          # pod IP, so each new connection is dialled at a specific replica and the fan-out is
+          # round-robin rather than whatever kube-proxy does with a single address.
+          - name: envoy-headless-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata: { name: envoy-headless, namespace: "" }
+                    spec:
+                      clusterIP: None
+                      selector: { app: envoy }
+                      ports: [{ name: http, port: 80, targetPort: 80 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-headless" } }] }
+
           # ── k6 — real load generator hitting Envoy ────────────────────────
           - name: k6-config
             base:
@@ -713,6 +749,7 @@ spec:
                     data:
                       script.js: |
                         import http from 'k6/http';
+                        import exec from 'k6/execution';
                         // Open-loop load: every generator OFFERS a fixed 400 requests per second no
                         // matter how fast the stack answers. The dial therefore means demand, and the
                         // gap between offered and served load is a real, scoreable signal.
@@ -731,6 +768,11 @@ spec:
                         // arrival, because the arrival rate never changed.
                         export const options = {
                           discardResponseBodies: true,
+                          // Re-resolve the gateway constantly and take a different pod IP each time a
+                          // connection is dialled. A one-second TTL is what makes a gateway scale-out
+                          // visible to the generator at all: the default is five minutes, so a replica
+                          // added mid-run would not be in this VU's rotation before the run expired.
+                          dns: { ttl: '1s', select: 'roundRobin', policy: 'preferIPv4' },
                           scenarios: {
                             load: {
                               executor: 'constant-arrival-rate',
@@ -743,8 +785,29 @@ spec:
                             },
                           },
                         };
+                        // How many iterations a VU keeps a connection before throwing it away.
+                        //
+                        // Without this, scaling the gateway measurably did NOTHING. HTTP keep-alive
+                        // pins each VU to the pod it first connected to, and neither DNS nor kube-proxy
+                        // can move an established connection — so replicas two and three came up, sat
+                        // at idle CPU, and every request stayed queued at the original pod. On screen
+                        // that is one hot Envoy card beside two cold ones, and it made the gateway
+                        // drills' correct answer a no-op: the arena said "widen the front door" and
+                        // widening it changed no measured signal.
+                        //
+                        // Recycling a slice of the pool continuously fixes it without pretending
+                        // browsers reconnect per request: connections are still reused ten times over,
+                        // a scale-out is absorbed within a second or two, and the cost is a few dozen
+                        // extra handshakes a second per generator instead of four hundred.
+                        const RECYCLE_EVERY = 10;
+                        // Envoy honours `Connection: close` and hangs up after answering, so the next
+                        // iteration dials again — and dialling again is what consults DNS.
+                        const RECYCLE = { headers: { Connection: 'close' } };
                         export default function () {
-                          http.get('http://envoy/');
+                          const iteration = exec.vu.iterationInInstance;
+                          http.get(
+                            'http://envoy-headless/',
+                            iteration % RECYCLE_EVERY === 0 ? RECYCLE : undefined);
                         }
             patches:
               - type: PatchSet
