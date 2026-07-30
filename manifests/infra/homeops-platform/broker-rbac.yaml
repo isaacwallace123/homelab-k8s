@@ -37,6 +37,11 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
+  # Ranked log inspection is a read-only, tail-bounded view of pods in the caller-owned run
+  # namespace. The API sanitizes and audits every returned line.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]

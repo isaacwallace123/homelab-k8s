@@ -160,13 +160,105 @@ spec:
                     metadata: { name: allow-intra, namespace: "" }
                     spec:
                       podSelector: {}
-                      policyTypes: [Ingress, Egress]
+                      policyTypes: [Ingress]
                       ingress: [{ from: [{ podSelector: {} }] }]
-                      egress: [{ to: [{ podSelector: {} }] }]
             patches:
               - type: PatchSet
                 patchSetName: namespaced
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-allow-intra" } }] }
+
+          # Egress is expressed per request-path edge instead of one namespace-wide allow. That
+          # makes the networkMode dial a real NetworkPolicy fault: db-blocked removes only the
+          # checkout -> Postgres edge while DNS, Redis, gateway, and load-generator traffic remain.
+          - name: networkpolicy-checkout-redis-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: checkout-redis-egress, namespace: "" }
+                    spec:
+                      podSelector:
+                        matchExpressions:
+                          - { key: app, operator: In, values: [checkout, checkout-canary] }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { app: redis } } }]
+                          ports: [{ protocol: TCP, port: 6379 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-redis-egress" } }] }
+
+          - name: networkpolicy-checkout-postgres-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: checkout-postgres-egress, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { homeops-db-network: normal } }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { app: postgres } } }]
+                          ports: [{ protocol: TCP, port: 5432 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-postgres-egress" } }] }
+
+          - name: networkpolicy-envoy-checkout-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: envoy-checkout-egress, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { app: envoy } }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { tier: checkout } } }]
+                          ports: [{ protocol: TCP, port: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-envoy-checkout-egress" } }] }
+
+          - name: networkpolicy-k6-envoy-egress
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef: { name: homeops }
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata: { name: k6-envoy-egress, namespace: "" }
+                    spec:
+                      podSelector: { matchLabels: { app: k6 } }
+                      policyTypes: [Egress]
+                      egress:
+                        - to: [{ podSelector: { matchLabels: { app: envoy } } }]
+                          ports: [{ protocol: TCP, port: 8080 }]
+            patches:
+              - type: PatchSet
+                patchSetName: namespaced
+              - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-k6-envoy-egress" } }] }
 
           - name: networkpolicy-allow-dns
             base:
@@ -374,7 +466,8 @@ spec:
                           # `tier` is what the gateway's backend pool selects on, so the canary
                           # Deployment can put pods into the same pool without this Deployment's
                           # (immutable) selector changing.
-                          labels: { app: checkout, tier: checkout }
+                          labels:
+                            { app: checkout, tier: checkout, homeops-db-network: normal }
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
@@ -413,6 +506,13 @@ spec:
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout" } }] }
               - { type: FromCompositeFieldPath, fromFieldPath: spec.apiReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.dbMaxConns
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value"
+                transforms:
+                  - { type: convert, convert: { toType: string } }
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
                 fromFieldPath: spec.releaseTrack
                 toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[5].value"
                 policy:
@@ -423,6 +523,11 @@ spec:
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.networkMode
+                toFieldPath: "spec.forProvider.manifest.spec.template.metadata.labels[homeops-db-network]"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
                 fromFieldPath: spec.targetPool
                 toFieldPath: "spec.forProvider.manifest.spec.template.spec.nodeSelector[kubernetes.io/hostname]"
                 transforms:
@@ -430,6 +535,7 @@ spec:
                     map:
                       apps: k3s-worker-apps
                       infra: k3s-worker-infra
+                      unavailable: homeops-no-such-worker
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
@@ -481,7 +587,14 @@ spec:
                       selector: { matchLabels: { app: checkout-canary } }
                       template:
                         metadata:
-                          labels: { app: checkout-canary, tier: checkout }
+                          # The database egress policy selects this label. Changing networkMode
+                          # therefore changes a real NetworkPolicy edge, not an application flag.
+                          labels:
+                            {
+                              app: checkout-canary,
+                              tier: checkout,
+                              homeops-db-network: normal,
+                            }
                           annotations:
                             homeops.isaacwallace.dev/restart-token: baseline
                         spec:
@@ -516,8 +629,20 @@ spec:
               - { type: FromCompositeFieldPath, fromFieldPath: spec.runId, toFieldPath: metadata.name, transforms: [{ type: string, string: { type: Format, fmt: "%s-checkout-canary" } }] }
               - { type: FromCompositeFieldPath, fromFieldPath: spec.canaryReplicas, toFieldPath: spec.forProvider.manifest.spec.replicas }
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.dbMaxConns
+                toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value"
+                transforms:
+                  - { type: convert, convert: { toType: string } }
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
                 fromFieldPath: spec.dataState
                 toFieldPath: "spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value"
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.networkMode
+                toFieldPath: "spec.forProvider.manifest.spec.template.metadata.labels[homeops-db-network]"
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
@@ -528,6 +653,7 @@ spec:
                     map:
                       apps: k3s-worker-apps
                       infra: k3s-worker-infra
+                      unavailable: homeops-no-such-worker
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
