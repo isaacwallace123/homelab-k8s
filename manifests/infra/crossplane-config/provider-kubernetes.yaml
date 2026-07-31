@@ -65,6 +65,23 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The Composition grants the broker namespace-scoped pod/event/log reads through a Role composed
+  # inside each disposable namespace, so that privilege never has to exist cluster-wide on the
+  # broker's own identity. The provider is what applies that Role, so it needs RBAC write here.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Kubernetes refuses to let a subject create a Role granting permissions it does not itself hold,
+  # and refuses a RoleBinding to a Role it could not grant. These two rules are exactly the composed
+  # observer Role's rules, held cluster-wide so the write is not an escalation. Without them the
+  # observer objects fail to reconcile, the LabRun never reports Ready, and every launch hangs until
+  # its provisioning budget expires. Keep them in step with the Role in the Composition.
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

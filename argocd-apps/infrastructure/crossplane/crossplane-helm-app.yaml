@@ -15,6 +15,14 @@ repoURL: https://charts.crossplane.io/stable
 chart: crossplane
 targetRevision: "2.3.3"
 values: |
+  args:
+    # A LabRun is watched by a human staring at a launch screen, not by a reconcile loop that can
+    # afford to be a minute stale. The default 1m per-resource poll is what a launch phase costs to
+    # detect when the realtime watch does not fire: composed Objects go ready in seconds, then the XR
+    # sits until its next tick before it will report Ready, once per gate. 10s is the smallest
+    # interval that is still cheap here — one XR and 28 composed Objects, far under the circuit
+    # breaker's 1 token/s refill.
+    - --poll-interval=10s
   metrics:
     enabled: true
   resourcesCrossplane:
