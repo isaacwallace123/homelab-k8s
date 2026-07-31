@@ -36,11 +36,13 @@ values: |
     # So the bucket absorbs a provision several times over, while the refill rate — the sustained
     # ceiling, and the thing that actually protects the control plane — stays low enough that a
     # genuine runaway is still throttled. A runaway is sustained; a provision is not.
-    - --circuit-breaker-burst=500
+    - --circuit-breaker-burst=5000
     - --circuit-breaker-refill-rate=5
-    # And if it does trip, recovery is measured in seconds. Five minutes of throttled reconciles is
-    # far longer than any burst it is protecting against.
-    - --circuit-breaker-cooldown=30s
+    # And the cooldown is what the wait actually costs, because an XR that trips reconciles only once
+    # per cooldown: at 30s a provision needed two of them to reach Ready, which was the whole 59s.
+    # Short is safe here — the cooldown bounds how often a runaway may reconcile, and the refill rate
+    # is the real sustained guard.
+    - --circuit-breaker-cooldown=5s
   metrics:
     enabled: true
   resourcesCrossplane:
