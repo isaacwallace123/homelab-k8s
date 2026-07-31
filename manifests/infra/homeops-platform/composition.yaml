@@ -908,6 +908,13 @@ spec:
           # same reason Envoy reaches checkout through a headless service: DNS returns every gateway
           # pod IP, so each new connection is dialled at a specific replica and the fan-out is
           # round-robin rather than whatever kube-proxy does with a single address.
+          #
+          # Which is exactly why the port is the container's own and not 80. A headless Service has no
+          # virtual address, so nothing ever rewrites the port: the client resolves a pod IP and dials
+          # the port it was given. A `port: 80, targetPort: 8080` mapping here would look like the
+          # ClusterIP Service above and do nothing, and the generators would spend the whole run
+          # getting connection-refused from a gateway that is up. Keep this equal to Envoy's listener,
+          # as checkout-headless is to checkout's.
           - name: envoy-headless-service
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -922,7 +929,7 @@ spec:
                     spec:
                       clusterIP: None
                       selector: { app: envoy }
-                      ports: [{ name: http, port: 80, targetPort: 8080 }]
+                      ports: [{ name: http, port: 8080, targetPort: 8080 }]
             patches:
               - type: PatchSet
                 patchSetName: namespaced
@@ -1000,7 +1007,7 @@ spec:
                         export default function () {
                           const iteration = exec.vu.iterationInInstance;
                           http.get(
-                            'http://envoy-headless/',
+                            'http://envoy-headless:8080/',
                             iteration % RECYCLE_EVERY === 0 ? RECYCLE : undefined);
                         }
             patches:
