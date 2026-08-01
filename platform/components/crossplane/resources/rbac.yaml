@@ -1,0 +1,183 @@
+# =============================================================================
+# Crossplane identities.
+#
+# Two consumers, two identities, two permission sets. The point is that a bug in a game
+# Composition cannot reach the arena's resources, and neither can reach the media stack —
+# enforced by RBAC rather than by the Composition being careful.
+#
+#   homeops  -> the public Operations Arena (LabRun)
+#   gameops  -> the game server fleet (GameServer)
+#
+# provider-kubernetes resolves credentials per ProviderConfig, so both run through one
+# provider deployment while authenticating as different ServiceAccounts.
+# =============================================================================
+
+# ── homeops: the Operations Arena ─────────────────────────────────────────────
+# Manages the isolation primitives plus the scenario workload objects the Composition
+# renders — deliberately NOT secrets, not configmaps outside a run, not pods/exec, and
+# nothing in a personal namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: homeops:provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "resourcequotas", "limitranges", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The Composition grants the broker namespace-scoped pod/event/log reads through a Role
+  # composed inside each disposable namespace, so that privilege never exists cluster-wide
+  # on the broker's own identity. The provider is what applies that Role, so it needs RBAC
+  # write here.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Kubernetes refuses to let a subject create a Role granting permissions it does not
+  # itself hold, and refuses a RoleBinding to a Role it could not grant. These two rules
+  # are exactly the composed observer Role's rules, held cluster-wide so the write is not
+  # an escalation. Without them the observer objects fail to reconcile, the LabRun never
+  # reports Ready, and every launch hangs until its provisioning budget expires. Keep them
+  # in step with the Role in the Composition.
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: homeops:provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: homeops:provider-kubernetes
+subjects:
+  - kind: ServiceAccount
+    name: provider-kubernetes
+    namespace: crossplane-system
+---
+# ── gameops: the game server fleet ────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gameops-provisioner
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+---
+# A long-lived token for this ServiceAccount. Kubernetes stopped auto-creating these in
+# 1.24, so it is requested explicitly; the token controller populates `token` and `ca.crt`.
+# It is consumed by the bootstrap Job that assembles the kubeconfig the ProviderConfig
+# reads — see kubeconfig-bootstrap.yaml.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gameops-token
+  namespace: crossplane-system
+  annotations:
+    kubernetes.io/service-account.name: gameops-provisioner
+    argocd.argoproj.io/sync-wave: "1"
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gameops:provisioner
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  # Namespace lifecycle and the isolation primitives that go in it. Crossplane composes a
+  # namespace per server, so this cannot be namespace-scoped.
+  - apiGroups: [""]
+    resources: ["namespaces", "resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Backup and idle-shutdown jobs.
+  - apiGroups: ["batch"]
+    resources: ["cronjobs", "jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read-only, for readiness and the idle-shutdown probe.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  #
+  # DELIBERATELY ABSENT: secrets, rbac.authorization.k8s.io, pods/exec, nodes,
+  # persistentvolumes, and every cluster-scoped resource except namespaces. Game servers
+  # run arbitrary third-party mod code — ATM10 is several hundred mods and Gmod addons are
+  # user-supplied Lua — so this identity is scoped as if the workloads are hostile.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gameops:provisioner
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gameops:provisioner
+subjects:
+  - kind: ServiceAccount
+    name: gameops-provisioner
+    namespace: crossplane-system
+---
+# ── provider-helm ─────────────────────────────────────────────────────────────
+# The Minecraft Composition manages a Helm Release, so this identity needs to create what
+# itzg's chart renders — including the RCON password Secret, which is why it holds a
+# secrets grant that gameops deliberately does not.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gameops:provider-helm
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "services", "configmaps", "secrets", "persistentvolumeclaims", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gameops:provider-helm
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gameops:provider-helm
+subjects:
+  - kind: ServiceAccount
+    name: provider-helm
+    namespace: crossplane-system

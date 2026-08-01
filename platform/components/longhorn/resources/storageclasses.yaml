@@ -1,0 +1,72 @@
+# =============================================================================
+# Storage tiers — see docs/architecture/storage.md
+#
+# Exactly ONE class is default. Previously both local-path and longhorn carried the
+# default annotation, which makes an unqualified PVC land on either one arbitrarily.
+# Clearing local-path's annotation is a phase-3 step (it ships with k3s, not from here):
+#
+#   kubectl patch storageclass local-path -p \
+#     '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+# =============================================================================
+---
+# Survives losing a whole Proxmox host. Databases, ArgoCD, Vaultwarden, Grafana.
+#
+# The zone soft anti-affinity is what makes the second host worth having: with
+# topology.kubernetes.io/zone set to the physical Proxmox host, three replicas are placed
+# across both machines. Before the cluster spanned two hosts, "3 replicas" meant three
+# copies on one physical box.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-replicated
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "3"
+  staleReplicaTimeout: "30"
+  fsType: ext4
+  replicaZoneSoftAntiAffinity: "true"
+  replicaSoftAntiAffinity: "false"
+  dataLocality: best-effort
+---
+# One replica. Rebuildable caches and scratch that still wants Longhorn snapshots.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-single
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "1"
+  staleReplicaTimeout: "30"
+  fsType: ext4
+  dataLocality: strict-local
+---
+# Game world data, on the game node's dedicated NVMe.
+#
+# This is a DELIBERATE durability downgrade for a large latency gain. Longhorn acknowledges
+# a write only after it lands on remote replicas; Minecraft's chunk saves are synchronous
+# and run on the tick thread, so replication converts directly into permanent TPS loss.
+# Durability comes from quiesced backups to the NAS on the other physical host instead —
+# a world tolerates losing a few hours far better than it tolerates running badly forever.
+#
+# WaitForFirstConsumer keeps the volume unbound until the pod is scheduled, so it is always
+# created on the node the game actually runs on.
+#
+# reclaimPolicy is Retain, not Delete: deleting a GameServer leaves the world on disk. A
+# mistyped `kubectl delete` should not be able to destroy a world that took months to
+# build. Reclaiming the space is a deliberate manual step.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nvme-local
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false

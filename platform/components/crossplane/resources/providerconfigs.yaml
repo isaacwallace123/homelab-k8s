@@ -1,0 +1,53 @@
+# =============================================================================
+# ProviderConfigs — wave 3, after the provider packages have registered their CRDs.
+#
+# SkipDryRunOnMissingResource lets the first sync get this far even though the CRD does
+# not exist yet; ArgoCD then reconciles it on a later pass.
+# =============================================================================
+
+# ── homeops: the Operations Arena ─────────────────────────────────────────────
+# InjectedIdentity uses the provider pod's own mounted ServiceAccount token — the
+# `provider-kubernetes` SA bound to homeops:provider-kubernetes.
+apiVersion: kubernetes.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: homeops
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  credentials:
+    source: InjectedIdentity
+---
+# ── gameops: the game server fleet ────────────────────────────────────────────
+# Authenticates as the `gameops-provisioner` ServiceAccount instead of the provider's own,
+# through the kubeconfig assembled by kubeconfig-bootstrap.yaml. This is what keeps a bug
+# in a GameServer Composition from being able to touch the arena's resources or anything
+# in a personal namespace.
+apiVersion: kubernetes.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: gameops
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: gameops-kubeconfig
+      key: kubeconfig
+---
+# ── provider-helm ─────────────────────────────────────────────────────────────
+# Used by the Minecraft Composition to manage itzg's chart as a composed Release.
+apiVersion: helm.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: gameops-helm
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  credentials:
+    source: InjectedIdentity

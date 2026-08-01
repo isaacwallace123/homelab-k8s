@@ -86,10 +86,9 @@ release.
 apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
 kind: GameServer
 metadata:
-  name: atm10
-  namespace: games
+  name: atm10                  # cluster-scoped; composes namespace game-atm10
 spec:
-  game: minecraft-forge        # selects the Composition
+  game: minecraft              # selects the Composition family
   size: xl                     # → 8 CPU / 16Gi, Guaranteed QoS
   storage:
     size: 100Gi
@@ -102,11 +101,16 @@ spec:
     retention: 14
   idle:
     shutdownAfter: 30m
-  settings:                    # game-specific, schema-validated per Composition
+  minecraft:                   # game-specific block, schema-validated
+    type: FORGE
     modpack: ATM10
     version: "1.21.1"
-    memory: 12G
 ```
+
+`GameServer` is cluster-scoped because it composes a `Namespace`. Crossplane v2 defaults XRDs to
+`Namespaced`, but a namespaced XR cannot *own* a cluster-scoped resource — it would create the
+namespace successfully and then leak it on delete, since garbage collection works through owner
+references. See [README.md](README.md) §6.
 
 `size` maps to a fixed resource class rather than free-form CPU/memory, which is what makes the
 namespace quota meaningful and keeps Guaranteed QoS guaranteed.
@@ -255,9 +259,16 @@ an accident, and it is not a coincidence that it is tight — see the memory bud
 
 Two controls keep it honest:
 
-**The namespace quota.** The `games` namespace has a `ResourceQuota` sized to the node's
-allocatable memory. When the fleet is full, the next server stays `Pending` with a clear quota
-event, instead of scheduling and OOM-killing a running world.
+**The node's own accounting.** Each server gets its own namespace, so a single cross-namespace
+quota is not something vanilla Kubernetes can express — the fleet cap is the node itself. That
+turns out to be the better mechanism anyway: because every game pod is Guaranteed QoS with
+`requests == limits`, the scheduler's accounting is *exact* rather than optimistic. There is no
+overcommit to be wrong about. When the fleet is full the next server stays `Pending` with an
+`Insufficient memory` event, instead of scheduling and OOM-killing a world that is already
+running.
+
+The per-server `ResourceQuota` does a different job: it caps each server to its declared size
+class, so a runaway mod cannot grow one server past its budget and starve its neighbours.
 
 **Idle scale-to-zero.** `spec.idle.shutdownAfter` drives a per-server CronJob: query player count
 (RCON for Minecraft, A2S for Source/Rust, HTTP for Satisfactory), and scale the StatefulSet to zero

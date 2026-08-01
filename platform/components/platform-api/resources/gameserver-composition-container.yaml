@@ -1,0 +1,415 @@
+# =============================================================================
+# Every non-Minecraft game.
+#
+# One Composition with a game catalogue inside it, rather than one Composition per game.
+# The shape is identical across Satisfactory, Terraria, Rust, Gmod, and the LinuxGSM long
+# tail — namespace, quota, isolation, a PVC, a single-replica StatefulSet with pinned
+# cores, a LoadBalancer, and a backup job. Only the image, the ports, and the data path
+# differ, so those are a lookup table and adding a game is a catalogue entry.
+#
+# Minecraft is the exception and has its own Composition, because itzg's chart already
+# does the work.
+# =============================================================================
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: gameserver-container
+  labels:
+    platform.homelab.isaacwallace.dev/family: container
+spec:
+  compositeTypeRef:
+    apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+    kind: GameServer
+
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $name := $xr.metadata.name }}
+            {{- $spec := $xr.spec }}
+            {{- $ns := printf "game-%s" $name }}
+
+            {{- /*
+              THE GAME CATALOGUE.
+
+              Adding a game is an entry here plus one enum value in the XRD. `dataPath` is
+              where the image keeps its world state, and is what the PVC mounts over.
+
+              s&box is deliberately absent: its dedicated server tooling is still moving and
+              is not settled the way these are. It gets an entry once it has been tested,
+              not before.
+            */}}
+            {{- $catalogue := dict
+                  "satisfactory" (dict
+                    "image"    "wolveix/satisfactory-server:latest"
+                    "dataPath" "/config"
+                    "ports"    (list (dict "name" "game"  "port" 7777 "protocol" "UDP")
+                                     (dict "name" "query" "port" 7777 "protocol" "TCP")))
+                  "terraria" (dict
+                    "image"    "jacobsmile/tmodloader1.4:latest"
+                    "dataPath" "/data"
+                    "ports"    (list (dict "name" "game" "port" 7777 "protocol" "TCP")))
+                  "rust" (dict
+                    "image"    "didstopia/rust-server:latest"
+                    "dataPath" "/steamcmd/rust"
+                    "ports"    (list (dict "name" "game"  "port" 28015 "protocol" "UDP")
+                                     (dict "name" "rcon"  "port" 28016 "protocol" "TCP")))
+                  "gmod" (dict
+                    "image"    "gameservermanagers/gameserver:gmod"
+                    "dataPath" "/data"
+                    "ports"    (list (dict "name" "game"  "port" 27015 "protocol" "UDP")
+                                     (dict "name" "query" "port" 27015 "protocol" "TCP")))
+                  "linuxgsm" (dict
+                    "image"    "gameservermanagers/gameserver:latest"
+                    "dataPath" "/data"
+                    "ports"    (list (dict "name" "game" "port" 27015 "protocol" "UDP")))
+            }}
+            {{- $game := index $catalogue $spec.game }}
+
+            {{- $sizes := dict
+                  "small"  (dict "cpu" 2 "mem" "4Gi")
+                  "medium" (dict "cpu" 4 "mem" "8Gi")
+                  "large"  (dict "cpu" 6 "mem" "12Gi")
+                  "xl"     (dict "cpu" 8 "mem" "16Gi") }}
+            {{- $size := index $sizes (default "medium" $spec.size) }}
+
+            {{- $storage := default (dict) $spec.storage }}
+            {{- $network := default (dict) $spec.network }}
+            {{- $backup  := default (dict) $spec.backup }}
+            {{- $steam   := default (dict) $spec.steam }}
+            {{- $publish := default "loadbalancer" $network.publish }}
+            {{- $image := $game.image }}
+            {{- if ne (default "" $steam.version) "" }}
+            {{- $image = printf "%s:%s" (splitList ":" $game.image | first) $steam.version }}
+            {{- end }}
+
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-namespace
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: namespace
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: v1
+                  kind: Namespace
+                  metadata:
+                    name: {{ $ns }}
+                    labels:
+                      homelab.isaacwallace.dev/managed: "true"
+                      homelab.isaacwallace.dev/game: {{ $spec.game | quote }}
+                      homelab.isaacwallace.dev/server: {{ $name | quote }}
+
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-quota
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: quota
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: v1
+                  kind: ResourceQuota
+                  metadata:
+                    name: server-quota
+                    namespace: {{ $ns }}
+                  spec:
+                    hard:
+                      requests.cpu: {{ $size.cpu | quote }}
+                      requests.memory: {{ $size.mem | quote }}
+                      limits.cpu: {{ $size.cpu | quote }}
+                      limits.memory: {{ $size.mem | quote }}
+                      persistentvolumeclaims: "2"
+                      count/statefulsets.apps: "1"
+
+            ---
+            # Gmod addons are user-supplied Lua and Rust plugins are arbitrary C#. The
+            # namespace is treated as hostile: players and DNS in, public internet out, and
+            # no path to the cyber range, the AI nodes, Proxmox, TrueNAS, or any other
+            # namespace in this cluster.
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-netpol
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: netpol
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: networking.k8s.io/v1
+                  kind: NetworkPolicy
+                  metadata:
+                    name: game-isolation
+                    namespace: {{ $ns }}
+                  spec:
+                    podSelector: {}
+                    policyTypes: [Ingress, Egress]
+                    ingress:
+                      - {}
+                    egress:
+                      - to:
+                          - namespaceSelector:
+                              matchLabels:
+                                kubernetes.io/metadata.name: kube-system
+                        ports:
+                          - protocol: UDP
+                            port: 53
+                          - protocol: TCP
+                            port: 53
+                      - to:
+                          - ipBlock:
+                              cidr: 0.0.0.0/0
+                              except:
+                                - 10.0.0.0/8
+                                - 172.16.0.0/12
+                                - 192.168.0.0/16
+
+            ---
+            # World data. Single-replica local NVMe by default — see
+            # docs/architecture/storage.md for why replication is the wrong trade here.
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-pvc
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: pvc
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: v1
+                  kind: PersistentVolumeClaim
+                  metadata:
+                    name: world
+                    namespace: {{ $ns }}
+                  spec:
+                    accessModes: [ReadWriteOnce]
+                    storageClassName: {{ default "nvme-local" $storage.class | quote }}
+                    resources:
+                      requests:
+                        storage: {{ default "20Gi" $storage.size | quote }}
+
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-server
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: server
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: apps/v1
+                  kind: StatefulSet
+                  metadata:
+                    name: server
+                    namespace: {{ $ns }}
+                  spec:
+                    serviceName: server
+                    # Always exactly one. These are persistent worlds, not interchangeable
+                    # match servers — a second replica would be a second world fighting over
+                    # the same volume, not more capacity.
+                    replicas: 1
+                    selector:
+                      matchLabels:
+                        app: {{ $name }}
+                    template:
+                      metadata:
+                        labels:
+                          app: {{ $name }}
+                      spec:
+                        nodeSelector:
+                          homelab.isaacwallace.dev/pool: games
+                        tolerations:
+                          - key: homelab.isaacwallace.dev/pool
+                            operator: Equal
+                            value: games
+                            effect: NoSchedule
+                        # Mod and addon code has no business talking to the API server.
+                        automountServiceAccountToken: false
+                        terminationGracePeriodSeconds: 120
+                        containers:
+                          - name: server
+                            image: {{ $image | quote }}
+                            {{- if $steam.extraEnv }}
+                            env:
+                              {{- range $k, $v := $steam.extraEnv }}
+                              - name: {{ $k | quote }}
+                                value: {{ $v | quote }}
+                              {{- end }}
+                            {{- end }}
+                            ports:
+                              {{- range $p := $game.ports }}
+                              - name: {{ $p.name }}
+                                containerPort: {{ $p.port }}
+                                protocol: {{ $p.protocol }}
+                              {{- end }}
+                            # requests == limits, integer CPU: Guaranteed QoS, which is what
+                            # earns exclusive cores from the static CPU manager.
+                            resources:
+                              requests:
+                                cpu: {{ $size.cpu | quote }}
+                                memory: {{ $size.mem | quote }}
+                              limits:
+                                cpu: {{ $size.cpu | quote }}
+                                memory: {{ $size.mem | quote }}
+                            volumeMounts:
+                              - name: world
+                                mountPath: {{ $game.dataPath | quote }}
+                        volumes:
+                          - name: world
+                            persistentVolumeClaim:
+                              claimName: world
+
+            {{- if ne $publish "none" }}
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-service
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: service
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: v1
+                  kind: Service
+                  metadata:
+                    name: server
+                    namespace: {{ $ns }}
+                    annotations:
+                      # autoAssign is on for this pool, so MetalLB picks the address.
+                      metallb.io/address-pool: games-pool
+                  spec:
+                    type: LoadBalancer
+                    # Preserves the player's real source IP — IP bans, anti-cheat
+                    # heuristics, and per-player rate limiting all depend on it — and keeps
+                    # the packet on the node running the server instead of hopping.
+                    externalTrafficPolicy: Local
+                    selector:
+                      app: {{ $name }}
+                    ports:
+                      {{- range $p := $game.ports }}
+                      - name: {{ $p.name }}
+                        port: {{ $p.port }}
+                        targetPort: {{ $p.port }}
+                        protocol: {{ $p.protocol }}
+                      {{- end }}
+            {{- end }}
+
+            {{- if default true $backup.enabled }}
+            ---
+            # Stops the server, copies the world to the NAS on the other physical host, and
+            # starts it again. Stopping is crude compared with Minecraft's RCON quiesce, but
+            # none of these games expose a "flush and hold" command, and a torn copy of a
+            # save file is worse than a few minutes of downtime at 5am.
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $name }}-backup
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: backup
+            spec:
+              providerConfigRef:
+                name: gameops
+              forProvider:
+                manifest:
+                  apiVersion: batch/v1
+                  kind: CronJob
+                  metadata:
+                    name: world-backup
+                    namespace: {{ $ns }}
+                  spec:
+                    schedule: {{ default "0 5 * * *" $backup.schedule | quote }}
+                    concurrencyPolicy: Forbid
+                    successfulJobsHistoryLimit: 3
+                    failedJobsHistoryLimit: 3
+                    jobTemplate:
+                      spec:
+                        backoffLimit: 1
+                        template:
+                          spec:
+                            restartPolicy: OnFailure
+                            nodeSelector:
+                              homelab.isaacwallace.dev/pool: games
+                            tolerations:
+                              - key: homelab.isaacwallace.dev/pool
+                                operator: Equal
+                                value: games
+                                effect: NoSchedule
+                            containers:
+                              - name: restic
+                                image: restic/restic:latest
+                                command: ["/bin/sh", "-ec"]
+                                args:
+                                  - |
+                                    export RESTIC_REPOSITORY=/nas/restic/{{ $name }}
+                                    export RESTIC_PASSWORD_FILE=/etc/restic/password
+                                    restic snapshots >/dev/null 2>&1 || restic init
+                                    restic backup /world --tag {{ $name }}
+                                    restic forget --keep-daily {{ default 14 $backup.retention }} --prune
+                                volumeMounts:
+                                  - name: world
+                                    mountPath: /world
+                                    readOnly: true
+                                  - name: nas
+                                    mountPath: /nas
+                                  - name: restic-password
+                                    mountPath: /etc/restic
+                                    readOnly: true
+                            volumes:
+                              - name: world
+                                persistentVolumeClaim:
+                                  claimName: world
+                              - name: nas
+                                nfs:
+                                  server: 192.168.0.100
+                                  path: /mnt/tank/backups/games
+                              - name: restic-password
+                                secret:
+                                  secretName: restic-password
+            {{- end }}
+
+            ---
+            # ── status ───────────────────────────────────────────────────────
+            # Read back from the observed composed resources. MetalLB fills the address in
+            # asynchronously, so it reports "pending" until the Service actually has one
+            # rather than rendering an empty string that looks like a failure.
+            {{- $ingress := dig "resources" "service" "resource" "status" "atProvider" "status" "loadBalancer" "ingress" (list) .observed }}
+            {{- $addr := "pending" }}
+            {{- if $ingress }}
+            {{- $addr = default "pending" (index $ingress 0).ip }}
+            {{- end }}
+            apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+            kind: GameServer
+            status:
+              namespace: {{ $ns }}
+              address: {{ $addr | quote }}
+              phase: {{ if eq $publish "none" }}Offline{{ else if eq $addr "pending" }}Provisioning{{ else }}Running{{ end }}
+
+    - step: ready
+      functionRef:
+        name: function-auto-ready

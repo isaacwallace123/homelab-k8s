@@ -40,3 +40,13 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: homeops
+---
+# games: holds mc-router and the GameServer declarations themselves. The per-server
+# `game-<name>` namespaces are composed by Crossplane and are NOT declared here — they are
+# created and garbage-collected with their GameServer.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: games
+  labels:
+    homelab.isaacwallace.dev/exposure: internal

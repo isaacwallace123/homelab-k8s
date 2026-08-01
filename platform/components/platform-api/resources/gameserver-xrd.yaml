@@ -1,0 +1,251 @@
+# =============================================================================
+# GameServer — the game hosting platform API.
+#
+# One of these is a whole game server: a namespace with isolation primitives, world
+# storage on local NVMe, a Guaranteed-QoS workload holding exclusive CPU cores, a
+# LoadBalancer address or a router registration, quiesced backups to the NAS, and an
+# idle-shutdown schedule. Adding a server is this file's worth of YAML; adding a GAME is
+# one new Composition.
+#
+# SCOPE: Cluster. Crossplane v2 defaults XRDs to Namespaced, but this composite composes a
+# Namespace, and Kubernetes does not permit a namespaced object to own a cluster-scoped
+# one. A namespaced XR would create the namespace and then leak it on delete, because
+# Crossplane garbage-collects through owner references. Cluster scope is the documented
+# answer for composites that compose cluster-scoped resources.
+#
+# NO CLAIM. Crossplane v2 removes the XR/claim split — the GameServer IS the thing you
+# create.
+#
+# The schema is the security boundary as much as the ergonomics. Images, commands, and
+# manifests are never caller-supplied: they live in the Compositions, in this repository.
+# A GameServer carries only bounded, enumerated choices.
+# =============================================================================
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: gameservers.platform.homelab.isaacwallace.dev
+spec:
+  scope: Cluster
+  group: platform.homelab.isaacwallace.dev
+  names:
+    kind: GameServer
+    plural: gameservers
+    singular: gameserver
+    shortNames:
+      - gs
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - game
+              properties:
+
+                game:
+                  type: string
+                  description: >-
+                    Which Composition family runs this server. Each family is a separate
+                    Composition selected by label.
+                  enum:
+                    - minecraft   # itzg/minecraft-server — vanilla, Paper, Fabric, Forge, modpacks
+                    - satisfactory
+                    - terraria
+                    - rust
+                    - gmod
+                    - linuxgsm    # the long tail: Valheim, Project Zomboid, ~130 others
+
+                displayName:
+                  type: string
+                  description: Human-readable name for dashboards and the MOTD.
+                  maxLength: 64
+
+                size:
+                  type: string
+                  description: >-
+                    Resource class. Maps to a fixed integer CPU count and memory in the
+                    Composition rather than being free-form, which is what keeps the
+                    namespace quota meaningful and Guaranteed QoS actually guaranteed —
+                    a fractional CPU request would silently drop the pod out of the
+                    exclusive-core allocation.
+
+                      small   2 CPU /  4Gi   Terraria, small vanilla
+                      medium  4 CPU /  8Gi   Paper, Gmod
+                      large   6 CPU / 12Gi   light modpacks, Satisfactory
+                      xl      8 CPU / 16Gi   ATM10, Rust
+                  enum: [small, medium, large, xl]
+                  default: medium
+
+                storage:
+                  type: object
+                  default: {}
+                  properties:
+                    size:
+                      type: string
+                      description: World volume size.
+                      pattern: "^[0-9]+(Mi|Gi|Ti)$"
+                      default: "20Gi"
+                    class:
+                      type: string
+                      description: >-
+                        Storage class for world data. nvme-local is strongly preferred:
+                        Longhorn acknowledges writes only after they reach remote replicas,
+                        and Minecraft's chunk saves are synchronous on the tick thread, so
+                        replication converts directly into permanent TPS loss.
+                      enum: [nvme-local, longhorn-single, longhorn-replicated]
+                      default: nvme-local
+
+                network:
+                  type: object
+                  default: {}
+                  properties:
+                    publish:
+                      type: string
+                      description: >-
+                        How players reach this server.
+
+                          loadbalancer  its own IP from the MetalLB games pool
+                          mc-router     shares one IP:25565, routed by hostname
+                                        (Minecraft Java only)
+                          none          not reachable from the LAN; for a server being
+                                        restored or migrated
+                      enum: [loadbalancer, mc-router, none]
+                      default: loadbalancer
+                    hostnames:
+                      type: array
+                      description: >-
+                        Hostnames clients connect with. Required for mc-router, which reads
+                        the hostname out of the Minecraft handshake to pick a backend.
+                      items:
+                        type: string
+                        maxLength: 253
+                      maxItems: 8
+                      default: []
+
+                backup:
+                  type: object
+                  default: {}
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    schedule:
+                      type: string
+                      description: Cron schedule for the quiesced backup to the NAS.
+                      default: "0 5 * * *"
+                      maxLength: 64
+                    retention:
+                      type: integer
+                      description: Snapshots to keep.
+                      default: 14
+                      minimum: 1
+                      maximum: 365
+
+                idle:
+                  type: object
+                  default: {}
+                  properties:
+                    shutdownAfter:
+                      type: string
+                      description: >-
+                        Scale to zero after this long with no players. Empty disables it.
+                        This is what makes a six-server fleet fit on one node — with six
+                        defined and two in use, the fleet costs the two. mc-router holds an
+                        incoming connection while a Minecraft server starts, so a player
+                        reconnecting wakes it transparently.
+                      pattern: "^$|^[0-9]+(m|h)$"
+                      default: ""
+
+                # ── game-specific blocks ────────────────────────────────────────
+                minecraft:
+                  type: object
+                  default: {}
+                  properties:
+                    type:
+                      type: string
+                      enum: [VANILLA, PAPER, FABRIC, FORGE, NEOFORGE, SPIGOT, AUTO_CURSEFORGE]
+                      default: VANILLA
+                    version:
+                      type: string
+                      description: Minecraft version, or LATEST.
+                      default: "LATEST"
+                      maxLength: 32
+                    modpack:
+                      type: string
+                      description: >-
+                        Modpack slug for AUTO_CURSEFORGE (e.g. "all-the-mods-10"). Requires
+                        a CurseForge API key in the cf-api-key secret.
+                      default: ""
+                      maxLength: 128
+                    motd:
+                      type: string
+                      default: ""
+                      maxLength: 59
+                    maxPlayers:
+                      type: integer
+                      default: 20
+                      minimum: 1
+                      maximum: 200
+                    difficulty:
+                      type: string
+                      enum: [peaceful, easy, normal, hard]
+                      default: normal
+                    gameMode:
+                      type: string
+                      enum: [survival, creative, adventure, spectator]
+                      default: survival
+
+                steam:
+                  type: object
+                  description: >-
+                    SteamCMD-based servers. appId and image are NOT free-form caller input
+                    at the fleet level — each Composition pins its own defaults; these
+                    override only within a game family that is already chosen by spec.game.
+                  default: {}
+                  properties:
+                    version:
+                      type: string
+                      description: Image tag to pin. Empty means the Composition's default.
+                      default: ""
+                      maxLength: 64
+                    extraEnv:
+                      type: object
+                      description: Game-specific environment variables (server name, seed, admin list).
+                      additionalProperties:
+                        type: string
+                      default: {}
+
+            status:
+              type: object
+              properties:
+                namespace:
+                  type: string
+                  description: The namespace composed for this server.
+                address:
+                  type: string
+                  description: The address players connect to.
+                phase:
+                  type: string
+                  description: Lifecycle phase.
+                players:
+                  type: string
+                  description: Last observed player count, when a probe is configured.
+
+      additionalPrinterColumns:
+        - name: Game
+          type: string
+          jsonPath: .spec.game
+        - name: Size
+          type: string
+          jsonPath: .spec.size
+        - name: Address
+          type: string
+          jsonPath: .status.address
+        - name: Phase
+          type: string
+          jsonPath: .status.phase

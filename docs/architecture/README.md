@@ -115,9 +115,10 @@ Three mitigations, all part of this design:
    `memory_floating_mb = memory_mb`, which disables ballooning. Setting a floor below the ceiling
    lets idle range and AI VMs hand memory back to the host. This change belongs in *those* repos —
    see [cross-lab.md](cross-lab.md) §4.
-2. **Cap the fleet in Kubernetes, not in hope.** The `games` namespace carries a `ResourceQuota`
-   sized to the game node's allocatable memory. Kubernetes then refuses to schedule the server that
-   would overcommit, instead of the kernel OOM-killing one that is already running.
+2. **Cap the fleet in Kubernetes, not in hope.** Every game pod is Guaranteed QoS with
+   `requests == limits`, so the scheduler's memory accounting is exact. When the node is full the
+   next server stays `Pending` with an `Insufficient memory` event, rather than scheduling and
+   having the kernel OOM-kill a world that is already running.
 3. **Scale idle servers to zero.** Every `GameServer` supports `idle.shutdownAfter`. With six
    servers defined and two actually in use, the fleet's real footprint is the two.
 
@@ -248,12 +249,18 @@ What changes from the previous posture is scope, not principle. Crossplane gradu
 | API | Scope | Purpose |
 | :--- | :--- | :--- |
 | `LabRun` | Cluster | Disposable scenario namespaces for the public Operations Arena (unchanged) |
-| `GameServer` | Namespaced | The game hosting fleet — see [game-platform.md](game-platform.md) |
+| `GameServer` | Cluster | The game hosting fleet — see [game-platform.md](game-platform.md) |
 
-Both are Crossplane v2 idioms: `scope: Namespaced` where possible, **no claims** (v2 removes the
-XR/claim split), and pipeline Compositions built on `function-go-templating` rather than
-several hundred lines of `patch-and-transform`. The existing `LabRun` Composition keeps
-`scope: Cluster` because it composes a `Namespace`, which a namespaced composite may not do.
+Both are Crossplane v2 idioms: **no claims** (v2 removes the XR/claim split, so the XR is what you
+create), composition selection under `spec.crossplane`, and pipeline Compositions built on
+`function-go-templating` rather than several hundred lines of `patch-and-transform`.
+
+Both are `scope: Cluster` for the same reason: each composes a `Namespace`. Crossplane v2 defaults
+XRDs to `Namespaced`, and a namespaced XR *will* create a cluster-scoped resource — but without an
+owner reference, because Kubernetes does not permit a namespaced object to own a cluster-scoped one.
+The Namespace would then survive deletion of the `GameServer` that created it, leaking a namespace
+per server. Cluster scope is the documented answer when a composite composes cluster-scoped
+resources.
 
 ### Bounded blast radius
 

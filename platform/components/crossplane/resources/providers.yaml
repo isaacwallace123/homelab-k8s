@@ -1,0 +1,104 @@
+# =============================================================================
+# Crossplane providers and composition functions.
+#
+# SYNC ORDERING MATTERS HERE. A ProviderConfig's CRD ships *inside* the provider package,
+# so it does not exist until Crossplane has installed that package. Intra-app sync waves
+# apply Providers, Functions, and RBAC first (wave 1); the ProviderConfigs (wave 3) then
+# reconcile on a later pass once their CRDs are registered. Without this the whole sync
+# aborts atomically on an unknown kind and nothing installs at all.
+#
+# Package versions are Crossplane Package refs — OCI images pulled by Crossplane, not Helm.
+# Verify against the crossplane-contrib releases before a fresh bootstrap.
+# =============================================================================
+
+# ── provider-kubernetes ───────────────────────────────────────────────────────
+# Manages in-cluster Kubernetes objects as composed resources.
+#
+# The runtime ServiceAccount name is fixed so the ClusterRoleBinding can grant it exactly
+# what it needs — the default generated name would make that binding unstable.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: provider-kubernetes
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes:v1.2.1
+  runtimeConfigRef:
+    name: provider-kubernetes
+---
+# ── provider-helm ─────────────────────────────────────────────────────────────
+# Lets a Composition manage a Helm release as a composed resource. The Minecraft
+# Composition uses this: itzg's chart already handles modpack download, EULA, JVM flags,
+# and RCON through values alone, so composing a Release is far less code — and far less to
+# get wrong — than rendering a StatefulSet by hand.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-helm
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: provider-helm
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-helm
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/provider-helm:v0.20.4
+  runtimeConfigRef:
+    name: provider-helm
+---
+# ── composition functions ─────────────────────────────────────────────────────
+# patch-and-transform drives the existing LabRun Composition.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-patch-and-transform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.10.7
+---
+# go-templating drives the GameServer Compositions.
+#
+# The LabRun Composition is ~400 lines of patch-and-transform for one workload, and each
+# new field costs another six-line patch block. A GameServer composes a namespace, quota,
+# limit range, PVC, workload, service, backup job, and network policy — expressed as
+# patches that would be unreadable. Templating states it as what it is: a manifest with
+# variables in it.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-go-templating
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.10.0
+---
+# Marks composed resources ready once their underlying objects are, so an XR does not
+# report Ready before what it composed actually is.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-auto-ready
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-auto-ready:v0.5.0

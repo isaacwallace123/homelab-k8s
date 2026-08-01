@@ -1,0 +1,10 @@
+namespace: games
+image: itzg/mc-router:latest
+
+# Pinned: this address is what *.mc.isaacwallace.dev resolves to, so it must not move when
+# the pool hands out addresses to servers.
+address: "192.168.0.210"
+
+# Minecraft's default port is scanned constantly. mc-router already drops connections that
+# do not name a mapped host; this bounds how fast anyone can try.
+connectionRateLimit: 20
