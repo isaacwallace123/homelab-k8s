@@ -1,0 +1,159 @@
+---
+# =============================================================================
+# join-agents.yml — Install k3s on worker nodes and join them to the cluster.
+#
+#   ansible-playbook playbooks/join-agents.yml
+#   ansible-playbook playbooks/join-agents.yml --limit k8s-game-01
+#
+# Per-node kubelet arguments come from the inventory, which Terraform generates from
+# var.nodes. That matters most for the game node: cpu-manager-policy=static CANNOT be
+# enabled later on a node that already has Guaranteed pods without draining it first, so
+# it has to be set at join time. See docs/architecture/game-platform.md §5.1.
+# =============================================================================
+
+- name: Prepare worker nodes
+  hosts: agent
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install node prerequisites
+      ansible.builtin.apt:
+        name:
+          - open-iscsi # Longhorn block volumes
+          - nfs-common # TrueNAS NFS mounts
+          - jq
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure iscsid is running
+      ansible.builtin.systemd:
+        name: iscsid
+        state: started
+        enabled: true
+
+    # ── game node: dedicated NVMe for world data ─────────────────────────────
+    # local-path provisions into this directory. Worlds live on local NVMe rather than
+    # Longhorn because replication puts network latency into Minecraft's synchronous chunk
+    # saves, which run on the tick thread. See docs/architecture/storage.md.
+    - name: Create the local-path data directory
+      ansible.builtin.file:
+        path: /var/lib/rancher/k3s/storage
+        state: directory
+        mode: "0755"
+
+    - name: Format the data disk
+      community.general.filesystem:
+        fstype: ext4
+        dev: /dev/sdb
+      when: node_pool | default('') == 'games'
+
+    - name: Mount the data disk at the local-path root
+      ansible.posix.mount:
+        path: /var/lib/rancher/k3s/storage
+        src: /dev/sdb
+        fstype: ext4
+        opts: defaults,noatime
+        state: mounted
+      when: node_pool | default('') == 'games'
+
+- name: Join workers to the cluster
+  hosts: agent
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check whether k3s is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Skip nodes that are already joined
+      ansible.builtin.meta: end_host
+      when: k3s_binary.stat.exists
+
+    - name: Ensure the k3s config directory exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Write the agent config
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+        content: |
+          # Managed by Ansible — provisioning/ansible/playbooks/join-agents.yml
+          server: "https://{{ primary_server_ip }}:6443"
+          token: "{{ k3s_token }}"
+          node-label:
+            - "topology.kubernetes.io/zone={{ node_zone }}"
+            - "homelab.isaacwallace.dev/pool={{ node_pool }}"
+          {% for k, v in (node_labels | default({})).items() %}
+            - "{{ k }}={{ v }}"
+          {% endfor %}
+          {% if node_taints | default([]) | length > 0 %}
+          node-taint:
+          {% for t in node_taints %}
+            - "{{ t }}"
+          {% endfor %}
+          {% endif %}
+          {% if node_kubelet_args | default([]) | length > 0 %}
+          kubelet-arg:
+          {% for a in node_kubelet_args %}
+            - "{{ a }}"
+          {% endfor %}
+          {% endif %}
+
+    - name: Install k3s as an agent
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          curl -sfL https://get.k3s.io \
+            | INSTALL_K3S_VERSION="{{ k3s_version }}" INSTALL_K3S_EXEC="agent" sh -
+        executable: /bin/bash
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for the node to report Ready
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl get node {{ inventory_hostname }}
+          -o jsonpath={.status.conditions[?(@.type=="Ready")].status}
+      delegate_to: "{{ groups['server'][0] }}"
+      become: true
+      register: node_ready
+      changed_when: false
+      retries: 30
+      delay: 10
+      until: node_ready.stdout == "True"
+
+- name: Verify exclusive CPU allocation on the game node
+  hosts: agent
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Skip non-game nodes
+      ansible.builtin.meta: end_host
+      when: node_pool | default('') != 'games'
+
+    - name: Read the kubelet CPU manager state
+      ansible.builtin.slurp:
+        src: /var/lib/kubelet/cpu_manager_state
+      register: cpu_state
+      failed_when: false
+
+    - name: Confirm the static policy is active
+      # If this is not "static", every performance assumption in the game platform design
+      # is void: pods get shared CPUs, CFS throttling applies, and tick threads migrate
+      # between cores. Better to fail here than to find out from a laggy server.
+      ansible.builtin.assert:
+        that:
+          - cpu_state.content is defined
+          - '"static" in (cpu_state.content | b64decode)'
+        fail_msg: >-
+          cpu_manager_state on {{ inventory_hostname }} does not show the static policy.
+          The kubelet arguments did not take. Check /etc/rancher/k3s/config.yaml and
+          `journalctl -u k3s-agent`.
+        success_msg: "CPU manager static policy is active on {{ inventory_hostname }}."

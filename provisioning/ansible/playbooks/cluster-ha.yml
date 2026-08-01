@@ -1,0 +1,219 @@
+---
+# =============================================================================
+# cluster-ha.yml — Convert the single-server cluster to a 3-node HA control plane.
+#
+#   ansible-playbook playbooks/cluster-ha.yml
+#
+# THIS IS THE ONE STEP WITH API DOWNTIME. Read docs/architecture/migration.md §2 first.
+#
+# The existing cluster was installed as a single k3s server, which means its datastore is
+# embedded SQLite, not etcd. You cannot add servers to a SQLite cluster. The conversion is
+# a restart of the primary server with --cluster-init, which migrates SQLite to embedded
+# etcd in place, after which the other servers can join.
+#
+# The API server is down for roughly 30-60 seconds during that restart. Running workloads
+# are NOT interrupted -- kubelets keep pods alive without an API server. Only scheduling,
+# scaling, and kubectl pause.
+# =============================================================================
+
+- name: Pre-flight checks
+  hosts: server
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Require an odd number of servers
+      ansible.builtin.assert:
+        that: (groups['server'] | length) % 2 == 1
+        fail_msg: >-
+          {{ groups['server'] | length }} control planes configured. etcd needs an odd
+          number to form a quorum. Fix var.nodes in terraform.tfvars and regenerate the
+          inventory.
+      run_once: true
+
+    - name: Require the k3s join token
+      ansible.builtin.assert:
+        that: k3s_token is defined and k3s_token | length > 0
+        fail_msg: >-
+          k3s_token is not set. Pass it in:
+            ansible-playbook playbooks/cluster-ha.yml -e "k3s_token=$(...)"
+          or export K3S_TOKEN and let group_vars pick it up.
+      run_once: true
+
+    - name: Detect whether k3s is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Detect the current datastore backend
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/db/etcd
+      register: etcd_dir
+      when: k3s_binary.stat.exists
+
+    - name: Record conversion state
+      ansible.builtin.set_fact:
+        k3s_installed: "{{ k3s_binary.stat.exists }}"
+        already_etcd: "{{ k3s_binary.stat.exists and (etcd_dir.stat.isdir | default(false)) }}"
+
+# -----------------------------------------------------------------------------
+- name: Convert the primary server to embedded etcd
+  hosts: server
+  become: true
+  serial: 1
+  any_errors_fatal: true
+
+  tasks:
+    - name: Skip hosts that are not the primary server
+      ansible.builtin.meta: end_host
+      when: ansible_host != primary_server_ip
+
+    - name: Snapshot the datastore before converting
+      ansible.builtin.command:
+        cmd: tar czf /var/lib/rancher/k3s-pre-ha-{{ ansible_date_time.epoch }}.tar.gz -C /var/lib/rancher k3s
+        creates: /var/lib/rancher/k3s-pre-ha-{{ ansible_date_time.epoch }}.tar.gz
+      when: k3s_installed | bool
+
+    - name: Ensure the k3s config directory exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Write the k3s server config
+      # cluster-init here is the migration itself. k3s reads /etc/rancher/k3s/config.yaml
+      # on every start, converts the SQLite datastore to embedded etcd, and from then on
+      # accepts joining servers.
+      #
+      # This is done through config.yaml rather than by editing the systemd unit: the unit
+      # is rewritten by the k3s installer on every upgrade, so a unit edit silently
+      # disappears the next time k3s is updated. config.yaml survives.
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+        content: |
+          # Managed by Ansible — provisioning/ansible/playbooks/cluster-ha.yml
+          cluster-init: true
+          token: "{{ k3s_token }}"
+          tls-san:
+          {% for h in groups['server'] %}
+            - "{{ hostvars[h].ansible_host }}"
+          {% endfor %}
+          disable:
+            - traefik
+            - servicelb
+            - local-storage
+          node-label:
+            - "topology.kubernetes.io/zone={{ node_zone }}"
+            - "homelab.isaacwallace.dev/pool={{ node_pool }}"
+      register: primary_config
+
+    - name: Restart k3s to perform the SQLite to etcd migration
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+        daemon_reload: true
+      when: primary_config.changed
+
+    - name: Wait for the API server to come back
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 6443
+        delay: 5
+        timeout: 300
+
+    - name: Confirm the datastore is now etcd
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/db/etcd
+      register: etcd_after
+      retries: 12
+      delay: 10
+      until: etcd_after.stat.isdir | default(false)
+
+    - name: Fail loudly if the migration did not happen
+      ansible.builtin.assert:
+        that: etcd_after.stat.isdir | default(false)
+        fail_msg: >-
+          k3s restarted but /var/lib/rancher/k3s/server/db/etcd does not exist, so the
+          datastore is still SQLite and no server can join. Check `journalctl -u k3s`.
+          Restore from the snapshot in /var/lib/rancher/ before retrying.
+
+# -----------------------------------------------------------------------------
+- name: Join the remaining control planes
+  hosts: server
+  become: true
+  serial: 1 # one at a time: joining two servers at once can fail to reach quorum
+
+  tasks:
+    - name: Skip the primary server
+      ansible.builtin.meta: end_host
+      when: ansible_host == primary_server_ip
+
+    - name: Skip nodes that already run k3s
+      ansible.builtin.meta: end_host
+      when: k3s_installed | bool
+
+    - name: Ensure the k3s config directory exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Write the joining server config
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+        content: |
+          # Managed by Ansible — provisioning/ansible/playbooks/cluster-ha.yml
+          server: "https://{{ primary_server_ip }}:6443"
+          token: "{{ k3s_token }}"
+          tls-san:
+          {% for h in groups['server'] %}
+            - "{{ hostvars[h].ansible_host }}"
+          {% endfor %}
+          disable:
+            - traefik
+            - servicelb
+            - local-storage
+          node-label:
+            - "topology.kubernetes.io/zone={{ node_zone }}"
+            - "homelab.isaacwallace.dev/pool={{ node_pool }}"
+
+    - name: Install k3s as a joining server
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          curl -sfL https://get.k3s.io \
+            | INSTALL_K3S_VERSION="{{ k3s_version }}" INSTALL_K3S_EXEC="server" sh -
+        executable: /bin/bash
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for this server to report Ready
+      ansible.builtin.command:
+        cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath={.status.conditions[?(@.type=="Ready")].status}
+      register: node_ready
+      changed_when: false
+      retries: 30
+      delay: 10
+      until: node_ready.stdout == "True"
+
+- name: Report cluster state
+  hosts: server
+  become: true
+  gather_facts: false
+  run_once: true
+
+  tasks:
+    - name: Skip all but the primary server
+      ansible.builtin.meta: end_host
+      when: ansible_host != primary_server_ip
+
+    - name: List control planes
+      ansible.builtin.command: k3s kubectl get nodes -l node-role.kubernetes.io/control-plane
+      register: cp_nodes
+      changed_when: false
+
+    - name: Show
+      ansible.builtin.debug:
+        msg: "{{ cp_nodes.stdout_lines }}"

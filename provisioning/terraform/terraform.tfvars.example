@@ -1,23 +1,182 @@
-# Copy this to terraform.tfvars and fill in your values.
-# terraform.tfvars is gitignored — never commit it.
+# Copy to terraform.tfvars (gitignored) and fill in the secrets.
+#
+# The node map below IS the cluster topology. Ansible's inventory is generated from it, so
+# this file is the only place node placement is declared.
 
 proxmox_endpoint  = "https://192.168.0.254:8006"
 proxmox_api_token = "root@pam!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-proxmox_ssh_user  = "root"
+ssh_public_key    = "ssh-ed25519 AAAA... isaac@workstation"
+vm_password       = "changeme"
+k3s_token         = "generate with: openssl rand -base64 64"
 
-# The VM ID of your Ubuntu 24.04 cloud-init template on Proxmox.
-# To create one:
-#   wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-#   qm create 9000 --name ubuntu-2404-template --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
-#   qm importdisk 9000 noble-server-cloudimg-amd64.img local-lvm
-#   qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
-#   qm set 9000 --ide2 local-lvm:cloudinit --boot c --bootdisk scsi0 --serial0 socket --vga serial0
-#   qm set 9000 --agent enabled=1
-#   qm template 9000
-vm_template_id = 9000
+# Ubuntu 24.04 cloud-init template VMID on each Proxmox host. Templates are node-local.
+templates = {
+  pve2     = 9000
+  cyberlab = 9000
+}
 
-# Your SSH public key — injected into VMs via cloud-init
-ssh_public_key = "ssh-ed25519 AAAA... isaac@homelab"
+# =============================================================================
+# Cluster topology — see docs/architecture/README.md §3
+#
+# 3 control planes: 2 on pve2, 1 on cyberlab. With only two physical hosts this buys
+# VM-level HA (rolling upgrades, a single VM failing), not host-level HA. Quorum sits on
+# pve2 deliberately: pve2 also runs TrueNAS, so losing it means storage is gone anyway,
+# while cyberlab sees far more churn from range work.
+#
+# pve2 MEMORY BUDGET — 64 GB total, and this rebalance is deliberately net-zero:
+#
+#   before:  cp-01  6 + worker-apps 32 + worker-infra  8            = 46 GB
+#   after:   cp-01  6 + cp-02  4 + store-01 24 + infra-01 12        = 46 GB
+#
+# The new control plane is paid for by trimming the media worker (which was allocated 32 GB
+# but requesting 5.5 GB) and giving 4 GB of it to the infra worker, which actually runs
+# close to its limits. Do not add a node here without taking the memory from somewhere.
+#
+# DISK SIZES for existing VMs must match what is already provisioned. Terraform can grow a
+# disk but not shrink one, and a shrink forces replacement — which would destroy the node.
+# =============================================================================
+nodes = {
 
-# VM default password (for console access — SSH key is preferred)
-vm_password = "changeme"
+  # ── pve2 — R5 5500, 6c/12t, 64 GB. Storage and quorum. ─────────────────────
+  "k8s-cp-01" = {
+    host        = "pve2"
+    vmid        = 104
+    ip          = "192.168.0.10"
+    role        = "server"
+    pool        = "control"
+    cores       = 2
+    memory      = 6144
+    disk_size   = 80      # existing size — must not shrink
+    machine     = "i440fx" # existing VM — changing this would force replacement
+    description = "k3s control plane — cluster-init, etcd voting member"
+    tags        = ["control-plane"]
+  }
+
+  "k8s-cp-02" = {
+    host        = "pve2"
+    vmid        = 105
+    ip          = "192.168.0.11"
+    role        = "server"
+    pool        = "control"
+    cores       = 2
+    memory      = 4096
+    disk_size   = 60
+    description = "k3s control plane — etcd voting member"
+    tags        = ["control-plane"]
+  }
+
+  # Media and NAS-adjacent workloads. Holds the Intel Arc A380 for Plex transcoding —
+  # hostpci is attached through the Proxmox UI and is ignored by Terraform.
+  "k8s-store-01" = {
+    host        = "pve2"
+    vmid        = 107
+    ip          = "192.168.0.12"
+    role        = "agent"
+    pool        = "storage"
+    cores       = 6
+    memory      = 24576
+    disk_size   = 150
+    description = "k3s worker — media, Plex (Arc A380), Longhorn replicas"
+    tags        = ["worker", "storage", "gpu"]
+    labels = {
+      "homelab.isaacwallace.dev/gpu"   = "intel-arc"
+      "node-role.kubernetes.io/worker" = "true"
+    }
+  }
+
+  "k8s-infra-01" = {
+    host        = "pve2"
+    vmid        = 110
+    ip          = "192.168.0.13"
+    role        = "agent"
+    pool        = "infra"
+    cores       = 4
+    memory      = 12288
+    disk_size   = 100
+    description = "k3s worker — MetalLB, Longhorn, monitoring, Crossplane"
+    tags        = ["worker", "infra"]
+    labels = {
+      "node-role.kubernetes.io/worker" = "true"
+    }
+  }
+
+  # ── cyberlab — i7-13700KF, 8P+8E/24t, 128 GB. Compute. ─────────────────────
+  # These VMs sit on vmbr0 (the LAN). They are never attached to a range bridge.
+  "k8s-cp-03" = {
+    host            = "cyberlab"
+    vmid            = 801
+    ip              = "192.168.0.14"
+    role            = "server"
+    pool            = "control"
+    cores           = 2
+    memory          = 4096
+    memory_floating = 2048 # ballooning matters on this host — see the memory budget
+    disk_size       = 60
+    description     = "k3s control plane — etcd voting member (minority host)"
+    tags            = ["control-plane"]
+  }
+
+  # The game node.
+  #
+  # cpu_affinity pins it to P-core threads only. Kubernetes counts 24 logical CPUs and
+  # cannot tell a P-core from an E-core, so a Minecraft tick thread would otherwise land on
+  # an E-core — a large and completely invisible TPS loss. 0-11 is P-cores 0-5 (both threads
+  # each), leaving P-cores 6-7 and every E-core for the range, the AI nodes, and the host.
+  # VERIFY the numbering first:  lscpu -e=CPU,CORE,MAXMHZ | sort -k3 -rn
+  #
+  # memory_floating is deliberately absent: this node's RAM is genuinely resident in JVM
+  # heaps and world state, and ballooning it causes stalls.
+  "k8s-game-01" = {
+    host         = "cyberlab"
+    vmid         = 802
+    ip           = "192.168.0.15"
+    role         = "agent"
+    pool         = "games"
+    cores        = 12
+    memory       = 57344
+    disk_size    = 100
+    cpu_affinity = "0-11"
+    description  = "k3s worker — game server fleet, exclusive P-cores"
+    tags         = ["worker", "games"]
+
+    # World data on a dedicated NVMe. Verify the datastore name on the cyberlab host.
+    data_disk = {
+      datastore = "secondary"
+      size      = 400
+    }
+
+    labels = {
+      "node-role.kubernetes.io/worker" = "true"
+    }
+
+    # Nothing but game workloads may land here — anything else would be migrated off the
+    # exclusively allocated cores anyway.
+    taints = ["homelab.isaacwallace.dev/pool=games:NoSchedule"]
+
+    # The static CPU manager policy is what actually grants exclusive cores to Guaranteed
+    # pods. It REQUIRES a non-zero reservation, and it cannot be enabled on a node that
+    # already has Guaranteed pods without draining — which is why this node is new rather
+    # than repurposed.
+    kubelet_args = [
+      "cpu-manager-policy=static",
+      "kube-reserved=cpu=1000m,memory=1Gi",
+      "system-reserved=cpu=500m,memory=512Mi",
+    ]
+  }
+
+  # ── Migration phase 5. Enable only once the memory budget allows. ──────────
+  # "k8s-work-01" = {
+  #   host            = "cyberlab"
+  #   vmid            = 803
+  #   ip              = "192.168.0.16"
+  #   role            = "agent"
+  #   pool            = "platform"
+  #   cores           = 4
+  #   memory          = 12288
+  #   memory_floating = 4096
+  #   disk_size       = 100
+  #   description     = "k3s worker — Crossplane runs, arena workloads"
+  #   tags            = ["worker", "platform"]
+  #   labels          = { "node-role.kubernetes.io/worker" = "true" }
+  # }
+}

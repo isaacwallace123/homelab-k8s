@@ -1,0 +1,80 @@
+---
+# =============================================================================
+# node-topology.yml — Apply zone, pool, and role labels plus taints to EXISTING nodes.
+#
+#   ansible-playbook playbooks/node-topology.yml
+#
+# New nodes get their labels at join time from config.yaml (join-agents.yml). This
+# playbook exists for nodes that already run k3s and cannot be relabelled by reinstalling
+# — the three original ones.
+#
+# Zone labels are the point of the two-host cluster: topology.kubernetes.io/zone is the
+# PHYSICAL Proxmox host, so Longhorn replica anti-affinity and pod topology spread
+# constraints finally express a real failure domain rather than "a different VM on the
+# same box". See docs/architecture/README.md §4.
+# =============================================================================
+
+- name: Label and taint cluster nodes
+  hosts: server
+  become: true
+  gather_facts: false
+
+  vars:
+    kubectl: k3s kubectl
+
+    # Inventory hostnames and Kubernetes node names disagree until the optional node
+    # recycle in migration phase 6: Terraform renamed the Proxmox VM, but the Kubernetes
+    # node name comes from the OS hostname set at k3s install time. Nothing depends on
+    # either name — placement is entirely by label — so the mapping lives here rather than
+    # forcing a disruptive rename.
+    node_name_map:
+      k8s-cp-01: k3s-control-plane
+      k8s-store-01: k3s-worker-apps
+      k8s-infra-01: k3s-worker-infra
+
+  tasks:
+    - name: Run only against the primary server
+      ansible.builtin.meta: end_host
+      when: ansible_host != primary_server_ip
+
+    - name: Fetch the nodes that actually exist
+      ansible.builtin.command: "{{ kubectl }} get nodes -o jsonpath={.items[*].metadata.name}"
+      register: existing_nodes
+      changed_when: false
+
+    - name: Apply topology and per-node labels
+      ansible.builtin.command: >-
+        {{ kubectl }} label node {{ node_name_map[item] | default(item) }}
+        topology.kubernetes.io/zone={{ hostvars[item].node_zone }}
+        homelab.isaacwallace.dev/pool={{ hostvars[item].node_pool }}
+        {% for k, v in (hostvars[item].node_labels | default({})).items() %}{{ k }}={{ v }} {% endfor %}
+        --overwrite
+      loop: "{{ groups['k3s_cluster'] }}"
+      loop_control:
+        label: "{{ node_name_map[item] | default(item) }}"
+      when: (node_name_map[item] | default(item)) in existing_nodes.stdout.split()
+      register: label_result
+      changed_when: "'not labeled' not in label_result.stdout"
+
+    - name: Apply taints
+      ansible.builtin.command: >-
+        {{ kubectl }} taint node {{ node_name_map[item.0] | default(item.0) }}
+        {{ item.1 }} --overwrite
+      loop: "{{ groups['k3s_cluster'] | subelements('node_taints', skip_missing=True) }}"
+      loop_control:
+        label: "{{ node_name_map[item.0] | default(item.0) }} -> {{ item.1 }}"
+      when: (node_name_map[item.0] | default(item.0)) in existing_nodes.stdout.split()
+      register: taint_result
+      changed_when: "'already has' not in taint_result.stderr"
+
+    - name: Show the resulting topology
+      ansible.builtin.command: >-
+        {{ kubectl }} get nodes
+        -L topology.kubernetes.io/zone
+        -L homelab.isaacwallace.dev/pool
+      register: topology
+      changed_when: false
+
+    - name: Topology
+      ansible.builtin.debug:
+        msg: "{{ topology.stdout_lines }}"

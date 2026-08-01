@@ -1,0 +1,11 @@
+---
+# Cluster-wide Ansible variables.
+#
+# The k3s join token is a secret and is NOT stored here. Provide it at run time:
+#     ansible-playbook playbooks/cluster-ha.yml -e "k3s_token=$K3S_TOKEN"
+# or export K3S_TOKEN and let the lookup below pick it up.
+k3s_token: "{{ lookup('env', 'K3S_TOKEN') }}"
+
+# Pinned deliberately. The live cluster runs v1.34.5+k3s1; joining nodes on a newer minor
+# than the servers is unsupported, so bump the servers first.
+k3s_version: v1.34.5+k3s1

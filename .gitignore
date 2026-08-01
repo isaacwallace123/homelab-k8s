@@ -14,3 +14,6 @@ provisioning/terraform/.terraform.lock.hcl
 provisioning/terraform/.terraform.tfstate.lock.info
 provisioning/terraform/terraform.tfvars
 provisioning/terraform/terraform.tfstate*
+
+# Terraform generates this from var.nodes; tfvars is the single source of truth.
+provisioning/ansible/inventory.generated.yml
