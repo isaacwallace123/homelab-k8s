@@ -101,7 +101,7 @@ resource "proxmox_virtual_environment_vm" "node" {
     user_account {
       username = var.ci_user
       password = var.vm_password
-      keys     = [var.ssh_public_key]
+      keys     = var.ssh_public_keys
     }
   }
 

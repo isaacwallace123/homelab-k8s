@@ -73,9 +73,20 @@ variable "ci_user" {
   default     = "isaac"
 }
 
-variable "ssh_public_key" {
-  description = "SSH public key injected into nodes via cloud-init"
-  type        = string
+variable "ssh_public_keys" {
+  description = <<-EOT
+    SSH public keys injected into every node via cloud-init.
+
+    A list, not a single key, because the original single key's private half does not exist
+    on the machine that runs Ansible — which made the first two nodes built from it
+    unreachable. Every key that needs to administer a node belongs here.
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.ssh_public_keys) > 0
+    error_message = "At least one SSH public key is required, or the nodes are unreachable."
+  }
 }
 
 variable "vm_password" {
