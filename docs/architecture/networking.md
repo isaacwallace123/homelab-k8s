@@ -10,10 +10,12 @@ below is static or MetalLB-owned.
 | `.1` | Router | — | Gateway |
 | `.10 – .19` | k8s nodes | Static (cloud-init) | Both Proxmox hosts |
 | `.100 – .199` | Proxmox hosts, lab VMs | Static | cyberlab range, ailab, TrueNAS |
-| `.201 – .209` | MetalLB `platform-pool` | Pinned | Gateways, ArgoCD |
-| `.210 – .219` | MetalLB `games-pool` | **Auto-assigned** | One IP per published game server |
-| `.220 – .239` | MetalLB `services-pool` | Pinned | Dashboards, media, existing services |
-| `.240 – .250` | MetalLB `services-pool` | Pinned | Monitoring, spare |
+| `.201 – .209` | MetalLB `platform-pool` | Pinned | Gateways, ArgoCD, AdGuard |
+| `.210 – .219` | MetalLB `games-pool` | **Auto-assigned** | `.210` is pinned to mc-router; the rest are one per published game server |
+| `.220 – .250` | MetalLB `services-pool` | Pinned | Dashboards, media, monitoring, spare |
+
+Currently allocated in `platform-pool`: `.201` internal gateway, `.202` AdGuard, `.203` ArgoCD,
+`.204` edge gateway (new), `.205` games-web gateway (new).
 
 `.210–.219` was previously excluded with a comment reserving it for "the other Proxmox k8s/agones
 cluster". No such cluster exists — the k8s nodes live at `.10–.13`. The range is reclaimed for the
@@ -58,9 +60,16 @@ One `GatewayClass` (`envoy`), three `Gateway` objects with distinct addresses an
 
 | Gateway | Address | Listeners | Purpose |
 | :--- | :--- | :--- | :--- |
-| `edge` | `.201` | HTTP :80 | Public traffic arriving through the Cloudflare Tunnel, which terminates TLS |
-| `internal` | `.202` | HTTP :80, HTTPS :443 (`*.lan`), TLS passthrough :443 (`argocd.lan`) | LAN services with cert-manager CA certs |
-| `games-web` | `.203` | HTTP :80, HTTPS :443 (`*.games.lan`) | Dynmap, admin panels, Satisfactory's web UI |
+| `envoy-gateway` | `.201` | HTTP :80, HTTPS :443 (`*.lan`), TLS passthrough :443 (`argocd.lan`) | LAN services with cert-manager CA certs — the existing gateway, unchanged |
+| `edge` | `.204` | HTTP :80 | Public traffic arriving through the Cloudflare Tunnel, which terminates TLS |
+| `games-web` | `.205` | HTTP :80, HTTPS :443 (`*.games.lan`) | Dynmap, admin panels, Satisfactory's web UI |
+
+The internal gateway keeps its existing name and address. Renaming it would recreate the Service,
+move the IP, and break every AdGuard override and the tunnel origin at once — `edge` and
+`games-web` are purely additive, and public routes move onto `edge` one at a time.
+
+`.202` and `.203` are **not free**: `.202` is AdGuard, which is also the nameserver every node is
+configured with, and `.203` is the ArgoCD LoadBalancer.
 
 Splitting `edge` from `internal` matters: the previous single gateway mixed tunnel-facing HTTP with
 LAN TLS on one listener set, so any route misconfiguration could expose a `.lan`-only service
@@ -79,8 +88,8 @@ destroys client source IPs).
 
 | Zone | Resolver | Points at |
 | :--- | :--- | :--- |
-| `*.lan` | AdGuard Home | `.202` (internal gateway) |
-| `*.games.lan` | AdGuard Home | `.203` (games-web gateway) |
+| `*.lan` | AdGuard Home | `.201` (internal gateway) |
+| `*.games.lan` | AdGuard Home | `.205` (games-web gateway) |
 | `*.mc.isaacwallace.dev` | Public DNS | `.210` (mc-router) via port-forward or tunnel |
 | `*.isaacwallace.dev` | Cloudflare | Tunnel → `edge` gateway |
 

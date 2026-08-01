@@ -4,13 +4,25 @@ Extended documentation for the homelab-k8s platform.
 
 ## Contents
 
+### `architecture/` — start here
+
+The current design: what runs where, which layer owns which decision, and why.
+
+| File | Contents |
+| :--- | :--- |
+| [architecture/README.md](architecture/README.md) | Topology across both Proxmox hosts, node pools, repo layout, Crossplane's position, the memory budget |
+| [architecture/networking.md](architecture/networking.md) | Address plan, MetalLB pools and per-pool speakers, the three Gateways, DNS |
+| [architecture/storage.md](architecture/storage.md) | The four storage classes and why game worlds are deliberately not replicated |
+| [architecture/game-platform.md](architecture/game-platform.md) | Game server hosting — what was chosen, what was rejected, and the four things that actually decide performance |
+| [architecture/cross-lab.md](architecture/cross-lab.md) | How homelab, cyberlab, and ailab connect without merging ownership |
+| [architecture/migration.md](architecture/migration.md) | Six-phase rollout, the rename hazard, and the rollback for each phase |
+
 ### Shared context
 
 | File | Contents |
 | :--- | :--- |
 | [shared-server-context.md](shared-server-context.md) | Physical server inventory, lab boundaries, and the migration path from two shared servers to one server per lab |
 | [lab-organization-and-kubernetes-strategy.md](lab-organization-and-kubernetes-strategy.md) | Federated lab control-plane model, Kubernetes boundaries, Crossplane posture, and future server layout |
-| [gitops-organization.md](gitops-organization.md) | App-of-Apps structure, descriptor contract, service onboarding, and when to revisit the deployment engine |
 | [recovery-and-operations-drills.md](recovery-and-operations-drills.md) | Recovery drills, backup checks, alerts, and shared operations evidence to add |
 
 ### `backstage/catalog/`
@@ -33,7 +45,7 @@ Architecture diagrams in Mermaid format. Render with any Mermaid-compatible tool
 | :--- | :--- |
 | [homelab-architecture.mermaid](code/homelab-architecture.mermaid) | Physical → VM → cluster → external layers |
 | [cluster.mermaid](code/cluster.mermaid) | Full namespace-level cluster topology with traffic flows |
-| [argo-architecture.mermaid](code/argo-architecture.mermaid) | ArgoCD GitOps sync chain — root app → ApplicationSets → manifests → sync waves |
+| [argo-architecture.mermaid](code/argo-architecture.mermaid) | ArgoCD GitOps sync chain — **stale**, still shows the ApplicationSet layout replaced by the platform chart |
 | [observability.mermaid](code/observability.mermaid) | Metrics/logs pipeline — scrape sources → Prometheus/Loki → alert rules → Alertmanager → ntfy |
 
 ### `images/`

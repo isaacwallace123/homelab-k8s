@@ -1,0 +1,13 @@
+# Everything in this repo is consumed by Linux tooling — ArgoCD, Helm, kubeconform,
+# yamllint, Ansible, and shell scripts. Pin LF so that editing on Windows cannot commit
+# CRLF, which yamllint rejects outright and which makes `chmod +x` scripts fail to run.
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.tpl    text eol=lf
+*.tf     text eol=lf
+*.tfvars text eol=lf
+*.sh     text eol=lf
+*.py     text eol=lf
+*.md     text eol=lf
+*.json   text eol=lf
+*.cfg    text eol=lf

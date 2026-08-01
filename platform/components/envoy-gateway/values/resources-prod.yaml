@@ -3,6 +3,9 @@
 # `envoy-gateway` keeps its existing name and address (.201). Renaming it would recreate
 # the Service, move the IP, and break every AdGuard override and the Cloudflare Tunnel
 # origin at once. It is the INTERNAL gateway; `edge` and `games-web` are additive.
+#
+# .202 and .203 are NOT free: .202 is AdGuard (which is also the nameserver every node is
+# configured with) and .203 is the ArgoCD LoadBalancer. The new gateways take .204/.205.
 
 namespace: networking
 gatewayClassName: envoy
@@ -55,7 +58,7 @@ gateways:
   # nothing routes to it until they are moved.
   - name: edge
     pool: platform-pool
-    address: 192.168.0.202
+    address: 192.168.0.204
     listeners:
       - name: http
         protocol: HTTP
@@ -67,7 +70,7 @@ gateways:
   # Web surfaces only. Game protocol traffic never passes through a Gateway.
   - name: games-web
     pool: platform-pool
-    address: 192.168.0.203
+    address: 192.168.0.205
     listeners:
       - name: http
         protocol: HTTP

@@ -23,27 +23,52 @@ jobs:
           tar xzf /tmp/kubeconform.tar.gz -C /tmp
           sudo mv /tmp/kubeconform /usr/local/bin/
 
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+
       - name: Install Python validators
-        run: pip install yamllint pyyaml jsonschema
+        run: pip install yamllint pyyaml
 
       - name: Lint YAML syntax
+        # platform/**/templates is excluded: those are Helm templates, not YAML, and a
+        # linter reading `{{- range }}` as a document is noise rather than signal.
         run: |
           yamllint -d '{extends: relaxed, rules: {line-length: {max: 200}}}' \
-            manifests/ argocd-apps/ categories/ bootstrap/
+            bootstrap/ platform/values/ platform/components/*/values/
+          find platform/components -path '*/templates' -prune -o -name '*.yaml' -print \
+            | xargs yamllint -d '{extends: relaxed, rules: {line-length: {max: 200}}}'
 
-      - name: Validate GitOps descriptors
-        run: python scripts/validate-gitops.py
+      - name: Render the platform chart and check every component resolves
+        # Catches a values entry pointing at a directory that does not exist, a templated
+        # component missing its Chart.yaml or env values file, and any template error.
+        run: ./scripts/validate-platform.sh
+
+      - name: Test-render the GameServer Compositions
+        # function-go-templating uses the same engine as Helm, so the inline templates can
+        # be rendered against mock composites. Without this a broken Composition is only
+        # discovered when it silently composes nothing.
+        run: ./scripts/test-compositions.sh
 
       - name: Validate Kubernetes manifests
         run: |
+          helm template platform platform -f platform/values/values-prod.yaml > /tmp/apps.yaml
           kubeconform \
             -strict \
             -ignore-missing-schemas \
             -summary \
-            -skip "SealedSecret,Application,ApplicationSet,AppProject,ClusterIssuer,Certificate,GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,IPAddressPool,L2Advertisement" \
+            -skip "SealedSecret,Application,ApplicationSet,AppProject,ClusterIssuer,Certificate,GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,IPAddressPool,L2Advertisement,CompositeResourceDefinition,Composition,Provider,Function,ProviderConfig,DeploymentRuntimeConfig,GameServer,Object,Release" \
             -ignore-filename-pattern '\.argocd-source-.*\.yaml' \
-            -kubernetes-version 1.31.0 \
-            bootstrap/ categories/ manifests/
+            -kubernetes-version 1.34.0 \
+            /tmp/apps.yaml bootstrap/ \
+            $(find platform/components -path '*/templates' -prune -o -name '*.yaml' -print)
+
+      - name: Validate Terraform
+        run: |
+          terraform -chdir=provisioning/terraform init -backend=false -input=false
+          terraform -chdir=provisioning/terraform validate
+          terraform -chdir=provisioning/terraform fmt -check -recursive
 
   scan-homeops-images:
     name: trivy — ${{ matrix.name }}

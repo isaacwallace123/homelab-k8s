@@ -56,27 +56,63 @@ The existing cluster is a single k3s server, which means its datastore is **embe
 etcd. Adding servers to it is not possible until it is converted. The conversion is a restart of
 the existing server with `--cluster-init`, which migrates SQLite to embedded etcd in place.
 
-1. Back up first — this is the irreversible step:
+1. Back up first — this is the irreversible step. Note that `k3s etcd-snapshot` does **not**
+   work yet: there is no etcd to snapshot until after the conversion. The datastore is a SQLite
+   file, so the backup is a file copy:
    ```sh
-   ./scripts/etcd-backup.sh --pre-ha        # snapshot + /var/lib/rancher/k3s tarball to TrueNAS
+   ssh k3s-control-plane 'sudo systemctl stop k3s && \
+     sudo tar czf /tmp/k3s-pre-ha.tar.gz -C /var/lib/rancher k3s && \
+     sudo systemctl start k3s'
+   scp k3s-control-plane:/tmp/k3s-pre-ha.tar.gz ./
    ```
-2. Terraform the new control plane VMs (`k8s-cp-02` on pve2, `k8s-cp-03` on cyberlab):
+   The playbook also takes this snapshot itself before converting, but take your own copy
+   somewhere off the node — a snapshot that only exists on the machine you are about to change
+   is not a backup.
+2. Update your local `terraform.tfvars` — the refactor changes its shape. Copy the node map out
+   of `terraform.tfvars.example` and add the two new required variables:
+
+   | Change | Why |
+   | :--- | :--- |
+   | `vm_template_id` → `templates` (a map) | Templates are node-local, so each Proxmox host needs its own |
+   | add `nodes` | The whole cluster topology; this is now the single source of truth |
+
+   Everything else (`ci_user`, `nameservers`, `network_bridge`, `network_gateway`,
+   `proxmox_ssh_user`, `ssh_private_key_path`) has a default and is optional.
+
+   Then move the three existing VMs into the `for_each` map, or Terraform will read the refactor
+   as destroy-and-recreate and rebuild your running cluster:
+
+   ```sh
+   DRY_RUN=true ./scripts/tf-state-migrate.sh     # review
+   ./scripts/tf-state-migrate.sh
+   terraform -chdir=provisioning/terraform plan   # STOP if anything says "must be replaced"
+   ```
+
+3. Terraform the new control plane VMs (`k8s-cp-02` on pve2, `k8s-cp-03` on cyberlab):
    ```sh
    terraform -chdir=provisioning/terraform apply -target='proxmox_virtual_environment_vm.node["k8s-cp-02"]' \
                                                   -target='proxmox_virtual_environment_vm.node["k8s-cp-03"]'
    ```
-3. Convert the existing server, then join the new ones:
+4. Convert the existing server, then join the new ones:
    ```sh
    ansible-playbook provisioning/ansible/playbooks/cluster-ha.yml
    ```
    The API server is unavailable for roughly 30–60 seconds during the restart. **Running workloads
    are not interrupted** — kubelets keep pods alive without an API server; only scheduling,
    scaling, and `kubectl` pause.
-4. Verify all three servers are voting members:
+5. Verify all three servers are voting members:
    ```sh
    kubectl get nodes -l node-role.kubernetes.io/control-plane
-   sudo k3s etcd-snapshot ls          # on any server
+   sudo k3s etcd-snapshot ls          # on any server — proves the datastore is now etcd
    ```
+
+Then bring up the workers, whose kubelet arguments and labels come from the generated
+inventory:
+
+```sh
+terraform -chdir=provisioning/terraform apply     # k8s-game-01
+ansible-playbook provisioning/ansible/playbooks/join-agents.yml
+```
 
 **Revert:** restore the pre-HA snapshot onto `k8s-cp-01` and delete the new VMs.
 

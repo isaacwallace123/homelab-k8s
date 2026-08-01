@@ -6,15 +6,25 @@
 [![Envoy Gateway](https://img.shields.io/badge/Envoy%20Gateway-E64A19?style=flat&logo=envoyproxy&logoColor=white)](https://gateway.envoyproxy.io/)
 [![Longhorn](https://img.shields.io/badge/Longhorn-5F224B?style=flat&logo=rancher&logoColor=white)](https://longhorn.io)
 
-Single source of truth for my homelab Kubernetes platform. Ansible bootstraps k3s on Proxmox VMs, and ArgoCD continuously reconciles every service and workload from this repo.
+Single source of truth for my homelab Kubernetes platform. Terraform declares the VMs, Ansible
+installs k3s, and ArgoCD continuously reconciles every service and workload from this repo.
+
+The cluster spans **both** Proxmox hosts as one stretched k3s cluster: three control planes,
+workers pooled by role, and physical hosts exposed as topology zones so storage replication and
+pod spreading describe a real failure domain. On top of it, Crossplane serves a small platform
+API — disposable scenario namespaces for the public Operations Arena, and the game server fleet.
+
+**Start here:** [docs/architecture/](docs/architecture/README.md)
 
 ---
 
 ## Architecture
 
-This homelab is one of three separate lab workspaces that temporarily share two physical servers.
-The homelab stays focused on personal services and the k3s/GitOps platform on `pve2`; the
-cyberlab and AI lab keep their own repositories and operational boundaries. See
+This homelab is one of three separate lab workspaces sharing two physical servers. The homelab
+owns the k3s/GitOps platform and personal services; the cyberlab and AI lab keep their own
+repositories and operational boundaries. Homelab k8s VMs run on both Proxmox hosts — that is
+compute placement, not a change of ownership, and those VMs are never attached to a cyberlab
+range bridge. See
 [Shared server context](docs/shared-server-context.md) and
 [Lab organization and Kubernetes strategy](docs/lab-organization-and-kubernetes-strategy.md).
 
@@ -26,8 +36,10 @@ will provide its isolated scenario runtime and sanitized event feed; see
 
 | Area | Implementation | Notes |
 | :--- | :--- | :--- |
-| Virtualization | Proxmox VE | Hosts all control-plane and worker VMs |
-| Bootstrap | Ansible (k3s-ansible) | Installs k3s, labels nodes, mounts NFS |
+| Virtualization | Proxmox VE (×2 hosts) | One stretched cluster; hosts exposed as topology zones |
+| VM lifecycle | Terraform (bpg/proxmox) | Map-driven; generates the Ansible inventory |
+| Bootstrap | Ansible | Installs k3s, labels/taints nodes, tunes the kubelet |
+| Platform API | Crossplane v2 | `LabRun` (arena) and `GameServer` (fleet) |
 | GitOps | ArgoCD | Self-heals cluster state from this repo |
 | Secrets | Sealed Secrets | Encrypted secrets committed safely to git |
 
@@ -50,22 +62,29 @@ will provide its isolated scenario runtime and sanitized event feed; see
 
 ### Cluster Topology
 
-| Node | Role | Workloads |
+Placement is by label, never by node name. `topology.kubernetes.io/zone` is the physical Proxmox
+host, so Longhorn replica anti-affinity and pod topology spread express a real failure domain.
+
+| Node | Zone | Role | Pool |
+| :--- | :--- | :--- | :--- |
+| `k8s-cp-01` | pve2 | control plane | — |
+| `k8s-cp-02` | pve2 | control plane | — |
+| `k8s-cp-03` | cyberlab | control plane | — |
+| `k8s-store-01` | pve2 | worker | `storage` — media, Plex (Arc A380), Longhorn |
+| `k8s-infra-01` | pve2 | worker | `infra` — MetalLB, monitoring, Crossplane |
+| `k8s-game-01` | cyberlab | worker | `games` — tainted, exclusive P-cores |
+
+Quorum sits on `pve2` deliberately: with two physical hosts you get VM-level HA, not host-level,
+and `pve2` also runs TrueNAS — losing it means storage is gone regardless. See
+[docs/architecture/README.md](docs/architecture/README.md) §3.
+
+**MetalLB pools** — see [networking](docs/architecture/networking.md):
+
+| Pool | Range | Assignment |
 | :--- | :--- | :--- |
-| `k3s-control-plane` | Control plane | etcd, API server, scheduler |
-| `k3s-worker-*` | General workers | Infra, apps, monitoring |
-
-**MetalLB address pool:** `192.168.0.220 – 192.168.0.250`
-
-| IP | Service |
-| :--- | :--- |
-| `192.168.0.201` | Envoy Gateway (all `.lan` HTTPS + HTTP redirect) |
-| `192.168.0.202` | AdGuard DNS (UDP/TCP 53) |
-| `192.168.0.203` | ArgoCD (direct LAN TLS) |
-| `192.168.0.230` | Plex media server (direct LAN, port 32400) |
-| `192.168.0.240` | Grafana |
-| `192.168.0.241` | Prometheus |
-| `192.168.0.242` | Alertmanager |
+| `platform-pool` | `.201 – .209` | Pinned — gateways, ArgoCD, AdGuard |
+| `games-pool` | `.210 – .219` | Auto — `.210` mc-router, rest per game server |
+| `services-pool` | `.220 – .250` | Pinned — dashboards, media, monitoring |
 
 ```mermaid
 flowchart TB
@@ -122,42 +141,55 @@ flowchart TB
 
 ## GitOps Lifecycle
 
-The cluster is fully reconciled through a three-level ArgoCD sync chain:
+Every Application and AppProject is rendered by one umbrella chart from one values file:
 
 ```
 bootstrap/root-app.yaml          ← apply once manually after ArgoCD install
-    └── categories/
-        ├── infrastructure.yaml  ← ApplicationSet (sync-wave -5)
-        │       discovers argocd-apps/infrastructure/**/*-{helm,git}-app.yaml
-        │       deploys: namespaces, sealed-secrets, cert-manager, metallb,
-        │                longhorn, envoy-gateway, ingress, monitoring, storage …
-        └── applications.yaml    ← ApplicationSet (sync-wave 0)
-                discovers argocd-apps/apps/**/*-git-app.yaml
-                deploys: media-stack, plex, homepage, ntfy
+    └── platform/                ← the umbrella chart
+        ├── values/values-prod.yaml     ← THE PLATFORM, DECLARED ONCE
+        ├── templates/applications.yaml ← generates up to 3 Apps per component
+        ├── templates/projects.yaml     ← AppProjects, sourceRepos computed
+        └── components/<name>/
+            ├── pre-resources/   → <name>-pre        (tier − 1)
+            ├── resources/       → <name>-resources  (tier + 1)
+            └── values/          → chart values, version-controlled here
 ```
 
-**Sync waves ensure ordering:**
-- Wave `-5` — infrastructure (MetalLB, Longhorn, cert-manager, Envoy Gateway)
-- Wave `-4` — Crossplane core
-- Wave `-3` — ArgoCD config, namespaces, network policies, Crossplane providers/functions/config
-- Wave `-2` — HomeOps platform API (`LabRun` XRD + Composition)
-- Wave `-1` — Sealed Secrets (secrets exist before workloads start)
-- Wave `0`  — Applications
-- Wave `1`  — Monitoring
+A component is **one values entry plus one directory**. Nothing else needs editing to add,
+remove, or reorder it.
+
+**Ordering is semantic, not numeric.** Components declare a tier; sync waves are derived:
+
+| Tier | Wave | | Tier | Wave |
+| :--- | ---: | :-- | :--- | ---: |
+| `bootstrap` | 0 | | `platform` | 100 |
+| `network` | 20 | | `platform-api` | 120 |
+| `storage` | 40 | | `observability` | 140 |
+| `security` | 60 | | `apps` | 160 |
+| `ingress` | 80 | | `fleet` | 180 |
 
 **Bootstrap a fresh cluster:**
 
 ```bash
-# 1. Install k3s via Ansible
-cd provisioning && ansible-playbook playbooks/install-k3s.yml
+# 1. Declare and create the VMs
+terraform -chdir=provisioning/terraform apply     # also writes the Ansible inventory
 
-# 2. Install ArgoCD (helm or manifests)
+# 2. Install k3s (HA control plane, then workers)
+cd provisioning/ansible
+ansible-playbook playbooks/cluster-ha.yml
+ansible-playbook playbooks/join-agents.yml
+
+# 3. Install ArgoCD (helm or manifests)
 kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# 3. Apply the root app — ArgoCD takes over from here
+# 4. Apply the root app — ArgoCD takes over from here
 kubectl apply -f bootstrap/root-app.yaml
 ```
+
+> Migrating an **existing** cluster to this layout? Read
+> [docs/architecture/migration.md](docs/architecture/migration.md) first — the restructure renames
+> most Applications, and to ArgoCD a rename is a delete plus a create.
 
 ---
 
@@ -206,6 +238,24 @@ The entire \*arr stack runs as a single pod (`media-stack`) in the `media` names
 | Overseerr | Request management |
 | FlareSolverr | Cloudflare bypass for Prowlarr |
 
+### Game Servers
+
+Hosted on the `games` node pool on the cyberlab host, declared as `GameServer` composite
+resources and composed by Crossplane. One entry in
+`platform/components/games/values/resources-prod.yaml` produces a namespace, quota, isolation
+policy, world volume, a Guaranteed-QoS workload holding exclusive P-cores, a LoadBalancer
+address, and a quiesced backup to the NAS.
+
+| Game | Composition | Published as |
+| :--- | :--- | :--- |
+| Minecraft (vanilla, Paper, Fabric, Forge, modpacks) | `gameserver-minecraft` (itzg chart) | mc-router at `.210:25565`, routed by hostname |
+| Satisfactory, Terraria, Rust, Gmod, LinuxGSM titles | `gameserver-container` (game catalogue) | Own IP from `games-pool` |
+
+Adding a **server** is a values entry. Adding a **game** is a catalogue entry in the container
+Composition. Neither Agones nor Pterodactyl is used, and
+[game-platform.md](docs/architecture/game-platform.md) explains why — every game here is a
+persistent world, not a match session.
+
 ### Platform
 
 | App | Purpose |
@@ -250,10 +300,12 @@ All alerts route to ntfy at `ntfy.lan/homelab-alerts`.
 
 Current remediation guidance: [Storage pressure recovery plan (2026-07-18)](docs/storage-pressure-recovery-plan-2026-07-18.md).
 
-| Type | Backend | Used by |
+| Class | Backend | Used by |
 | :--- | :--- | :--- |
-| Longhorn (RWO) | Local disk on workers | Prometheus (10 Gi), Grafana (2 Gi), Loki (10 Gi), media app configs |
-| NFS (RWX) | TrueNAS `/tank` at `192.168.0.252` | Movies (4 Ti), TV (4 Ti), Downloads (450 Gi requested, SSD) |
+| `longhorn-replicated` *(default)* | Longhorn, 3 replicas, zone anti-affinity | Anything whose loss hurts — databases, ArgoCD, Grafana |
+| `longhorn-single` | Longhorn, 1 replica | Rebuildable caches and scratch |
+| `nvme-local` | local-path on the game node's NVMe | Game worlds — see [storage](docs/architecture/storage.md) |
+| `nfs-nas` (RWX) | TrueNAS `/tank` at `192.168.0.252` | Movies (4 Ti), TV (4 Ti), Downloads, backup targets |
 
 Longhorn volumes have daily snapshots with 7-day retention via `RecurringJob`.
 
@@ -277,18 +329,26 @@ kubectl create secret generic my-secret --from-literal=key=value \
 
 | Path | Purpose |
 | :--- | :--- |
-| `bootstrap/` | Root ArgoCD Application — apply once to bootstrap the cluster |
-| `categories/` | ApplicationSets for `infrastructure` (wave -5) and `apps` (wave 0) |
-| `argocd-apps/` | Per-service Application descriptors consumed by the ApplicationSets |
-| `manifests/apps/` | Raw Kubernetes manifests for homelab applications |
-| `manifests/infra/` | Raw Kubernetes manifests for platform infrastructure |
-| `provisioning/` | Ansible playbooks for k3s install and node setup |
-| `manifests/infra/crossplane-config/` | Crossplane provider-kubernetes, function, and scoped RBAC/ProviderConfig |
-| `manifests/infra/homeops-platform/` | `LabRun` platform API (XRD + Composition) backing the public Operations Arena |
-| `schemas/` | Validation schemas for custom GitOps descriptor files |
-| `scripts/` | Utility scripts (ArgoCD CLI helpers) |
+| `bootstrap/root-app.yaml` | The one manual `kubectl apply` |
+| `platform/values/values-prod.yaml` | **The platform, declared once** — every component, its tier, its chart |
+| `platform/templates/` | Application + AppProject generator, shared sync policy and ignoreDifferences |
+| `platform/components/<name>/` | Per-component manifests and values |
+| `platform/components/crossplane/` | Providers, functions, and the two scoped identities (`homeops`, `gameops`) |
+| `platform/components/platform-api/` | `LabRun` and `GameServer` XRDs + Compositions |
+| `platform/components/games/` | The game server fleet |
+| `provisioning/terraform/` | VMs on both Proxmox hosts; generates the Ansible inventory |
+| `provisioning/ansible/` | k3s HA install, node labels/taints, kubelet tuning |
+| `docs/architecture/` | How and why the platform is shaped this way |
+| `scripts/` | Validation, composition tests, and one-time migration helpers |
 
-See [GitOps organization](docs/gitops-organization.md) for the descriptor contract and service onboarding workflow.
+**Scripts:**
+
+| Script | Purpose |
+| :--- | :--- |
+| `validate-platform.sh` | Render the chart, check every component resolves, diff against the live cluster |
+| `test-compositions.sh` | Render the GameServer Compositions against mock composites |
+| `pre-cutover.sh` | One-time: strip prune finalizers before the Application rename |
+| `tf-state-migrate.sh` | One-time: move existing VMs into the Terraform `for_each` map |
 
 ## Lab Boundaries
 
@@ -298,7 +358,11 @@ See [GitOps organization](docs/gitops-organization.md) for the descriptor contra
 | `cyberlab` | isolated cyber range VMs, SOC, attack/defense scenarios, security case studies | May export metrics/status; not managed by homelab ArgoCD |
 | `ailab` | model serving, RAG, agents, evals, lab assistants, AI demos | May reuse observability/ingress patterns; heavy runtimes should stay AI-owned |
 
-Kubernetes is the homelab service runtime, not the universal control plane for all labs. Crossplane is deferred until there is a concrete self-service platform API worth testing.
+Kubernetes is the homelab service runtime, not the universal control plane for all labs.
+Crossplane serves in-cluster self-service APIs only — it never manages Proxmox, VMs, DNS, or guest
+lifecycle, which remain Terraform's and Ansible's. Cross-lab data flows one way: labs export
+metrics and logs into the homelab observability hub, and nothing in the hub writes back. See
+[cross-lab integration](docs/architecture/cross-lab.md).
 
 ---
 
