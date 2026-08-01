@@ -1,0 +1,67 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gatewayClassName }}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+{{/*
+One Gateway per entry in .Values.gateways, each on its own MetalLB address.
+
+Splitting these matters for more than tidiness: a single Gateway mixing tunnel-facing HTTP
+with LAN-only TLS means one mis-scoped HTTPRoute can publish an internal service through
+the public tunnel. Separate Gateways with separate allowedRoutes make that structurally
+impossible rather than a thing to catch in review.
+
+NOTE: no game protocol traffic passes through any Gateway. Envoy proxies TCP/UDP in
+non-transparent mode only, so the backend would see Envoy's address instead of the
+player's — which breaks IP bans, anti-cheat heuristics, and per-player rate limiting.
+Game Services take MetalLB addresses directly. See docs/architecture/game-platform.md §4.
+*/}}
+{{- range $gw := .Values.gateways }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $gw.name }}
+  namespace: {{ $.Values.namespace }}
+  {{- with $gw.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ $.Values.gatewayClassName }}
+  infrastructure:
+    annotations:
+      metallb.io/address-pool: {{ $gw.pool }}
+      metallb.io/loadBalancerIPs: {{ $gw.address | quote }}
+  listeners:
+    {{- range $l := $gw.listeners }}
+    - name: {{ $l.name }}
+      protocol: {{ $l.protocol }}
+      port: {{ $l.port }}
+      {{- with $l.hostname }}
+      hostname: {{ . | quote }}
+      {{- end }}
+      {{- if $l.tls }}
+      tls:
+        mode: {{ $l.tls.mode }}
+        {{- if eq $l.tls.mode "Terminate" }}
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ $l.tls.secretName }}
+            namespace: {{ $.Values.namespace }}
+        {{- end }}
+      {{- end }}
+      allowedRoutes:
+        namespaces:
+          {{- if $l.allowedNamespaces }}
+          from: Selector
+          selector:
+            matchLabels:
+              {{- toYaml $l.allowedNamespaces | nindent 14 }}
+          {{- else }}
+          from: All
+          {{- end }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,47 @@
+{{/*
+One IPAddressPool + one L2Advertisement per entry in .Values.pools.
+
+The per-pool `nodeSelectors` is the part that matters on a two-host cluster. Without it,
+MetalLB may elect ANY node as the L2 speaker for an address — so a game server's IP could
+be announced by a node on pve2 while the pod runs on cyberlab. Every player packet would
+then land on the wrong physical host and be forwarded across the LAN, adding a hop and
+asymmetric return path to a latency-sensitive UDP stream.
+
+Pinning each pool's speakers to the nodes that can actually serve its traffic, together
+with externalTrafficPolicy: Local on the Services, keeps the path direct.
+*/}}
+{{- range $pool := .Values.pools }}
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: {{ $pool.name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  # autoAssign is false for pools whose addresses are pinned per-Service by annotation,
+  # and true for pools handed out by a controller (the game fleet).
+  autoAssign: {{ $pool.autoAssign }}
+  {{- if $pool.avoidBuggyIPs }}
+  avoidBuggyIPs: true
+  {{- end }}
+  addresses:
+    {{- range $addr := $pool.addresses }}
+    - {{ $addr }}
+    {{- end }}
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: {{ $pool.name }}-l2
+  namespace: {{ $.Values.namespace }}
+spec:
+  ipAddressPools:
+    - {{ $pool.name }}
+  {{- with $pool.nodeSelectors }}
+  nodeSelectors:
+    {{- range $sel := . }}
+    - matchLabels:
+        {{- toYaml $sel | nindent 8 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

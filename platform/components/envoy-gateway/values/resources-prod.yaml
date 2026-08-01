@@ -1,0 +1,81 @@
+# Gateways — see docs/architecture/networking.md §3.
+#
+# `envoy-gateway` keeps its existing name and address (.201). Renaming it would recreate
+# the Service, move the IP, and break every AdGuard override and the Cloudflare Tunnel
+# origin at once. It is the INTERNAL gateway; `edge` and `games-web` are additive.
+
+namespace: networking
+gatewayClassName: envoy
+
+certificates:
+  - name: lan-tls
+    issuer: homelab-ca
+    dnsNames:
+      - "*.lan"
+  - name: games-lan-tls
+    issuer: homelab-ca
+    dnsNames:
+      - "*.games.lan"
+
+redirect:
+  gateway: envoy-gateway
+  sectionName: http
+  hostnames: ["*.lan"]
+
+gateways:
+  # ── internal: LAN services + current Cloudflare Tunnel origin ────────────────
+  - name: envoy-gateway
+    pool: platform-pool
+    address: 192.168.0.201
+    listeners:
+      - name: http
+        protocol: HTTP
+        port: 80
+
+      - name: https-lan
+        protocol: HTTPS
+        port: 443
+        hostname: "*.lan"
+        tls:
+          mode: Terminate
+          secretName: lan-tls
+
+      # TLS passthrough for ArgoCD. Passthrough (not Terminate) is what keeps the gRPC
+      # streams the ArgoCD CLI depends on working. `argocd.lan` is more specific than
+      # `*.lan`, so this listener wins for that hostname.
+      - name: argocd-passthrough
+        protocol: TLS
+        port: 443
+        hostname: argocd.lan
+        tls:
+          mode: Passthrough
+
+  # ── edge: public traffic only, TLS terminated upstream by the tunnel ─────────
+  # Added in migration phase 4. Move public HTTPRoutes here deliberately, one at a time;
+  # nothing routes to it until they are moved.
+  - name: edge
+    pool: platform-pool
+    address: 192.168.0.202
+    listeners:
+      - name: http
+        protocol: HTTP
+        port: 80
+        allowedNamespaces:
+          homelab.isaacwallace.dev/exposure: public
+
+  # ── games-web: dynmap, admin panels, Satisfactory's web UI ───────────────────
+  # Web surfaces only. Game protocol traffic never passes through a Gateway.
+  - name: games-web
+    pool: platform-pool
+    address: 192.168.0.203
+    listeners:
+      - name: http
+        protocol: HTTP
+        port: 80
+      - name: https
+        protocol: HTTPS
+        port: 443
+        hostname: "*.games.lan"
+        tls:
+          mode: Terminate
+          secretName: games-lan-tls

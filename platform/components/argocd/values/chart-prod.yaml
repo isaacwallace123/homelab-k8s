@@ -1,0 +1,14 @@
+# ArgoCD runs on the control plane. With three control planes after migration phase 2 this
+# also gives the ArgoCD components somewhere to reschedule when one is drained.
+global:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+configs:
+  params: {}
+crds:
+  install: true
+  keep: true

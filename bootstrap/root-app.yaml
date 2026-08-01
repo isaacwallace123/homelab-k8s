@@ -1,8 +1,14 @@
-# Root Application — single entry point for the entire GitOps chain.
-# Apply this once manually after installing ArgoCD:
+# Root Application — the single entry point for the entire GitOps chain.
+#
+# Apply once, by hand, after installing ArgoCD:
 #   kubectl apply -f bootstrap/root-app.yaml
 #
-# ArgoCD then discovers categories/ and deploys everything automatically.
+# From there the platform chart renders every AppProject and every Application. Nothing
+# else is ever applied manually.
+#
+# BEFORE APPLYING THIS ON THE EXISTING CLUSTER, read scripts/pre-cutover.sh. The
+# restructure renames most Applications, and to ArgoCD a rename is a delete plus a create
+# — with prune finalizers still attached that would cascade-delete their resources.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -13,7 +19,10 @@ spec:
   source:
     repoURL: https://github.com/isaacwallace123/homelab-k8s.git
     targetRevision: main
-    path: categories
+    path: platform
+    helm:
+      valueFiles:
+        - values/values-prod.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -21,3 +30,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    retry:
+      limit: -1

@@ -1,0 +1,55 @@
+# Crossplane core. Chart version == Crossplane version; Renovate keeps it current.
+#
+# Providers, functions, RBAC, and ProviderConfigs are applied by this component's
+# resources/ at tier+1. XRDs and Compositions are a separate component (platform-api) at a
+# later tier, so the package manager is always installed and healthy before anything tries
+# to register an API against it.
+
+args:
+  # A LabRun is watched by a human staring at a launch screen, not by a reconcile loop that
+  # can afford to be a minute stale. The default 1m per-resource poll is what a launch phase
+  # costs to detect when the realtime watch does not fire: composed Objects go ready in
+  # seconds, then the XR sits until its next tick before it reports Ready, once per gate.
+  # 10s is the smallest interval that is still cheap here.
+  - --poll-interval=10s
+
+  # Sizing the XR circuit breaker for what provisioning actually looks like.
+  #
+  # Composing a LabRun costs 28 Objects, and every one churns its status while the thing it
+  # wraps settles. Realtime composition turns each into a watch event on the XR, so a
+  # healthy provision arrives as a burst of roughly a hundred — exactly the default bucket.
+  # Tripping it cost far more than it saved: composed Objects were Ready in 14s while the
+  # LabRun did not report Ready until 70s, because the breaker had opened and was releasing
+  # reconciles on its cooldown.
+  #
+  # The bucket absorbs a provision several times over; the refill rate — the sustained
+  # ceiling, and the thing that actually protects the control plane — stays low enough that
+  # a genuine runaway is still throttled. A runaway is sustained; a provision is not.
+  - --circuit-breaker-burst=1000
+
+  # The refill rate, not the cooldown, is what a tripped XR waits on: once open, the next
+  # allowed reconcile is scheduled by when the bucket has recovered. At the default 1/s a
+  # provision waited ~60s to be told it was ready; at 5/s it was still ~28s.
+  #
+  # The bucket does not start each provision full — tearing a run down deletes 28 Objects,
+  # and that storm drains it, so the next run begins depleted. That is exactly the
+  # delete-then-create cycle a person clicking "start ranked" produces.
+  - --circuit-breaker-refill-rate=50
+  - --circuit-breaker-cooldown=5s
+
+metrics:
+  enabled: true
+
+resourcesCrossplane:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Keep the control plane off the game node — its cores are exclusively allocated and a
+# Crossplane pod landing there would be evicted from them anyway.
+nodeSelector:
+  node-role.kubernetes.io/worker: "true"
+tolerations: []

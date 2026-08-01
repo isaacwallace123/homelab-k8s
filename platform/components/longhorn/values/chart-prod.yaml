@@ -1,0 +1,37 @@
+# Longhorn.
+#
+# defaultReplicaCount is 2 rather than 3 because until migration phase 2 every node is a VM
+# on pve2 — a third replica bought nothing but disk. Once the cluster spans both Proxmox
+# hosts and nodes carry topology.kubernetes.io/zone, the zone-aware replicated class in
+# resources/ is what provides real cross-host redundancy.
+#
+# NOTE on the default StorageClass: `persistence.defaultClass: true` is kept here so that
+# migration phase 1 changes nothing. Today BOTH local-path and longhorn are marked default,
+# which makes an unqualified PVC non-deterministic. Phase 3 resolves that by clearing
+# local-path's default annotation — see docs/architecture/migration.md.
+defaultSettings:
+  defaultReplicaCount: 2
+  defaultDataPath: /var/lib/longhorn
+  # Spread replicas across physical hosts once zone labels exist (phase 3).
+  replicaZoneSoftAntiAffinity: true
+  replicaAutoBalance: best-effort
+
+longhornManager:
+  nodeSelector:
+    node-role.kubernetes.io/worker: "true"
+  tolerations: []
+longhornDriver:
+  nodeSelector:
+    node-role.kubernetes.io/worker: "true"
+  tolerations: []
+longhornUI:
+  nodeSelector:
+    node-role.kubernetes.io/worker: "true"
+  tolerations: []
+
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 2
+
+ingress:
+  enabled: false

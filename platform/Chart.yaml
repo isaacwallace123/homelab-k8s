@@ -1,0 +1,8 @@
+apiVersion: v2
+name: platform
+description: >-
+  Renders every ArgoCD Application, AppProject, and ordering decision for the homelab platform from
+  a single values file. One component = one values entry + one directory under components/.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

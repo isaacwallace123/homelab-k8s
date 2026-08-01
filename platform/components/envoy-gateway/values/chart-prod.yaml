@@ -1,0 +1,6 @@
+# Upstream gateway-helm values. Kept minimal on purpose — Gateway topology lives in
+# resources-prod.yaml, not in the controller's chart values.
+config:
+  envoyGateway:
+    provider:
+      type: Kubernetes

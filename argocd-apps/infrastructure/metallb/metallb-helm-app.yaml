@@ -1,8 +1,0 @@
-name: metallb
-namespace: networking
-project: infrastructure
-syncWave: "-3"
-repoURL: https://metallb.github.io/metallb
-chart: metallb
-targetRevision: "0.15.3"
-values: ""

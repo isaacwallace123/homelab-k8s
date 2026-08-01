@@ -1,0 +1,308 @@
+# =============================================================================
+# THE PLATFORM, DECLARED ONCE.
+#
+# Adding a component: add an entry here + a directory under platform/components/.
+# Removing one: set `enabled: false` (or delete the entry).
+# Reordering: change its `tier`. Never write a sync wave by hand.
+# =============================================================================
+
+environment: prod
+
+repo:
+  url: https://github.com/isaacwallace123/homelab-k8s.git
+  revision: main
+
+cluster:
+  internalDomain: lan
+  publicDomain: isaacwallace.dev
+
+defaults:
+  project: infrastructure
+
+# -----------------------------------------------------------------------------
+# Tiers → sync waves. Spaced by 20 so a component's pre(-1)/chart(0)/resources(+1)
+# phases plus any waveOffset can never bleed into the next tier.
+# -----------------------------------------------------------------------------
+tiers:
+  bootstrap: 0        # namespaces, ArgoCD's own config
+  network: 20         # MetalLB, cloudflared
+  storage: 40         # Longhorn, NFS CSI, StorageClasses
+  security: 60        # cert-manager, sealed-secrets
+  ingress: 80         # Envoy Gateway, GatewayClass, Gateways
+  platform: 100       # Crossplane, providers, functions, ProviderConfigs
+  platform-api: 120   # XRDs and Compositions
+  observability: 140  # Prometheus, Loki, Grafana, Alertmanager
+  apps: 160           # personal services
+  fleet: 180          # instances of the platform API (game servers)
+
+# -----------------------------------------------------------------------------
+# AppProjects. `sourceRepos` is computed — this repo, plus `extraSourceRepos`, plus
+# every chart repo used by a component assigned to the project.
+# -----------------------------------------------------------------------------
+projects:
+  infrastructure:
+    description: Cluster infrastructure managed by this repository.
+    destinations: ["*"]
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+
+  applications:
+    description: >-
+      Personal user-facing services. Must not manage cyberlab or AI lab infrastructure.
+    destinations: [media, networking, portfolio]
+
+  portfolio:
+    description: >-
+      Public-facing portfolio network, sourced from the externally owned portfolio monorepo.
+      Stateless websites only — never cyberlab range VMs, the SOC, Windows/AD, or any
+      Proxmox/Terraform-owned infrastructure. The cyberlab namespace holds only the
+      read-only website.
+    destinations: [portfolio, cyberlab]
+    extraSourceRepos:
+      - https://github.com/isaacwallace123/portfolio-v3.git
+    clusterResourceWhitelist:
+      - group: ""
+        kind: Namespace
+
+  monitoring:
+    description: Observability hub — homelab metrics plus read-only cross-lab visibility.
+    destinations: [monitoring, networking]
+    clusterResourceWhitelist:
+      - group: rbac.authorization.k8s.io
+        kind: ClusterRole
+      - group: rbac.authorization.k8s.io
+        kind: ClusterRoleBinding
+
+  games:
+    description: >-
+      Game server fleet. Instances of the GameServer platform API and the router in front
+      of them. Crossplane composes the per-server namespaces; this project owns only the
+      declarations and shared routing.
+    destinations: [games, "game-*"]
+    clusterResourceWhitelist:
+      - group: ""
+        kind: Namespace
+
+# =============================================================================
+# COMPONENTS
+# =============================================================================
+components:
+
+  # ── bootstrap ───────────────────────────────────────────────────────────────
+  - name: namespaces
+    tier: bootstrap
+    namespace: argocd
+    resources:
+      enabled: true
+
+  - name: argocd
+    tier: bootstrap
+    namespace: argocd
+    waveOffset: 2
+    chart:
+      repoURL: https://argoproj.github.io/argo-helm
+      name: argo-cd
+      version: "7.9.1"
+    resources:
+      enabled: true
+
+  # ── network ─────────────────────────────────────────────────────────────────
+  - name: metallb
+    tier: network
+    namespace: networking
+    chart:
+      repoURL: https://metallb.github.io/metallb
+      name: metallb
+      version: "0.15.3"
+    resources:
+      enabled: true
+      templated: true          # pools + per-pool L2Advertisements are rendered
+
+  - name: cloudflared
+    tier: network
+    waveOffset: 2
+    namespace: networking
+    resources:
+      enabled: true
+
+  - name: network-policies
+    tier: network
+    waveOffset: 4
+    namespace: networking
+    resources:
+      enabled: true
+
+  # ── storage ─────────────────────────────────────────────────────────────────
+  - name: longhorn
+    tier: storage
+    namespace: longhorn-system
+    chart:
+      repoURL: https://charts.longhorn.io
+      name: longhorn
+      version: "1.11.1"
+    preResources:
+      enabled: true            # node prereqs must land before the chart
+    resources:
+      enabled: true            # StorageClasses + recurring backup jobs
+
+  - name: storage
+    tier: storage
+    waveOffset: 4
+    namespace: media
+    resources:
+      enabled: true            # NFS volumes from TrueNAS
+
+  # ── security ────────────────────────────────────────────────────────────────
+  - name: sealed-secrets
+    tier: security
+    namespace: secrets
+    chart:
+      repoURL: https://bitnami.github.io/sealed-secrets
+      name: sealed-secrets
+      version: "2.19.1"
+
+  - name: cert-manager
+    tier: security
+    namespace: cert-manager
+    chart:
+      repoURL: https://charts.jetstack.io
+      name: cert-manager
+      version: v1.17.4
+    resources:
+      enabled: true            # ClusterIssuers
+
+  # ── ingress ─────────────────────────────────────────────────────────────────
+  - name: envoy-gateway
+    tier: ingress
+    namespace: envoy-gateway-system
+    chart:
+      repoURL: docker.io/envoyproxy
+      name: gateway-helm
+      version: v1.7.1
+    resources:
+      enabled: true
+      templated: true          # GatewayClass + the three Gateways
+      namespace: networking
+
+  # ── node feature / hardware ─────────────────────────────────────────────────
+  - name: nfd
+    tier: storage
+    waveOffset: 6
+    namespace: node-feature-discovery
+    chart:
+      repoURL: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+      name: node-feature-discovery
+      version: "0.17.2"
+
+  - name: intel-device-plugins-operator
+    tier: storage
+    waveOffset: 8
+    namespace: kube-system
+    chart:
+      repoURL: https://intel.github.io/helm-charts/
+      name: intel-device-plugins-operator
+      version: "0.35.0"
+
+  - name: intel-gpu-plugin
+    tier: storage
+    waveOffset: 10
+    namespace: kube-system
+    chart:
+      repoURL: https://intel.github.io/helm-charts/
+      name: intel-device-plugins-gpu
+      version: "0.35.0"
+
+  # ── platform (Crossplane) ───────────────────────────────────────────────────
+  - name: crossplane
+    tier: platform
+    namespace: crossplane-system
+    chart:
+      repoURL: https://charts.crossplane.io/stable
+      name: crossplane
+      version: "2.3.3"
+    resources:
+      enabled: true            # providers, functions, RBAC, ProviderConfigs
+
+  # ── platform API (XRDs + Compositions) ──────────────────────────────────────
+  # XRDs and Compositions for LabRun (the Operations Arena) and GameServer (the fleet).
+  # Destination stays `homeops` — the broker ServiceAccount and its RoleBindings are
+  # namespaced there; the XRDs and Compositions are cluster-scoped and unaffected.
+  - name: platform-api
+    tier: platform-api
+    namespace: homeops
+    resources:
+      enabled: true
+
+  # ── observability ───────────────────────────────────────────────────────────
+  - name: monitoring
+    tier: observability
+    namespace: monitoring
+    project: monitoring
+    resources:
+      enabled: true
+
+  - name: etcd-backup
+    tier: observability
+    waveOffset: 2
+    namespace: kube-system
+    resources:
+      enabled: true
+
+  # ── apps ────────────────────────────────────────────────────────────────────
+  - name: plex
+    tier: apps
+    namespace: media
+    project: applications
+    resources:
+      enabled: true
+
+  - name: media-stack
+    tier: apps
+    namespace: media
+    project: applications
+    resources:
+      enabled: true
+
+  - name: homepage
+    tier: apps
+    namespace: networking
+    project: applications
+    resources:
+      enabled: true
+
+  - name: ntfy
+    tier: apps
+    namespace: networking
+    project: applications
+    resources:
+      enabled: true
+
+  - name: portfolio
+    tier: apps
+    waveOffset: 2
+    namespace: portfolio
+    project: portfolio
+    resources:
+      enabled: true
+      git:                     # externally owned — the portfolio monorepo is the source of truth
+        repoURL: https://github.com/isaacwallace123/portfolio-v3.git
+        path: deploy/k8s
+
+  # ── fleet (instances of the platform API) ───────────────────────────────────
+  - name: mc-router
+    tier: fleet
+    namespace: games
+    project: games
+    resources:
+      enabled: true
+      templated: true
+
+  - name: games
+    tier: fleet
+    waveOffset: 2
+    namespace: games
+    project: games
+    resources:
+      enabled: true
+      templated: true          # the GameServer fleet, rendered from values

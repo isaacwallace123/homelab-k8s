@@ -1,0 +1,60 @@
+{{/*
+=============================================================================
+AppProjects, rendered from the same values as the Applications.
+
+The point of generating these rather than hand-maintaining them: a project's
+`sourceRepos` is COMPUTED from the components assigned to it. Adding a component that
+pulls a new upstream chart automatically permits that chart repo in its project. The
+previous layout kept the two in separate files, so every new chart repo meant an
+Application that synced fine in `default` and failed the moment projects were enforced.
+=============================================================================
+*/}}
+{{- range $name, $p := .Values.projects }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: {{ $p.description | quote }}
+  sourceRepos:
+    {{- /* This repo, plus any explicitly declared extras, plus every chart repo used by
+           a component assigned to this project. Deduplicated and sorted so the rendered
+           output is stable and diffable. */ -}}
+    {{- $repos := list $.Values.repo.url }}
+    {{- range $extra := ($p.extraSourceRepos | default (list)) }}
+    {{- $repos = append $repos $extra }}
+    {{- end }}
+    {{- range $c := $.Values.components }}
+    {{- $enabled := include "platform.bool" (dict "ctx" $c "key" "enabled" "default" true) }}
+    {{- $cProject := default $.Values.defaults.project $c.project }}
+    {{- if and $enabled (eq $cProject $name) }}
+    {{- if and $c.chart $c.chart.repoURL }}
+    {{- $repos = append $repos $c.chart.repoURL }}
+    {{- end }}
+    {{- /* externally owned manifest repos, e.g. the portfolio monorepo */ -}}
+    {{- range $phase := (list ($c.preResources | default dict) ($c.resources | default dict)) }}
+    {{- if and $phase.git $phase.git.repoURL }}
+    {{- $repos = append $repos $phase.git.repoURL }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- range $r := ($repos | uniq | sortAlpha) }}
+    - {{ $r }}
+    {{- end }}
+  destinations:
+    {{- range $d := $p.destinations }}
+    - server: https://kubernetes.default.svc
+      namespace: {{ $d | quote }}
+    {{- end }}
+  {{- if $p.clusterResourceWhitelist }}
+  clusterResourceWhitelist:
+    {{- toYaml $p.clusterResourceWhitelist | nindent 4 }}
+  {{- end }}
+  namespaceResourceWhitelist:
+    {{- toYaml ($p.namespaceResourceWhitelist | default (list (dict "group" "*" "kind" "*"))) | nindent 4 }}
+{{- end }}

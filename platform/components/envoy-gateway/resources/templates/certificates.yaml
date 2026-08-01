@@ -1,0 +1,55 @@
+{{/*
+TLS certificates for the Terminate listeners, issued by the homelab-ca ClusterIssuer.
+
+To trust these in a browser/OS, export the CA and install it:
+  kubectl get secret homelab-ca-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' \
+    | base64 -d > homelab-ca.crt
+*/}}
+{{- range $cert := .Values.certificates }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $cert.name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  secretName: {{ $cert.name }}
+  issuerRef:
+    name: {{ $cert.issuer }}
+    kind: ClusterIssuer
+  dnsNames:
+    {{- range $dns := $cert.dnsNames }}
+    - {{ $dns | quote }}
+    {{- end }}
+{{- end }}
+---
+{{/*
+Redirect plain HTTP to HTTPS for the internal domain. Exact-match public hostnames are
+unaffected, since a more specific route wins.
+*/}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https-redirect
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.redirect.gateway }}
+      namespace: {{ .Values.namespace }}
+      sectionName: {{ .Values.redirect.sectionName }}
+  hostnames:
+    {{- range $h := .Values.redirect.hostnames }}
+    - {{ $h | quote }}
+    {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

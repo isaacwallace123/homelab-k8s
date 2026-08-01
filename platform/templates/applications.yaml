@@ -1,0 +1,107 @@
+{{/*
+=============================================================================
+The Application generator.
+
+Each entry in .Values.components produces up to three ArgoCD Applications:
+
+  <name>-pre        pre-resources/   wave = tier - 1   things the chart needs to exist first
+  <name>            upstream chart   wave = tier       the component itself
+  <name>-resources  resources/       wave = tier + 1   what the chart's existence enables
+
+A component may use any subset. A component with no `chart` is manifests-only; one with
+no pre/resources is chart-only.
+=============================================================================
+*/}}
+{{- range $c := .Values.components }}
+{{- $enabled := include "platform.bool" (dict "ctx" $c "key" "enabled" "default" true) }}
+{{- if $enabled }}
+{{- $pre := $c.preResources | default dict }}
+{{- $post := $c.resources | default dict }}
+{{- $project := include "platform.project" (dict "root" $ "component" $c) }}
+{{- $hasChart := and $c.chart $c.chart.repoURL $c.chart.name $c.chart.version }}
+
+{{- if $pre.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $c.name }}-pre
+  namespace: argocd
+  labels:
+    {{- include "platform.labels" (dict "component" $c) | nindent 4 }}
+    platform.homelab.isaacwallace.dev/phase: pre
+  annotations:
+    argocd.argoproj.io/sync-wave: "{{ include "platform.wave" (dict "root" $ "component" $c "phase" -1) }}"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $project }}
+  {{- include "platform.gitSource" (dict "root" $ "component" $c "dir" "pre-resources" "spec" $pre) | nindent 2 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $pre.namespace | default $c.namespace }}
+  {{- include "platform.ignoreDifferences" . | nindent 2 }}
+  {{- include "platform.syncPolicy" (dict "extraOptions" $pre.syncOptions) | nindent 2 }}
+{{- end }}
+
+{{- if $hasChart }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $c.name }}
+  namespace: argocd
+  labels:
+    {{- include "platform.labels" (dict "component" $c) | nindent 4 }}
+    platform.homelab.isaacwallace.dev/phase: chart
+  annotations:
+    argocd.argoproj.io/sync-wave: "{{ include "platform.wave" (dict "root" $ "component" $c "phase" 0) }}"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $project }}
+  # Multi-source: the chart is pulled from upstream, its values are version-controlled
+  # HERE. Neither is vendored, and a chart bump is a one-line version change.
+  sources:
+    - repoURL: {{ $c.chart.repoURL }}
+      chart: {{ $c.chart.name }}
+      targetRevision: {{ $c.chart.version }}
+      helm:
+        valueFiles:
+          - $values/platform/components/{{ $c.name }}/values/chart-{{ $.Values.environment }}.yaml
+    - repoURL: {{ $.Values.repo.url }}
+      targetRevision: {{ $.Values.repo.revision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $c.namespace }}
+  {{- include "platform.ignoreDifferences" . | nindent 2 }}
+  {{- include "platform.syncPolicy" (dict "extraOptions" $c.syncOptions) | nindent 2 }}
+{{- end }}
+
+{{- if $post.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $c.name }}-resources
+  namespace: argocd
+  labels:
+    {{- include "platform.labels" (dict "component" $c) | nindent 4 }}
+    platform.homelab.isaacwallace.dev/phase: resources
+  annotations:
+    argocd.argoproj.io/sync-wave: "{{ include "platform.wave" (dict "root" $ "component" $c "phase" 1) }}"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $project }}
+  {{- include "platform.gitSource" (dict "root" $ "component" $c "dir" "resources" "spec" $post) | nindent 2 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $post.namespace | default $c.namespace }}
+  {{- include "platform.ignoreDifferences" . | nindent 2 }}
+  {{- include "platform.syncPolicy" (dict "extraOptions" $post.syncOptions) | nindent 2 }}
+{{- end }}
+
+{{- end }}
+{{- end }}

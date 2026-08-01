@@ -1,0 +1,2 @@
+# Chart moved from bitnami-labs -> bitnami org (the old gh-pages 404s after sunset).
+fullnameOverride: sealed-secrets-controller
