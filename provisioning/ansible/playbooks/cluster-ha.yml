@@ -103,7 +103,11 @@
           disable:
             - traefik
             - servicelb
-            - local-storage
+            # local-storage is deliberately NOT disabled. k3s's local-path provisioner is
+            # what backs the `nvme-local` StorageClass that game world volumes use, and
+            # disabling it would delete the provisioner along with the class. Its
+            # StorageClass must not be the cluster default, which is handled in the
+            # longhorn component rather than here.
           node-label:
             - "topology.kubernetes.io/zone={{ node_zone }}"
             - "homelab.isaacwallace.dev/pool={{ node_pool }}"
@@ -175,7 +179,11 @@
           disable:
             - traefik
             - servicelb
-            - local-storage
+            # local-storage is deliberately NOT disabled. k3s's local-path provisioner is
+            # what backs the `nvme-local` StorageClass that game world volumes use, and
+            # disabling it would delete the provisioner along with the class. Its
+            # StorageClass must not be the cluster default, which is handled in the
+            # longhorn component rather than here.
           node-label:
             - "topology.kubernetes.io/zone={{ node_zone }}"
             - "homelab.isaacwallace.dev/pool={{ node_pool }}"

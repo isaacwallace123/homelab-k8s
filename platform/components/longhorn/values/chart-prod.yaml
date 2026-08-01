@@ -5,10 +5,13 @@
 # hosts and nodes carry topology.kubernetes.io/zone, the zone-aware replicated class in
 # resources/ is what provides real cross-host redundancy.
 #
-# NOTE on the default StorageClass: `persistence.defaultClass: true` is kept here so that
-# migration phase 1 changes nothing. Today BOTH local-path and longhorn are marked default,
-# which makes an unqualified PVC non-deterministic. Phase 3 resolves that by clearing
-# local-path's default annotation — see docs/architecture/migration.md.
+# THE DEFAULT STORAGE CLASS is `longhorn-replicated`, declared in resources/. This chart
+# must not also claim it: with `persistence.defaultClass: true` the cluster ended up with
+# THREE classes marked default (local-path, longhorn, longhorn-replicated), and Kubernetes
+# resolves that arbitrarily.
+#
+# The plain `longhorn` class still exists and the 12 PVCs already bound to it are
+# unaffected — it is simply no longer the one an unqualified PVC lands on.
 defaultSettings:
   defaultReplicaCount: 2
   defaultDataPath: /var/lib/longhorn
@@ -30,7 +33,7 @@ longhornUI:
   tolerations: []
 
 persistence:
-  defaultClass: true
+  defaultClass: false
   defaultClassReplicaCount: 2
 
 ingress:
