@@ -119,6 +119,18 @@ ignoreDifferences:
     jqPathExpressions:
       - .spec.rules[].matches
       - .spec.rules[].filters[].requestRedirect.port
+  # A StatefulSet's volumeClaimTemplates are stored with server-added apiVersion, kind, and
+  # a status block the API server keeps updating. ArgoCD owns the whole list as one atomic
+  # field under server-side apply, so it diffs those additions against a manifest that
+  # cannot contain them — leaving every StatefulSet permanently OutOfSync while Healthy.
+  # This did not show up before the platform chart because the old ApplicationSets applied
+  # client-side, which normalises differently.
+  - group: apps
+    kind: StatefulSet
+    jqPathExpressions:
+      - .spec.volumeClaimTemplates[].status
+      - .spec.volumeClaimTemplates[].apiVersion
+      - .spec.volumeClaimTemplates[].kind
   - group: deviceplugin.intel.com
     kind: GpuDevicePlugin
     jqPathExpressions:
