@@ -21,18 +21,32 @@ cluster behaviour at all — it only changes how the same state is expressed.
 
 The restructure renames most Applications (`metallb-config` → `metallb-resources`,
 `longhorn-prereqs` → `longhorn-pre`, and so on). **To ArgoCD a rename is a delete plus a create.**
-Every existing Application carries `resources-finalizer.argocd.argoproj.io`, so deleting it
+All 28 existing Applications carry `resources-finalizer.argocd.argoproj.io`, so deleting one
 cascade-deletes everything it manages — the media stack's PVCs, the MetalLB pools, the Longhorn
-StorageClasses. The same applies to the `categories/` ApplicationSets: deleting an ApplicationSet
-deletes the Applications it generated.
+StorageClasses.
 
-Strip the finalizers first, so the deletes **orphan** those resources and the new Applications
-adopt them on first sync (server-side apply takes ownership without recreating):
+**Stripping the finalizer on its own does not work.** Verified against the live cluster: patch it
+off and the ApplicationSet controller puts it back within ten seconds, because it reconciles the
+children it owns. Anyone who strips finalizers, sees them gone, and proceeds is about to delete
+their PVCs.
+
+The controller has to stop owning them first. That is the order `pre-cutover.sh` implements:
+
+| Step | Why |
+| ---: | :--- |
+| 1. Freeze the root app | Otherwise `selfHeal` recreates every ApplicationSet removed below |
+| 2. Delete the ApplicationSets with `--cascade=orphan` | Severs the ownerReference so children survive, **and** removes the controller that re-adds finalizers |
+| 3. Strip finalizers, verify they stayed off, then delete the Applications | Now the delete orphans resources instead of destroying them |
+| 4. Diff a before/after resource snapshot | Proves nothing was destroyed before you go any further |
 
 ```sh
 DRY_RUN=true ./scripts/pre-cutover.sh     # review
 ./scripts/pre-cutover.sh                  # apply
 ```
+
+The script aborts if finalizers reappear at step 3, and aborts if anything is missing at step 4.
+Between steps 3 and 5 the cluster runs unmanaged — that is harmless, since pods do not care
+whether an `Application` object exists.
 
 3. Merge the branch. The root app now points at `platform/`.
 4. Watch it land, and confirm nothing was pruned:
