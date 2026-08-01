@@ -9,10 +9,12 @@ ssh_public_key    = "ssh-ed25519 AAAA... isaac@workstation"
 vm_password       = "changeme"
 k3s_token         = "generate with: openssl rand -base64 64"
 
-# Ubuntu 24.04 cloud-init template VMID on each Proxmox host. Templates are node-local.
+# Which template each host clones from. `node` is where the TEMPLATE lives, which need not
+# be the host the VM is created on — pve2 holds no templates, so it cross-node clones the
+# one on cyberlab (Proxmox copies the disk over the LAN).
 templates = {
-  pve2     = 9000
-  cyberlab = 9000
+  pve2     = { vmid = 9000, node = "cyberlab" }
+  cyberlab = { vmid = 9000, node = "cyberlab" }
 }
 
 # =============================================================================

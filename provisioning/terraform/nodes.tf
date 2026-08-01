@@ -20,9 +20,12 @@ resource "proxmox_virtual_environment_vm" "node" {
   machine     = each.value.machine
 
   clone {
-    # Templates are node-local in Proxmox, so each host has its own.
-    vm_id = var.templates[each.value.host]
-    full  = true
+    # `node_name` is the host the TEMPLATE lives on. When it differs from this VM's host,
+    # Proxmox performs a cross-node clone. pve2 holds no templates, so its VMs clone from
+    # the one on cyberlab rather than requiring a duplicate template per host.
+    vm_id     = var.templates[each.value.host].vmid
+    node_name = var.templates[each.value.host].node
+    full      = true
   }
 
   cpu {
@@ -120,6 +123,15 @@ resource "proxmox_virtual_environment_vm" "node" {
       vga,
       # GPU passthrough is attached through the Proxmox UI on the storage node.
       hostpci,
+      # Disks are sized at CREATE and never reconciled afterwards. ignore_changes does not
+      # affect creation, so new nodes still get exactly what the node map declares.
+      #
+      # This is not tidiness — k8s-store-01 has an 8 TB SATA drive passed through raw on
+      # scsi1 (/dev/disk/by-id/ata-ST8000DM004-...), attached outside Terraform. Without
+      # this, Terraform sees an undeclared disk and plans to DETACH the media library.
+      # Growing a disk is a deliberate manual action in Proxmox, followed by a resize
+      # inside the guest.
+      disk,
     ]
   }
 }

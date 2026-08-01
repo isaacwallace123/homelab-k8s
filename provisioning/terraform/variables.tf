@@ -31,10 +31,18 @@ variable "ssh_private_key_path" {
 
 variable "templates" {
   description = <<-EOT
-    Ubuntu cloud-init template VMID per Proxmox host. Templates are node-local unless they
-    live on shared storage, so each host needs its own entry.
+    Which cloud-init template each Proxmox host clones from, keyed by the host the new VM
+    is being created on.
+
+    `node` is the host the TEMPLATE lives on, which is not necessarily the host the VM is
+    created on. pve2 currently holds no templates at all, so its entry points at the one on
+    cyberlab and Proxmox performs a cross-node clone (it copies the disk over the LAN —
+    slower on first create, but it avoids maintaining a duplicate template per host).
   EOT
-  type        = map(number)
+  type = map(object({
+    vmid = number
+    node = string
+  }))
 }
 
 variable "network_bridge" {
@@ -106,13 +114,16 @@ variable "nodes" {
     memory_floating = optional(number)
     disk_size       = number
     datastore       = optional(string, "local-lvm")
-    machine         = optional(string, "q35")
-    cpu_affinity    = optional(string)
-    description     = optional(string, "")
-    tags            = optional(list(string), [])
-    labels          = optional(map(string), {})
-    taints          = optional(list(string), [])
-    kubelet_args    = optional(list(string), [])
+    # No default: VM 104 was created before `machine` was ever set, so Proxmox reports the
+    # implicit i440fx. Defaulting to q35 here would rewrite the machine type of a running
+    # control plane. Leave it unset to inherit whatever the VM already has.
+    machine      = optional(string)
+    cpu_affinity = optional(string)
+    description  = optional(string, "")
+    tags         = optional(list(string), [])
+    labels       = optional(map(string), {})
+    taints       = optional(list(string), [])
+    kubelet_args = optional(list(string), [])
     data_disk = optional(object({
       datastore = string
       size      = number
