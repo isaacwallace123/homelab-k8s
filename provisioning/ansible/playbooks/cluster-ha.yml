@@ -73,7 +73,7 @@
       ansible.builtin.command:
         cmd: tar czf /var/lib/rancher/k3s-pre-ha-{{ ansible_date_time.epoch }}.tar.gz -C /var/lib/rancher k3s
         creates: /var/lib/rancher/k3s-pre-ha-{{ ansible_date_time.epoch }}.tar.gz
-      when: k3s_installed | bool
+      when: k3s_installed | bool and not already_etcd | bool
 
     - name: Ensure the k3s config directory exists
       ansible.builtin.file:
