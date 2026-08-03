@@ -199,12 +199,8 @@
 
     - name: Wait for this server to report Ready
       ansible.builtin.command:
-        cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath={.status.conditions[?(@.type=="Ready")].status}
-      register: node_ready
+        cmd: k3s kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=300s
       changed_when: false
-      retries: 30
-      delay: 10
-      until: node_ready.stdout == "True"
 
 - name: Report cluster state
   hosts: server

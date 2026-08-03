@@ -18,6 +18,26 @@ resource "proxmox_virtual_environment_vm" "node" {
   description = each.value.description
   tags        = concat(["k3s", "terraform"], each.value.tags)
   machine     = each.value.machine
+  bios        = each.value.bios
+
+  dynamic "efi_disk" {
+    for_each = each.value.bios == "ovmf" && each.value.efi_datastore != null ? [1] : []
+    content {
+      datastore_id = each.value.efi_datastore
+      file_format  = "raw"
+      type         = "4m"
+    }
+  }
+
+  dynamic "hostpci" {
+    for_each = each.value.hostpci
+    content {
+      device  = hostpci.value.device
+      mapping = hostpci.value.mapping
+      pcie    = hostpci.value.pcie
+      rombar  = hostpci.value.rombar
+    }
+  }
 
   clone {
     # `node_name` is the host the TEMPLATE lives on. When it differs from this VM's host,
@@ -112,6 +132,16 @@ resource "proxmox_virtual_environment_vm" "node" {
   on_boot = true
 
   lifecycle {
+    # A k3s node is not cattle here: its local disk holds Longhorn replicas, and destroying
+    # one destroys a copy of live data. This guard exists because it was learned the hard
+    # way — a `bios` change on k8s-store-01 forced a replacement, wiping the media/Plex node
+    # and taking its Longhorn replicas with it. Recovery only worked because the surviving
+    # replicas happened to be on the other worker.
+    #
+    # To intentionally rebuild a node: set this to false in a commit of its own, drain the
+    # node, confirm Longhorn shows its replicas rebuilt elsewhere, THEN apply.
+    prevent_destroy = true
+
     ignore_changes = [
       # Proxmox and the guest agent rewrite these after creation; Terraform must not fight
       # them or every plan reports drift that is not real.
@@ -121,16 +151,21 @@ resource "proxmox_virtual_environment_vm" "node" {
       initialization,
       operating_system,
       vga,
-      # GPU passthrough is attached through the Proxmox UI on the storage node.
-      hostpci,
-      # Disks are sized at CREATE and never reconciled afterwards. ignore_changes does not
-      # affect creation, so new nodes still get exactly what the node map declares.
+
+      # REPLACEMENT-FORCING ATTRIBUTES. The provider cannot change these in place, so any
+      # drift between tfvars and the running VM is planned as destroy-and-recreate. They are
+      # honoured at CREATE (ignore_changes does not affect creation) and frozen thereafter,
+      # which is the whole point: a typo in tfvars must never be able to wipe a node.
+      bios,
+      efi_disk,
+      hostpci, # GPU passthrough, attached by Proxmox resource mapping
+
+      # Disks are sized at CREATE and never reconciled afterwards.
       #
-      # This is not tidiness — k8s-store-01 has an 8 TB SATA drive passed through raw on
-      # scsi1 (/dev/disk/by-id/ata-ST8000DM004-...), attached outside Terraform. Without
-      # this, Terraform sees an undeclared disk and plans to DETACH the media library.
-      # Growing a disk is a deliberate manual action in Proxmox, followed by a resize
-      # inside the guest.
+      # This is not tidiness — k8s-store-01 carries an 8 TB SATA drive passed through raw on
+      # scsi1, attached outside Terraform. Without this, Terraform sees an undeclared disk
+      # and plans to DETACH the media library. Growing a disk is a deliberate manual action
+      # in Proxmox, followed by a resize inside the guest.
       disk,
     ]
   }

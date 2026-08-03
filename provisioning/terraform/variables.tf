@@ -128,17 +128,25 @@ variable "nodes" {
     # No default: VM 104 was created before `machine` was ever set, so Proxmox reports the
     # implicit i440fx. Defaulting to q35 here would rewrite the machine type of a running
     # control plane. Leave it unset to inherit whatever the VM already has.
-    machine      = optional(string)
-    cpu_affinity = optional(string)
-    description  = optional(string, "")
-    tags         = optional(list(string), [])
-    labels       = optional(map(string), {})
-    taints       = optional(list(string), [])
-    kubelet_args = optional(list(string), [])
+    machine       = optional(string)
+    cpu_affinity  = optional(string)
+    bios          = optional(string)
+    efi_datastore = optional(string)
+    description   = optional(string, "")
+    tags          = optional(list(string), [])
+    labels        = optional(map(string), {})
+    taints        = optional(list(string), [])
+    kubelet_args  = optional(list(string), [])
     data_disk = optional(object({
       datastore = string
       size      = number
     }))
+    hostpci = optional(list(object({
+      device  = string
+      mapping = string
+      pcie    = optional(bool, true)
+      rombar  = optional(bool, true)
+    })), [])
   }))
 
   validation {

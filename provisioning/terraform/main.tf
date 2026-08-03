@@ -20,7 +20,8 @@ provider "proxmox" {
   insecure  = true # self-signed cert on Proxmox — set false once a valid cert is in place
 
   ssh {
-    agent    = true
-    username = var.proxmox_ssh_user
+    agent       = false
+    username    = var.proxmox_ssh_user
+    private_key = file(var.ssh_private_key_path)
   }
 }
