@@ -19,6 +19,14 @@ defaultSettings:
   replicaZoneSoftAntiAffinity: true
   replicaAutoBalance: best-effort
 
+  # Rebuild ONE replica per node at a time, not the default five.
+  #
+  # etcd lives on the same pve2 storage as everything else, and it is exquisitely sensitive
+  # to fsync latency. Nine concurrent rebuilds drove pve2 to loadavg 16 with 22% iowait,
+  # which starved etcd, cost it its leader-election leases, and dropped the API server
+  # twice. Rebuilds are background work; the control plane is not.
+  concurrentReplicaRebuildPerNodeLimit: 1
+
 # Longhorn must tolerate the media taint. The media node holds replicas like every other
 # worker, and without this toleration its manager and CSI driver cannot schedule there --
 # which shows up as a disk that never becomes Schedulable rather than as an obvious error.
