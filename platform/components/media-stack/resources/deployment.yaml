@@ -15,8 +15,16 @@ spec:
       labels:
         app: media-stack
     spec:
+      # Media is pinned to the dedicated media node: it is the only one with the Arc A380
+      # for transcoding, and it sits next to TrueNAS on pve2. The node is tainted so that
+      # nothing else lands there and competes for the GPU or the NFS path.
       nodeSelector:
-        node-role.kubernetes.io/apps: "true"
+        homelab.isaacwallace.dev/pool: media
+      tolerations:
+        - key: homelab.isaacwallace.dev/workload
+          operator: Equal
+          value: media
+          effect: NoSchedule
 
       # Runs before all app containers. Sets qBittorrent WebUI password (once,
       # idempotent) and strips the old proxy settings that are no longer needed

@@ -15,8 +15,16 @@ spec:
       labels:
         app: plex
     spec:
+      # Media is pinned to the dedicated media node: it is the only one with the Arc A380
+      # for transcoding, and it sits next to TrueNAS on pve2. The node is tainted so that
+      # nothing else lands there and competes for the GPU or the NFS path.
       nodeSelector:
-        node-role.kubernetes.io/apps: "true"
+        homelab.isaacwallace.dev/pool: media
+      tolerations:
+        - key: homelab.isaacwallace.dev/workload
+          operator: Equal
+          value: media
+          effect: NoSchedule
       containers:
         - name: plex
           image: lscr.io/linuxserver/plex:1.43.3.10828-00f62d37d-ls315

@@ -19,14 +19,21 @@ defaultSettings:
   replicaZoneSoftAntiAffinity: true
   replicaAutoBalance: best-effort
 
+# Longhorn must tolerate the media taint. The media node holds replicas like every other
+# worker, and without this toleration its manager and CSI driver cannot schedule there --
+# which shows up as a disk that never becomes Schedulable rather than as an obvious error.
 longhornManager:
   nodeSelector:
     node-role.kubernetes.io/worker: "true"
-  tolerations: []
+  tolerations: &mediaToleration
+    - key: homelab.isaacwallace.dev/workload
+      operator: Equal
+      value: media
+      effect: NoSchedule
 longhornDriver:
   nodeSelector:
     node-role.kubernetes.io/worker: "true"
-  tolerations: []
+  tolerations: *mediaToleration
 longhornUI:
   nodeSelector:
     node-role.kubernetes.io/worker: "true"
