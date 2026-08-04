@@ -29,7 +29,7 @@ spec:
           template: |
             {{- $spec := .observed.composite.resource.spec }}
             {{- $name := $spec.databaseName }}
-            {{- $ns := .observed.composite.resource.metadata.namespace }}
+            {{- $ns := $spec.namespace }}
             apiVersion: kubernetes.crossplane.io/v1alpha2
             kind: Object
             metadata:

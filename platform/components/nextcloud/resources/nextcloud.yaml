@@ -16,8 +16,9 @@ apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
 kind: Database
 metadata:
   name: nextcloud
-  namespace: cloud
 spec:
+  # Cluster-scoped composite; the namespace is a field. See database-xrd.yaml.
+  namespace: cloud
   databaseName: nextcloud
   size: 10Gi
 ---

@@ -6,15 +6,16 @@
 # is slower. It is the right call while Plex is the thing family actually uses. Moving
 # Immich to the media node later is a `pool` change in this file and nothing else.
 #
-# DATABASE: VectorChord, not stock Postgres. Since v1.133.0 Immich checks the VectorChord
+# DATABASE: VectorChord, not stock Postgres. Immich checks the VectorChord
 # extension version on startup and refuses to boot without it, so the claim overrides the
 # Database XRD's default image and preloads the library.
 apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
 kind: Database
 metadata:
   name: immich
-  namespace: cloud
 spec:
+  # Cluster-scoped composite; the namespace is a field. See database-xrd.yaml.
+  namespace: cloud
   databaseName: immich
   size: 20Gi
   imageName: ghcr.io/tensorchord/cloudnative-vectorchord:17-0.3.0
@@ -53,7 +54,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: immich-server
-          image: ghcr.io/immich-app/immich-server:v1.147.0
+          image: ghcr.io/immich-app/immich-server:v3.1.0
           env:
             - name: DB_HOSTNAME
               valueFrom:
@@ -136,7 +137,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: immich-ml
-          image: ghcr.io/immich-app/immich-machine-learning:v1.147.0
+          image: ghcr.io/immich-app/immich-machine-learning:v3.1.0
           ports:
             - containerPort: 3003
               name: http

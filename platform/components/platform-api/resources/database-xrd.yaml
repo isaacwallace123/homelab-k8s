@@ -9,15 +9,25 @@
 # Swapping the engine underneath (a different operator, an external server) is a
 # Composition change and touches no application manifest.
 #
-# `scope: Namespaced` (Crossplane v2): the composite lives beside the app that asked for
-# it, and composes only namespaced resources. Deleting the app's namespace collects the
-# database with it.
+# `scope: Cluster`, not Namespaced.
+#
+# This was Namespaced first, which is the better model — the composite lives beside the app
+# and is collected with its namespace. It does not work here: the Composition composes a
+# provider-kubernetes `Object`, and that CRD is cluster-scoped with no namespaced variant.
+# Crossplane refuses the combination outright:
+#
+#   cannot apply cluster scoped composed resource "cluster" for a namespaced composite
+#
+# So the composite is cluster-scoped and carries the destination namespace as a field.
+# The cost is that deleting the app's namespace no longer collects its database; the
+# Database object has to be deleted explicitly. Given it holds the only copy of the data,
+# that is a defensible failure mode.
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
   name: databases.platform.homelab.isaacwallace.dev
 spec:
-  scope: Namespaced
+  scope: Cluster
   group: platform.homelab.isaacwallace.dev
   names:
     kind: Database
@@ -35,6 +45,14 @@ spec:
             spec:
               type: object
               properties:
+                namespace:
+                  type: string
+                  description: >-
+                    Namespace the CNPG Cluster and its connection Secret are created in.
+                    A field rather than the composite's own metadata.namespace, because
+                    the composite is cluster-scoped — see the note above.
+                  pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                  maxLength: 63
                 databaseName:
                   type: string
                   description: The database to create, and the owner role created with it.
@@ -92,6 +110,7 @@ spec:
                     type: string
                   default: []
               required:
+                - namespace
                 - databaseName
             status:
               type: object
