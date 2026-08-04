@@ -43,6 +43,21 @@ spec:
               value: "1000"
             - name: TZ
               value: America/New_York
+            # Arc (DG2) transcoding needs Intel's iHD VA driver, which this image does not
+            # ship — /usr/lib/x86_64-linux-gnu/dri is empty and the transcoder fails with
+            # "No VA display found for device /dev/dri/renderD128" even though the render
+            # node is present and permissions are correct.
+            #
+            # LinuxServer's universal-package-install mod adds it at container start, which
+            # keeps this declarative instead of maintaining a forked image.
+            - name: DOCKER_MODS
+              value: linuxserver/mods:universal-package-install
+            - name: INSTALL_PACKAGES
+              value: intel-media-va-driver-non-free|vainfo
+            # iHD is the driver for Gen12+ / Arc. i965 is the legacy one and does not
+            # support DG2, so leaving the choice to autodetection can pick the wrong one.
+            - name: LIBVA_DRIVER_NAME
+              value: iHD
             - name: VERSION
               value: docker
             - name: ADVERTISE_IP
