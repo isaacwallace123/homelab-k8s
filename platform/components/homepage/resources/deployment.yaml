@@ -93,10 +93,14 @@ data:
             href: http://192.168.0.247
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/stirling-pdf.png
             description: PDF Toolkit
-        - Garage:
-            href: http://192.168.0.245
+        # No href on purpose. Garage has NO web UI — .245 is the raw S3 API, and a browser
+        # hitting it with no credentials correctly returns "AccessDenied: Garage does not
+        # support anonymous access yet". That is the service working, but as a dashboard
+        # tile it reads as broken. Left as a labelled entry so the endpoint is documented
+        # without inviting a click that can only fail.
+        - Garage (S3):
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/garage.png
-            description: S3 Object Storage · Longhorn backup target
+            description: S3 API at 192.168.0.245 · Longhorn backup target · no web UI
 
     - Networking:
         - Cudy Router:

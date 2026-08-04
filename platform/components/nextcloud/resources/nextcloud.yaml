@@ -94,8 +94,13 @@ spec:
                   name: nextcloud-auth
                   key: admin-password
                   optional: true
+            # localhost and the pod CIDR are NOT optional here. The kubelet sends its
+            # probes with Host set to the POD IP, and Nextcloud answers any untrusted host
+            # with HTTP 400 {"error":"Trusted domain error.","code":15}. The readiness
+            # probe then never passes and the LIVENESS probe kills the pod -- which looks
+            # exactly like "Nextcloud crashed when I created the admin account".
             - name: NEXTCLOUD_TRUSTED_DOMAINS
-              value: "cloud.isaacwallace.dev 192.168.0.243"
+              value: "cloud.isaacwallace.dev 192.168.0.243 localhost 10.42.*.*"
             # Behind cloudflared, so the app must trust the proxy's forwarded headers or
             # every login appears to come from the tunnel's pod IP and rate limiting fires.
             - name: TRUSTED_PROXIES
