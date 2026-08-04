@@ -1,8 +1,8 @@
 # Bucket — an S3 bucket, on request.
 #
 # Same idea as the Database XRD: an app asks for storage, not for a specific object store.
-# Nextcloud and Immich both want "a bucket and credentials for it"; neither should carry
-# Garage-specific configuration, and neither should leave a bucket behind when removed.
+# An app wants "a bucket and credentials for it" and should not carry Garage-specific
+# configuration, nor leave a bucket behind when it is removed.
 #
 # The Composition creates the bucket, a scoped access key, and a Secret in the claimant's
 # namespace. Because the composite is namespaced, deleting the app's namespace collects

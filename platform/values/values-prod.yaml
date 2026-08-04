@@ -66,8 +66,8 @@ projects:
 
   cloud:
     description: >-
-      The personal-cloud tier — Nextcloud, Immich, Garage, Stirling-PDF and the
-      CloudNativePG clusters behind them. Confined to the `cloud` namespace: this is
+      The personal-cloud tier — Immich, Garage, Stirling-PDF and the CloudNativePG
+      cluster behind Immich. Confined to the `cloud` namespace: this is
       the tier that holds personal files and photos, and it has no reason to reach the
       media stack, the arena, or anything cyberlab owns.
     destinations: [cloud]
@@ -285,7 +285,7 @@ components:
 
   # ── cloud tier ──────────────────────────────────────────────────────────────
   # Garage first: the Bucket Composition's ProviderConfig points at its admin API, and
-  # Nextcloud and Immich claim buckets from it.
+  # Immich claims buckets from it.
   - name: garage
     tier: apps
     namespace: cloud
@@ -293,15 +293,6 @@ components:
     resources:
       enabled: true
 
-  # Nextcloud claims a Database, so it must reconcile after garage and after the
-  # platform-api tier has registered the XRD.
-  - name: nextcloud
-    tier: apps
-    waveOffset: 4
-    namespace: cloud
-    project: cloud
-    resources:
-      enabled: true
 
   - name: immich
     tier: apps

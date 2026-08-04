@@ -1,7 +1,7 @@
 # Garage — S3-compatible object storage for the cloud tier.
 #
 # Two jobs here:
-#   1. Buckets for Nextcloud and Immich, provisioned by Crossplane `Bucket` claims rather
+#   1. Buckets for the cloud apps, provisioned by Crossplane `Bucket` claims rather
 #      than by hand (see platform-api/resources/bucket-*.yaml).
 #   2. A Longhorn backup target. The cluster currently has none, which means Longhorn's
 #      snapshots protect against a replica failure but not against losing the pool.

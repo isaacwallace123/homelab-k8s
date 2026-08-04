@@ -27,7 +27,6 @@ flowchart TB
         subgraph CloudNode["k8s-cloud-01 · pool=cloud"]
             subgraph ns_cloud["namespace: cloud"]
                 Garage["Garage S3\n.245"]
-                Nextcloud["Nextcloud\n.243"]
                 Immich["Immich\nserver · ML · valkey\n.244"]
                 Stirling["Stirling-PDF\n.247"]
                 CNPG["CloudNativePG\nclusters"]
@@ -94,7 +93,6 @@ flowchart TB
     EnvoyGW --> ArgoCD
     EnvoyGW --> Grafana
     EnvoyGW --> Frontend
-    EnvoyGW --> Nextcloud
     EnvoyGW --> Immich
     Client -->|"direct :32400"| Plex
 
@@ -111,7 +109,6 @@ flowchart TB
 
     Crossplane -->|"composes Database"| CNPG
     Crossplane -->|"composes Bucket"| Garage
-    Nextcloud --> CNPG
     Immich --> CNPG
 
     Longhorn --> Prometheus
@@ -124,7 +121,6 @@ flowchart TB
     TrueNAS -->|"NFS /tank"| Plex
     TrueNAS -->|"NFS /tank"| Radarr
     TrueNAS -->|"NFS /tank"| Sonarr
-    TrueNAS -->|"NFS /tank/cloud"| Nextcloud
     TrueNAS -->|"NFS /tank/cloud"| Immich
     TrueNAS -->|"NFS /tank/cloud"| Garage
 

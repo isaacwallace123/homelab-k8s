@@ -7,7 +7,6 @@
 #
 #   zfs create tank/cloud
 #   zfs create tank/cloud/garage
-#   zfs create tank/cloud/nextcloud
 #   zfs create tank/cloud/immich
 #   chown -R 1000:1000 /mnt/tank/cloud
 #
@@ -16,12 +15,11 @@
 # That differs from the media exports, which leave maproot off and work fine because
 # media-stack runs every container as PUID/PGID 1000. The cloud tier does not:
 #
-#   garage     runs as root and writes its block store directly
-#   nextcloud  entrypoint runs as root to create its init lock, then drops to www-data (33)
+#   garage  runs as root and writes its block store directly
 #
-# With root_squash both get "Permission denied" no matter who owns the dataset — garage
-# fails with `IO error: Permission denied (os error 13)` after initialising the block
-# manager, and nextcloud cannot create /var/www/html/nextcloud-init-sync.lock.
+# Under root_squash it gets "Permission denied" no matter who owns the dataset, failing
+# with `IO error: Permission denied (os error 13)` right after initialising the block
+# manager.
 #
 # NOTE: changing maproot on an existing share does not affect already-mounted clients.
 # The consuming pod has to be deleted so the kubelet remounts.
@@ -56,38 +54,6 @@ spec:
     - ReadWriteMany
   storageClassName: ""
   volumeName: tank-cloud-garage
-  resources:
-    requests:
-      storage: 1Ti
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tank-cloud-nextcloud
-spec:
-  capacity:
-    storage: 1Ti
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  claimRef:
-    namespace: cloud
-    name: tank-cloud-nextcloud
-  nfs:
-    server: 192.168.0.252
-    path: /mnt/tank/cloud/nextcloud
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tank-cloud-nextcloud
-  namespace: cloud
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: ""
-  volumeName: tank-cloud-nextcloud
   resources:
     requests:
       storage: 1Ti

@@ -74,13 +74,9 @@ data:
               key: "{{HOMEPAGE_VAR_SAB_KEY}}"
 
     # Widgets are deliberately absent here for now. Homepage renders a visible error card
-    # when a widget's key is missing, and Immich and Nextcloud only issue API keys after
-    # their first-run setup. Add them once those exist — see the note in the env block.
+    # when a widget's key is missing, and Immich only issues an API key after its
+    # first-run setup. Add it once that exists — see the note in the env block.
     - Cloud:
-        - Nextcloud:
-            href: http://192.168.0.243
-            icon: nextcloud.png
-            description: Files · Calendar · Contacts
         - Immich:
             href: http://192.168.0.244
             icon: immich.png

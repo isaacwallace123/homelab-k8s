@@ -42,7 +42,7 @@ spec:
 # Manages Garage buckets and access keys as composed resources, via Garage's admin API.
 #
 # This is what makes the Bucket XRD real rather than a Job wrapped in a Composition.
-# Nextcloud and Immich declare a Bucket claim and get a bucket, a scoped access key, and a
+# An app declares a Bucket claim and gets a bucket, a scoped access key, and a
 # Secret — with deletion collected by Crossplane instead of left behind.
 #
 # NOT crossplane-contrib. Verify the package before a fresh bootstrap:

@@ -1,7 +1,7 @@
 # Database — a Postgres database, on request.
 #
 # The point of this XRD is that an app should not have to know how Postgres is run here.
-# Nextcloud and Immich each need "a database and a connection secret"; they should not each
+# An app needs "a database and a connection secret"; it should not
 # ship a StatefulSet, a PVC, a backup schedule and a bespoke Secret layout that drifts.
 #
 # A claim is four fields. The Composition turns it into a CloudNativePG Cluster with
@@ -61,8 +61,8 @@ spec:
                 size:
                   type: string
                   description: >-
-                    Storage for the data volume. Small is enough for Nextcloud's metadata;
-                    Immich's asset table is what grows.
+                    Storage for the data volume. Immich's asset table is what grows;
+                    most apps need far less.
                   enum: ["5Gi", "10Gi", "20Gi", "50Gi"]
                   default: "10Gi"
                 instances:
