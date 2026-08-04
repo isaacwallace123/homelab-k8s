@@ -103,8 +103,14 @@ spec:
               port: 80
             initialDelaySeconds: 30
             periodSeconds: 10
-            # First boot runs the installer against an empty database.
-            failureThreshold: 60
+            # 30s + 180*10s = ~30 minutes.
+            #
+            # First boot does not just run the installer: it unpacks the entire Nextcloud
+            # tree -- tens of thousands of small files -- onto the NFS dataset. Over NFS
+            # that is far slower than the local-disk case the default assumes. At the
+            # previous 10-minute budget the probe killed the pod mid-extraction and it
+            # restarted from the beginning, which looks identical to a crash loop.
+            failureThreshold: 180
           readinessProbe:
             httpGet:
               path: /status.php
