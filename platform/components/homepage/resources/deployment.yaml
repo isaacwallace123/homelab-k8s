@@ -73,6 +73,31 @@ data:
               url: http://sabnzbd.media.svc.cluster.local:8090
               key: "{{HOMEPAGE_VAR_SAB_KEY}}"
 
+    # Widgets are deliberately absent here for now. Homepage renders a visible error card
+    # when a widget's key is missing, and Immich and Nextcloud only issue API keys after
+    # their first-run setup. Add them once those exist — see the note in the env block.
+    - Cloud:
+        - Nextcloud:
+            href: http://192.168.0.243
+            icon: nextcloud.png
+            description: Files · Calendar · Contacts
+        - Immich:
+            href: http://192.168.0.244
+            icon: immich.png
+            description: Photos & Video Library
+        - Vaultwarden:
+            href: http://192.168.0.246
+            icon: vaultwarden.png
+            description: Password Manager
+        - Stirling PDF:
+            href: http://192.168.0.247
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/stirling-pdf.png
+            description: PDF Toolkit
+        - Garage:
+            href: http://192.168.0.245
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/garage.png
+            description: S3 Object Storage · Longhorn backup target
+
     - Networking:
         - Cudy Router:
             href: http://192.168.0.1
