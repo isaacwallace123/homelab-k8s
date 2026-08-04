@@ -42,7 +42,10 @@ spec:
 # `cloud` namespace, which is why garage sits at the apps tier and the platform-api tier
 # that consumes it reconciles later. On a cold bootstrap this ProviderConfig reports
 # unhealthy until Garage is up; that is expected and self-resolves.
-apiVersion: garage.crossplane.io/v1alpha1
+# NOTE the API version: the provider serves ProviderConfig at v1 while its managed
+# resources (Bucket, Key, KeyAccess) are v1alpha1. Assuming they matched is what made this
+# fail to apply with "no matches for kind ProviderConfig in version .../v1alpha1".
+apiVersion: garage.crossplane.io/v1
 kind: ProviderConfig
 metadata:
   name: garage

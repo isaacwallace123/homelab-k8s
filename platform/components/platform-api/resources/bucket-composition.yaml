@@ -60,17 +60,38 @@ spec:
                 name: garage
               forProvider:
                 name: {{ $name }}
-                # Scoped to this bucket. No createBucket permission — the Composition owns
-                # bucket lifecycle, and an app that can create buckets can outlive its own
-                # claim's garbage collection.
+                # Key permissions are GLOBAL, not per-bucket — the only field here is
+                # createBucket. Bucket-scoped grants are a separate KeyAccess below.
+                #
+                # false deliberately: the Composition owns bucket lifecycle, and a key that
+                # can create buckets can leave them behind when its claim is collected.
                 permissions:
-                  - bucket: {{ $name }}
-                    read: true
-                    write: true
-                    owner: false
+                  createBucket: false
               writeConnectionSecretToRef:
                 name: {{ $name }}-garage-key
                 namespace: {{ $ns }}
+            ---
+            # Grants this key read+write on this bucket and nothing else. The Refs let
+            # Crossplane resolve the generated Garage IDs rather than requiring them to be
+            # known at template time.
+            apiVersion: garage.crossplane.io/v1alpha1
+            kind: KeyAccess
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: keyaccess
+            spec:
+              providerConfigRef:
+                name: garage
+              forProvider:
+                accessKeyIdRef:
+                  name: {{ $name }}
+                bucketIdRef:
+                  name: {{ $name }}
+                permissions:
+                  read: true
+                  write: true
+                  owner: false
             ---
             {{- $ready := false }}
             {{- with .observed.resources.bucket }}

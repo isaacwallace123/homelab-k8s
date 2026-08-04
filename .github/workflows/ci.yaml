@@ -52,6 +52,10 @@ jobs:
         run: ./scripts/test-compositions.sh
 
       - name: Validate Kubernetes manifests
+        # `values` directories and Chart.yaml are pruned alongside `templates`. They are
+        # Helm inputs, not Kubernetes objects, so they have no `kind` and kubeconform
+        # counts each one as an error rather than skipping it. yamllint already covers
+        # them for syntax.
         run: |
           helm template platform platform -f platform/values/values-prod.yaml > /tmp/apps.yaml
           kubeconform \
@@ -62,7 +66,10 @@ jobs:
             -ignore-filename-pattern '\.argocd-source-.*\.yaml' \
             -kubernetes-version 1.34.0 \
             /tmp/apps.yaml bootstrap/ \
-            $(find platform/components -path '*/templates' -prune -o -name '*.yaml' -print)
+            $(find platform/components \
+                \( -path '*/templates' -o -path '*/values' \) -prune -o \
+                -name 'Chart.yaml' -prune -o \
+                -name '*.yaml' -print)
 
       - name: Validate Terraform
         run: |
