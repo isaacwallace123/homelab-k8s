@@ -103,6 +103,17 @@ data:
             href: http://192.168.0.201
             icon: envoy.png
             description: Reverse Proxy
+        - ntfy:
+            href: http://192.168.0.222
+            icon: ntfy.png
+            description: Push Notifications
+        # External link, deliberately. The subnet router has no web UI of its own, and the
+        # thing actually worth reaching is the admin console — advertised routes must be
+        # re-approved there after any TS_ROUTES change, which is easy to forget.
+        - Tailscale:
+            href: https://login.tailscale.com/admin/machines
+            icon: tailscale.png
+            description: VPN · route approval and devices
 
     - Monitoring:
         - Grafana:
@@ -114,6 +125,14 @@ data:
               url: http://grafana.monitoring.svc.cluster.local:3000
               username: admin
               password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
+        - Prometheus:
+            href: http://192.168.0.241
+            icon: prometheus.png
+            description: Metrics Store · PromQL
+        - Alertmanager:
+            href: http://192.168.0.242
+            icon: alertmanager.png
+            description: Alert Routing · Silences
         - Cluster:
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/prometheus.png
             description: CPU · RAM · Network
