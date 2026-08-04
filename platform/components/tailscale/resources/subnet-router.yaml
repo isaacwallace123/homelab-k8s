@@ -91,7 +91,9 @@ spec:
         homelab.isaacwallace.dev/pool: apps
       containers:
         - name: tailscale
-          image: ghcr.io/tailscale/tailscale:v1.90.2
+          # Tailscale ships stable on even minor versions; odd minors (1.97, 1.99, 1.101,
+          # 1.103) are unstable builds, so do not "upgrade" to a higher-looking odd tag.
+          image: ghcr.io/tailscale/tailscale:v1.98.10
           env:
             - name: TS_AUTHKEY
               valueFrom:
