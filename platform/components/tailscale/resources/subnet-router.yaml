@@ -100,10 +100,28 @@ spec:
                 secretKeyRef:
                   name: tailscale-auth
                   key: authkey
-            # The LAN. Add 10.43.0.0/16 here too if you ever want to hit ClusterIPs
-            # directly from a laptop; not needed for anything listed above.
+            # Deliberately NOT 192.168.0.0/24. That would work, but it hands every
+            # tailnet device the whole LAN — including the router at .1, TrueNAS at
+            # .252 and Proxmox at .254. A stolen laptop would then own the hypervisor
+            # that runs every VM, so the blast radius is the entire homelab.
+            #
+            # These four ranges cover the MetalLB service pools and nothing else:
+            #
+            #   .200/29  → .200-.207   Envoy gateways, ArgoCD
+            #   .216/29  → .216-.223   Homepage, ntfy
+            #   .224/28  → .224-.239   Plex and the *arr stack
+            #   .240/29  → .240-.247   Grafana, Prometheus, Alertmanager,
+            #                          Immich, Garage, Stirling-PDF
+            #
+            # Ranges rather than /32s so a newly allocated service IP inside a pool
+            # is reachable without editing this file. Anything outside them — the
+            # router, the nodes, TrueNAS, Proxmox — is simply not routed, which is
+            # the point.
+            #
+            # To reach Proxmox remotely, add 192.168.0.254/32. Weigh it: it is the
+            # single most valuable target on the network.
             - name: TS_ROUTES
-              value: "192.168.0.0/24"
+              value: "192.168.0.200/29,192.168.0.216/29,192.168.0.224/28,192.168.0.240/29"
             - name: TS_KUBE_SECRET
               value: tailscale-state
             - name: TS_USERSPACE
