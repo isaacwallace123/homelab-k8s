@@ -69,10 +69,21 @@
           # Managed by Ansible — provisioning/ansible/playbooks/join-agents.yml
           server: "https://{{ primary_server_ip }}:6443"
           token: "{{ k3s_token }}"
+          # `node-role.kubernetes.io/*` is deliberately filtered out here. The kubelet
+          # refuses to self-assign labels in restricted kubernetes.io namespaces and
+          # exits rather than starting:
+          #
+          #   Error: failed to validate kubelet flags: unknown 'kubernetes.io' or 'k8s.io'
+          #   labels specified with --node-labels: [node-role.kubernetes.io/worker]
+          #
+          # Every node in terraform.tfvars carries that label, so without this filter no
+          # new node can join at all -- k3s-agent installs and then fails to start.
+          # node-topology.yml applies these afterwards with `kubectl label`, which is the
+          # only route the API server accepts them by.
           node-label:
             - "topology.kubernetes.io/zone={{ node_zone }}"
             - "homelab.isaacwallace.dev/pool={{ node_pool }}"
-          {% for k, v in (node_labels | default({})).items() %}
+          {% for k, v in (node_labels | default({})).items() if not k.startswith('node-role.kubernetes.io/') %}
             - "{{ k }}={{ v }}"
           {% endfor %}
           {% if node_taints | default([]) | length > 0 %}
