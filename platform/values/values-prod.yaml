@@ -71,6 +71,16 @@ projects:
       the tier that holds personal files and photos, and it has no reason to reach the
       media stack, the arena, or anything cyberlab owns.
     destinations: [cloud]
+    # `Database` is a cluster-scoped composite (provider-kubernetes `Object` is
+    # cluster-scoped, so a namespaced composite cannot compose one). An AppProject blocks
+    # cluster-scoped kinds unless they are listed here, and the failure is explicit:
+    #   resource platform.homelab.isaacwallace.dev:Database is not permitted in project cloud
+    #
+    # Scoped to this one kind deliberately. The tier still cannot create Namespaces, CRDs,
+    # RBAC, or anything else cluster-wide.
+    clusterResourceWhitelist:
+      - group: platform.homelab.isaacwallace.dev
+        kind: Database
 
   monitoring:
     description: Observability hub — homelab metrics plus read-only cross-lab visibility.
