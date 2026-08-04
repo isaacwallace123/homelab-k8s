@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Test-render the GameServer Composition templates against mock composite resources.
+# Test-render the Composition templates against mock composite resources.
 #
 # function-go-templating uses Go text/template plus sprig — the same engine Helm uses — so
 # the inline templates can be extracted and rendered with `helm template` against fake XR
@@ -10,9 +10,15 @@
 #   * wrong sprig argument types
 #   * missing keys and bad `dig` paths
 #   * YAML that does not parse once rendered
+#   * indentation bugs in {{- with }} / {{- range }} blocks, which are the easiest to
+#     introduce and the hardest to catch by reading
 #
 # It does NOT check Crossplane semantics (resource names, provider refs, readiness). For
 # that, install the crossplane CLI and use `crossplane render`.
+#
+# Each composition is exercised on BOTH branches: a fully specified claim and a minimal
+# one. The minimal case is the one that matters — Crossplane applies XRD defaults, but a
+# bare template must not assume they are present.
 # =============================================================================
 set -euo pipefail
 
@@ -33,10 +39,10 @@ python - "$T" <<'PY'
 import sys, pathlib, yaml
 out = pathlib.Path(sys.argv[1]) / "harness" / "templates"
 base = pathlib.Path("platform/components/platform-api/resources")
-for f in sorted(base.glob("gameserver-composition-*.yaml")):
+for f in sorted(base.glob("*-composition.yaml")):
     doc = yaml.safe_load(f.read_text(encoding="utf-8"))
     tmpl = doc["spec"]["pipeline"][0]["input"]["inline"]["template"]
-    name = f.name.replace("gameserver-composition-", "").replace(".yaml", "")
+    name = f.name.replace("-composition.yaml", "")
     # Wrap so that `.` inside the template is the mock composition context, matching how
     # function-go-templating invokes it.
     (out / f"{name}.tpl").write_text(
@@ -45,75 +51,62 @@ for f in sorted(base.glob("gameserver-composition-*.yaml")):
 PY
 
 # ── mock inputs ──────────────────────────────────────────────────────────────
-cat > "$T/case-minecraft-modpack.yaml" <<'EOF'
+# Immich: the case that exercises every optional field. A VectorChord image, a preloaded
+# shared library, and post-init extensions — none of which stock Postgres claims use.
+cat > "$T/case-database-immich.yaml" <<'EOF'
 observed:
   composite:
     resource:
-      metadata: {name: atm10}
+      metadata: {name: immich, namespace: cloud}
       spec:
-        game: minecraft
-        displayName: All The Mods 10
-        size: xl
-        storage: {size: 100Gi, class: nvme-local}
-        network: {publish: mc-router, hostnames: [atm10.mc.isaacwallace.dev]}
-        backup: {enabled: true, schedule: "0 5 * * *", retention: 14}
-        minecraft: {type: AUTO_CURSEFORGE, modpack: all-the-mods-10, difficulty: normal, maxPlayers: 10}
+        databaseName: immich
+        size: 20Gi
+        instances: 1
+        storageClass: longhorn-replicated
+        imageName: ghcr.io/tensorchord/cloudnative-vectorchord:17-0.3.0
+        sharedPreloadLibraries: [vchord.so]
+        extensions: [vchord, cube, earthdistance]
   resources: {}
 EOF
 
-# Minimal spec: everything defaulted. This is the case that catches missing `default`
-# guards, since Crossplane applies XRD defaults but a bare template must not assume them.
-cat > "$T/case-minecraft-minimal.yaml" <<'EOF'
+# Nextcloud: no optional fields. The `postgresql` block and postInitApplicationSQL must be
+# ABSENT, not rendered empty — an empty shared_preload_libraries list stops Postgres.
+cat > "$T/case-database-minimal.yaml" <<'EOF'
 observed:
   composite:
     resource:
-      metadata: {name: smp}
-      spec: {game: minecraft}
+      metadata: {name: nextcloud, namespace: cloud}
+      spec:
+        databaseName: nextcloud
+        size: 10Gi
+        instances: 1
+        storageClass: longhorn-replicated
+        imageName: ghcr.io/cloudnative-pg/postgresql:17.2
+        sharedPreloadLibraries: []
+        extensions: []
   resources: {}
 EOF
 
-cat > "$T/case-container-satisfactory.yaml" <<'EOF'
+cat > "$T/case-bucket-quota.yaml" <<'EOF'
 observed:
   composite:
     resource:
-      metadata: {name: satisfactory}
+      metadata: {name: immich, namespace: cloud}
       spec:
-        game: satisfactory
-        size: large
-        storage: {size: 50Gi, class: nvme-local}
-        network: {publish: loadbalancer}
-        backup: {enabled: true, retention: 7}
-  resources:
-    service:
-      resource:
-        status:
-          atProvider:
-            status:
-              loadBalancer:
-                ingress: [{ip: 192.168.0.211}]
-EOF
-
-cat > "$T/case-container-minimal.yaml" <<'EOF'
-observed:
-  composite:
-    resource:
-      metadata: {name: terraria}
-      spec: {game: terraria}
+        bucketName: cloud-immich
+        maxSize: "1099511627776"
+        maxObjects: "1000000"
   resources: {}
 EOF
 
-cat > "$T/case-container-unpublished.yaml" <<'EOF'
+# No quotas: the `quotas` block must be omitted entirely rather than emitted empty.
+cat > "$T/case-bucket-minimal.yaml" <<'EOF'
 observed:
   composite:
     resource:
-      metadata: {name: rust}
+      metadata: {name: backups, namespace: cloud}
       spec:
-        game: rust
-        size: xl
-        network: {publish: none}
-        backup: {enabled: false}
-        steam:
-          extraEnv: {RUST_SERVER_NAME: "test", RUST_SERVER_WORLDSIZE: "3500"}
+        bucketName: longhorn-backups
   resources: {}
 EOF
 
@@ -137,14 +130,13 @@ run() {
   fi
 }
 
-echo "==> minecraft composition"
-run minecraft case-minecraft-modpack.yaml
-run minecraft case-minecraft-minimal.yaml
+echo "==> database composition"
+run database case-database-immich.yaml
+run database case-database-minimal.yaml
 
-echo "==> container composition"
-run container case-container-satisfactory.yaml
-run container case-container-minimal.yaml
-run container case-container-unpublished.yaml
+echo "==> bucket composition"
+run bucket case-bucket-quota.yaml
+run bucket case-bucket-minimal.yaml
 
 echo
 [[ "$fail" -eq 0 ]] && echo "OK" || { echo "FAILED"; exit 1; }

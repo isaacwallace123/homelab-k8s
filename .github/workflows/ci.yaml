@@ -45,7 +45,7 @@ jobs:
         # component missing its Chart.yaml or env values file, and any template error.
         run: ./scripts/validate-platform.sh
 
-      - name: Test-render the GameServer Compositions
+      - name: Test-render the Crossplane Compositions
         # function-go-templating uses the same engine as Helm, so the inline templates can
         # be rendered against mock composites. Without this a broken Composition is only
         # discovered when it silently composes nothing.
@@ -58,7 +58,7 @@ jobs:
             -strict \
             -ignore-missing-schemas \
             -summary \
-            -skip "SealedSecret,Application,ApplicationSet,AppProject,ClusterIssuer,Certificate,GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,IPAddressPool,L2Advertisement,CompositeResourceDefinition,Composition,Provider,Function,ProviderConfig,DeploymentRuntimeConfig,GameServer,Object,Release" \
+            -skip "SealedSecret,Application,ApplicationSet,AppProject,ClusterIssuer,Certificate,GpuDevicePlugin,RecurringJob,HTTPRoute,TLSRoute,Gateway,GatewayClass,IPAddressPool,L2Advertisement,CompositeResourceDefinition,Composition,Provider,Function,ProviderConfig,DeploymentRuntimeConfig,Object" \
             -ignore-filename-pattern '\.argocd-source-.*\.yaml' \
             -kubernetes-version 1.34.0 \
             /tmp/apps.yaml bootstrap/ \

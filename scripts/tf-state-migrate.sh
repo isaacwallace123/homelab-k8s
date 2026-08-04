@@ -85,7 +85,7 @@ State migrated. NOW REVIEW THE PLAN BEFORE APPLYING:
 
 What you should see for the three existing nodes:
   ~ update in-place   name, tags, description, memory  -- fine
-  + create            k8s-cp-02, k8s-cp-03, k8s-game-01 -- expected
+  + create            k8s-cp-02, k8s-cp-03 -- expected
 
 What means STOP:
   -/+ must be replaced   on k8s-cp-01, k8s-store-01, or k8s-infra-01
