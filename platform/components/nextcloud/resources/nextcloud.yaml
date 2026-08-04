@@ -1,14 +1,22 @@
 # Nextcloud — files, calendar, contacts.
 #
-# STORAGE: the data directory is the TrueNAS NFS dataset, NOT Garage S3 primary storage.
+# STORAGE: split. The application tree is on Longhorn; only user DATA is on TrueNAS NFS.
 #
-# The plan called for S3 primary storage, and this deviates deliberately. With S3 primary
-# storage Nextcloud writes every file as an opaque object keyed by file ID — you cannot
-# browse your own data on the NAS, ZFS snapshots of it are not directly restorable, and
-# recovering a single file means going through Nextcloud's database to resolve the ID.
-# On a box that already has ZFS with snapshots and replication, a plain directory is both
-# simpler and far easier to get files out of when something is wrong. Garage still earns
-# its place as the Longhorn backup target and for Immich.
+# Putting all of /var/www/html on NFS does not work. On every start the image rsyncs its
+# ~30,000-file tree into that directory, and the aws-sdk-php vendor bundle alone is ~15,000
+# tiny files. Over NFS each one costs a round trip; the rsync wedged in
+# `rpc_wait_bit_killable` and made zero progress for minutes at a time. Large sequential
+# media reads from the same server are unaffected — this is a small-file problem, not a
+# broken NFS server.
+#
+# So the app tree lives on Longhorn (fast, local, real POSIX semantics) and /var/www/html/data
+# — the part that actually grows and that you want on the NAS — is the NFS dataset. This is
+# also the layout Nextcloud itself recommends.
+#
+# NOT Garage S3 primary storage, deliberately: with S3 primary storage Nextcloud writes
+# every file as an opaque object keyed by file ID, so you cannot browse your own data on the
+# NAS and recovering one file means resolving IDs through the database. On a box that
+# already has ZFS snapshots, a plain directory is far easier to get files out of.
 #
 # DATABASE: a Crossplane `Database` claim, not a hand-rolled Postgres. See
 # platform/components/platform-api/resources/database-xrd.yaml.
@@ -124,9 +132,12 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
           volumeMounts:
-            # The whole html tree, so apps, config and data survive a pod replacement.
-            - name: data
+            # App tree on Longhorn — this is what rsync writes on every start.
+            - name: html
               mountPath: /var/www/html
+            # User data on the NAS, mounted INSIDE the app tree.
+            - name: data
+              mountPath: /var/www/html/data
           resources:
             requests:
               cpu: 200m
@@ -135,9 +146,26 @@ spec:
               cpu: "2"
               memory: 3Gi
       volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: nextcloud-html
         - name: data
           persistentVolumeClaim:
             claimName: tank-cloud-nextcloud
+---
+# The Nextcloud application tree. Longhorn, not NFS — see the note at the top of this file.
+# ~2 GiB unpacked; 10 GiB leaves room for apps installed later.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-html
+  namespace: cloud
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 10Gi
 ---
 apiVersion: v1
 kind: Service
