@@ -150,6 +150,9 @@ ignoreDifferences:
   #
   # Only the composite's own spec is ignored. What it COMPOSES is still reconciled by
   # Crossplane, and drift there still surfaces on the composed resources themselves.
+  # metadata.labels is included because Crossplane stamps crossplane.io/composite onto
+  # every composite it owns, and annotations because a composite applied by hand once
+  # carries kubectl's last-applied-configuration forever.
   - group: platform.homelab.isaacwallace.dev
     kind: Database
     jqPathExpressions:
@@ -159,10 +162,14 @@ ignoreDifferences:
       - .spec.storageClass
       - .spec.sharedPreloadLibraries
       - .spec.extensions
+      - .metadata.labels
+      - .metadata.annotations
   - group: platform.homelab.isaacwallace.dev
     kind: Bucket
     jqPathExpressions:
       - .spec.crossplane
+      - .metadata.labels
+      - .metadata.annotations
 {{- end -}}
 
 {{/*
