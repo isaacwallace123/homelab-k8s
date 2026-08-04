@@ -61,4 +61,3 @@ gateways:
         port: 80
         allowedNamespaces:
           homelab.isaacwallace.dev/exposure: public
-

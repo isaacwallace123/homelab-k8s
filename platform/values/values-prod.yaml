@@ -81,7 +81,6 @@ projects:
       - group: rbac.authorization.k8s.io
         kind: ClusterRoleBinding
 
-
 # =============================================================================
 # COMPONENTS
 # =============================================================================
@@ -342,4 +341,3 @@ components:
       git:                     # externally owned — the portfolio monorepo is the source of truth
         repoURL: https://github.com/isaacwallace123/portfolio-v3.git
         path: deploy/k8s
-

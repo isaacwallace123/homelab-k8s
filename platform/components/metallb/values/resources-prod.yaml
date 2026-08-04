@@ -26,4 +26,3 @@ pools:
     autoAssign: false
     addresses:
       - 192.168.0.220-192.168.0.250
-
