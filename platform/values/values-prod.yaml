@@ -140,6 +140,15 @@ components:
     resources:
       enabled: true
 
+  # Remote access for laptop and phone. Advertises the LAN into the tailnet, so every
+  # service keeps its existing address instead of needing a public hostname each.
+  - name: tailscale
+    tier: network
+    waveOffset: 6
+    namespace: networking
+    resources:
+      enabled: true
+
   # ── storage ─────────────────────────────────────────────────────────────────
   - name: longhorn
     tier: storage

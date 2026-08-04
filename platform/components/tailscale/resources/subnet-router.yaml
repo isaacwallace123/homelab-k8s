@@ -1,0 +1,124 @@
+# Tailscale subnet router.
+#
+# ONE deployment that makes the entire LAN reachable from your laptop and phone, anywhere,
+# over WireGuard. Not a per-service tunnel: it advertises 192.168.0.0/24 into the tailnet,
+# so every address you already use keeps working unchanged —
+#
+#   Homepage .220 · Plex .230 · the *arr stack .231-.236 · Grafana .240
+#   Immich .244 · Garage .245 · Stirling .247
+#   ArgoCD .203 · Proxmox .254 · TrueNAS .252 · the router .1
+#
+# Chosen over publishing services through the Cloudflare tunnel because these are personal
+# services, not public ones. A tunnel puts them on the internet behind a hostname and needs
+# a route, a cert and an auth story per service. Tailscale puts them on a private network
+# that only your devices are on, needs nothing per service, and never exposes anything to
+# the public internet at all.
+#
+# It also sidesteps the HTTPS problem entirely: apps whose clients demand TLS for anything
+# non-local are reached over the tailnet as if you were at home.
+#
+# SETUP, once:
+#   1. Create a reusable, pre-approved auth key at
+#      https://login.tailscale.com/admin/settings/keys  (tag it, e.g. tag:k8s)
+#   2. Seal it into sealed-secret-tailscale.yaml (see create-sealed-secret.sh)
+#   3. Approve the advertised route at
+#      https://login.tailscale.com/admin/machines  →  the `homelab-k8s` node → Edit routes
+#      Nothing works until that route is approved; that is a Tailscale-side click, not a
+#      cluster problem.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tailscale
+  namespace: networking
+---
+# The router stores its node identity in a Secret so it keeps the same tailnet machine
+# across restarts. Without this it re-authenticates on every pod restart, burns a new
+# machine entry each time, and its advertised route needs re-approving every time.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tailscale
+  namespace: networking
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["tailscale-state"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tailscale
+  namespace: networking
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tailscale
+subjects:
+  - kind: ServiceAccount
+    name: tailscale
+    namespace: networking
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tailscale-subnet-router
+  namespace: networking
+  labels:
+    app: tailscale-subnet-router
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: two routers advertising the same subnet at once makes
+  # Tailscale pick between them mid-rollout, which drops connections for no benefit.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tailscale-subnet-router
+  template:
+    metadata:
+      labels:
+        app: tailscale-subnet-router
+    spec:
+      serviceAccountName: tailscale
+      # On the apps pool (cyberlab), deliberately. If this ran on pve2 it would go down
+      # with the host that also carries TrueNAS and media — exactly when remote access to
+      # look at what broke is most useful.
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: apps
+      containers:
+        - name: tailscale
+          image: ghcr.io/tailscale/tailscale:v1.90.2
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: authkey
+            # The LAN. Add 10.43.0.0/16 here too if you ever want to hit ClusterIPs
+            # directly from a laptop; not needed for anything listed above.
+            - name: TS_ROUTES
+              value: "192.168.0.0/24"
+            - name: TS_KUBE_SECRET
+              value: tailscale-state
+            - name: TS_USERSPACE
+              # false = kernel networking via /dev/net/tun. Userspace mode cannot route
+              # a subnet for other devices, which is the entire point of this pod.
+              value: "false"
+            - name: TS_EXTRA_ARGS
+              # --accept-dns=false: this pod must not take DNS from the tailnet, or it
+              # stops resolving cluster-internal names and breaks its own health.
+              value: "--hostname=homelab-k8s --accept-dns=false"
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
