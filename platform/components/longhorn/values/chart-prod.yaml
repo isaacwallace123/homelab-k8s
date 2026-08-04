@@ -13,6 +13,18 @@
 # The plain `longhorn` class still exists and the 12 PVCs already bound to it are
 # unaffected — it is simply no longer the one an unqualified PVC lands on.
 defaultSettings:
+  # Tolerations for the components Longhorn schedules ITSELF -- the CSI plugin, the
+  # attacher/provisioner/resizer, and the instance managers.
+  #
+  # The longhornManager/longhornDriver Helm values below do NOT cover those. Setting only
+  # those left longhorn-csi-plugin with no tolerations, so it never landed on the tainted
+  # cloud node, and every PVC there failed to attach with:
+  #
+  #   CSINode k8s-cloud-01 does not contain driver driver.longhorn.io
+  #
+  # Longhorn reads this as `key=value:Effect` separated by semicolons.
+  taintToleration: "homelab.isaacwallace.dev/pool=media:NoSchedule;homelab.isaacwallace.dev/pool=cloud:NoSchedule;homelab.isaacwallace.dev/workload=media:NoSchedule"
+
   defaultReplicaCount: 2
   defaultDataPath: /var/lib/longhorn
   # Spread replicas across physical hosts once zone labels exist (phase 3).
