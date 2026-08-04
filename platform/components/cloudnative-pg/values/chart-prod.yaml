@@ -1,0 +1,33 @@
+# CloudNativePG operator.
+#
+# The operator is a controller: it watches Cluster resources and reconciles StatefulSets.
+# It holds no data itself, so it belongs on the general-purpose pool with the rest of the
+# control plane rather than next to the databases it manages. The Postgres instances it
+# creates are placed by the Database Composition, which pins them to `pool: cloud`.
+#
+# Every other chart component in this repo ships a values file at this exact path and the
+# platform chart requires one. Without it ArgoCD fails to generate the manifest entirely
+# and the Application reports sync status Unknown with a ComparisonError -- which is not
+# caught by `helm template` on the platform chart, because that renders the Application
+# objects rather than the child charts they point at.
+nodeSelector:
+  homelab.isaacwallace.dev/pool: apps
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# The operator watches all namespaces. Left empty deliberately: scoping it to `cloud`
+# would mean a Database claim in any other namespace silently never reconciles.
+config:
+  data: {}
+
+monitoring:
+  # Prometheus is not managed by prometheus-operator here, so a PodMonitor would be an
+  # unrecognised kind. Metrics are still exposed; scraping is configured on the Prometheus
+  # side in platform/components/monitoring.
+  podMonitorEnabled: false
