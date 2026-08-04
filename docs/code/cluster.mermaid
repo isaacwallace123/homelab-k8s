@@ -26,10 +26,9 @@ flowchart TB
 
         subgraph CloudNode["k8s-cloud-01 · pool=cloud"]
             subgraph ns_cloud["namespace: cloud"]
-                Garage["Garage S3\n.240"]
+                Garage["Garage S3\n.245"]
                 Nextcloud["Nextcloud\n.243"]
                 Immich["Immich\nserver · ML · valkey\n.244"]
-                Vaultwarden["Vaultwarden\n.241"]
                 Stirling["Stirling-PDF\n.242"]
                 CNPG["CloudNativePG\nclusters"]
             end
@@ -97,7 +96,6 @@ flowchart TB
     EnvoyGW --> Frontend
     EnvoyGW --> Nextcloud
     EnvoyGW --> Immich
-    EnvoyGW --> Vaultwarden
     Client -->|"direct :32400"| Plex
 
     Radarr --> Downloaders
@@ -120,7 +118,6 @@ flowchart TB
     Longhorn --> Grafana
     Longhorn --> Loki
     Longhorn --> Postgres
-    Longhorn --> Vaultwarden
     Longhorn -->|"weekly backup"| Garage
 
     TrueNAS -->|"NFS /tank · /flash"| Downloaders

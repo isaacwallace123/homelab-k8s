@@ -66,8 +66,8 @@ projects:
 
   cloud:
     description: >-
-      The personal-cloud tier — Nextcloud, Immich, Garage, Vaultwarden, Stirling-PDF and
-      the CloudNativePG clusters behind them. Confined to the `cloud` namespace: this is
+      The personal-cloud tier — Nextcloud, Immich, Garage, Stirling-PDF and the
+      CloudNativePG clusters behind them. Confined to the `cloud` namespace: this is
       the tier that holds personal files and photos, and it has no reason to reach the
       media stack, the arena, or anything cyberlab owns.
     destinations: [cloud]
@@ -311,13 +311,6 @@ components:
     resources:
       enabled: true
 
-  - name: vaultwarden
-    tier: apps
-    waveOffset: 4
-    namespace: cloud
-    project: cloud
-    resources:
-      enabled: true
 
   - name: stirling-pdf
     tier: apps

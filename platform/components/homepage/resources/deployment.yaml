@@ -85,10 +85,6 @@ data:
             href: http://192.168.0.244
             icon: immich.png
             description: Photos & Video Library
-        - Vaultwarden:
-            href: http://192.168.0.246
-            icon: vaultwarden.png
-            description: Password Manager
         - Stirling PDF:
             href: http://192.168.0.247
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/stirling-pdf.png

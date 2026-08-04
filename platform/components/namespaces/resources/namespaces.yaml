@@ -41,8 +41,8 @@ kind: Namespace
 metadata:
   name: homeops
 ---
-# cloud: the personal-cloud tier — Nextcloud, Immich, Garage (S3), Vaultwarden,
-# Stirling-PDF, and the CloudNativePG clusters behind them. Pinned to the `cloud` pool on
+# cloud: the personal-cloud tier — Nextcloud, Immich, Garage (S3), Stirling-PDF,
+# and the CloudNativePG clusters behind them. Pinned to the `cloud` pool on
 # pve2 because all of it is storage-bound and sits next to the TrueNAS exports.
 #
 # Buckets and databases in here are provisioned by Crossplane claims (Bucket, Database),

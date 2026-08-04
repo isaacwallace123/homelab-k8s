@@ -13,9 +13,8 @@
 #   .230 plex          .231 radarr      .232 sonarr     .233 prowlarr
 #   .234 qbittorrent   .235 sabnzbd     .236 overseerr
 #   .240 grafana       .241 prometheus  .242 alertmanager
-#   .243 nextcloud     .244 immich      .245 garage-s3  .246 vaultwarden
-#   .247 stirling-pdf
-# Free: .221, .223-.229, .237-.239, .248-.250
+#   .243 nextcloud     .244 immich      .245 garage-s3  .247 stirling-pdf
+# Free: .221, .223-.229, .237-.239, .246, .248-.250
 
 namespace: networking
 

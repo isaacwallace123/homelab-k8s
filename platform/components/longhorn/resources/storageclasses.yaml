@@ -9,7 +9,7 @@
 #     '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 # =============================================================================
 ---
-# Survives losing a whole Proxmox host. Databases, ArgoCD, Vaultwarden, Grafana.
+# Survives losing a whole Proxmox host. Databases, ArgoCD, Grafana, Nextcloud.
 #
 # The zone soft anti-affinity is what makes the second host worth having: with
 # topology.kubernetes.io/zone set to the physical Proxmox host, three replicas are placed

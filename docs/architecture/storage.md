@@ -6,7 +6,7 @@ with no `storageClassName` could land on either. That is fixed here: exactly one
 
 | Class | Backing | Replicas | Default | Use for |
 | :--- | :--- | ---: | :---: | :--- |
-| `longhorn-replicated` | Longhorn, zone anti-affinity | 3 | **yes** | Anything whose loss hurts: databases, ArgoCD, Vaultwarden, Grafana |
+| `longhorn-replicated` | Longhorn, zone anti-affinity | 3 | **yes** | Anything whose loss hurts: databases, ArgoCD, Grafana, the Nextcloud app tree |
 | `longhorn-single` | Longhorn | 1 | no | Rebuildable caches and scratch that still wants snapshots |
 | `nfs-nas` | TrueNAS on pve2, NFS CSI | — | no | Media library, backup targets, anything large and cold |
 
