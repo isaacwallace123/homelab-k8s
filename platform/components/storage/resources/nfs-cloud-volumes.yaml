@@ -11,8 +11,20 @@
 #   zfs create tank/cloud/immich
 #   chown -R 1000:1000 /mnt/tank/cloud
 #
-# and add each as an NFS share with maproot/mapall left OFF — the pods run as UID 1000 and
-# rely on root_squash the same way the media exports do.
+# and add each as an NFS share with **maproot_user=root, maproot_group=root**.
+#
+# That differs from the media exports, which leave maproot off and work fine because
+# media-stack runs every container as PUID/PGID 1000. The cloud tier does not:
+#
+#   garage     runs as root and writes its block store directly
+#   nextcloud  entrypoint runs as root to create its init lock, then drops to www-data (33)
+#
+# With root_squash both get "Permission denied" no matter who owns the dataset — garage
+# fails with `IO error: Permission denied (os error 13)` after initialising the block
+# manager, and nextcloud cannot create /var/www/html/nextcloud-init-sync.lock.
+#
+# NOTE: changing maproot on an existing share does not affect already-mounted clients.
+# The consuming pod has to be deleted so the kubelet remounts.
 #
 # Reclaim policy is Retain on all of them. These hold the only copy of photos and files;
 # a deleted PVC must never take the dataset with it.
