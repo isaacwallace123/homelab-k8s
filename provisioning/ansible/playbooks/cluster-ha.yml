@@ -103,11 +103,11 @@
           disable:
             - traefik
             - servicelb
-            # local-storage is deliberately NOT disabled. k3s's local-path provisioner is
-            # what backs the `nvme-local` StorageClass that game world volumes use, and
-            # disabling it would delete the provisioner along with the class. Its
-            # StorageClass must not be the cluster default, which is handled in the
-            # longhorn component rather than here.
+            # local-storage is deliberately NOT disabled. k3s ships the local-path
+            # provisioner enabled, and disabling it after the fact deletes the
+            # provisioner along with its StorageClass. Nothing in this repo targets it —
+            # what matters is that its class is not the cluster default, which is
+            # handled in the longhorn component rather than here.
           node-label:
             - "topology.kubernetes.io/zone={{ node_zone }}"
             - "homelab.isaacwallace.dev/pool={{ node_pool }}"
@@ -179,11 +179,11 @@
           disable:
             - traefik
             - servicelb
-            # local-storage is deliberately NOT disabled. k3s's local-path provisioner is
-            # what backs the `nvme-local` StorageClass that game world volumes use, and
-            # disabling it would delete the provisioner along with the class. Its
-            # StorageClass must not be the cluster default, which is handled in the
-            # longhorn component rather than here.
+            # local-storage is deliberately NOT disabled. k3s ships the local-path
+            # provisioner enabled, and disabling it after the fact deletes the
+            # provisioner along with its StorageClass. Nothing in this repo targets it —
+            # what matters is that its class is not the cluster default, which is
+            # handled in the longhorn component rather than here.
           node-label:
             - "topology.kubernetes.io/zone={{ node_zone }}"
             - "homelab.isaacwallace.dev/pool={{ node_pool }}"

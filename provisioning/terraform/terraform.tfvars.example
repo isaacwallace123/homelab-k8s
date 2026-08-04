@@ -1,110 +1,184 @@
-# Copy to terraform.tfvars (gitignored) and fill in the secrets.
+# EXAMPLE topology for the homelab k3s cluster. Copy to terraform.tfvars and fill in the
+# three REPLACE-ME values plus your SSH keys.
 #
-# The node map below IS the cluster topology. Ansible's inventory is generated from it, so
-# this file is the only place node placement is declared.
+# GENERATED FROM the live terraform.tfvars with secrets redacted, deliberately: the previous
+# example had drifted into a topology that the validations in variables.tf now reject
+# (pools "storage"/"infra"/"platform" no longer exist, and its etcd majority sat on the
+# wrong host). An example that cannot pass `terraform plan` is worse than no example.
+#
+# Regenerate after any topology change so the two cannot diverge again.
 
 proxmox_endpoint  = "https://192.168.0.254:8006"
-proxmox_api_token = "root@pam!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-ssh_public_key    = "ssh-ed25519 AAAA... isaac@workstation"
-vm_password       = "changeme"
-k3s_token         = "generate with: openssl rand -base64 64"
+proxmox_api_token = "root@pam!terraform=REPLACE-ME"
+# Every key that needs to administer a node belongs here — a list, not a single key,
+# because the first two nodes were built with a key whose private half did not exist on
+# the machine that runs Ansible, which made them unreachable.
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... you@example.com",
+]
+vm_password = "REPLACE-ME"
+k3s_token   = "REPLACE-ME  # openssl rand -base64 64"
 
-# Which template each host clones from. `node` is where the TEMPLATE lives, which need not
-# be the host the VM is created on — pve2 holds no templates, so it cross-node clones the
-# one on cyberlab (Proxmox copies the disk over the LAN).
+# pve2 holds NO templates, so it cross-node clones the one on cyberlab.
 templates = {
   pve2     = { vmid = 9000, node = "cyberlab" }
   cyberlab = { vmid = 9000, node = "cyberlab" }
 }
 
 # =============================================================================
-# Cluster topology — see docs/architecture/README.md §3
+# TWO PLANES.
 #
-# 3 control planes: 2 on pve2, 1 on cyberlab. With only two physical hosts this buys
-# VM-level HA (rolling upgrades, a single VM failing), not host-level HA. Quorum sits on
-# pve2 deliberately: pve2 also runs TrueNAS, so losing it means storage is gone anyway,
-# while cyberlab sees far more churn from range work.
+#   pve2      storage plane — TrueNAS, media, the cloud tier, one etcd member
+#   cyberlab  compute plane — general apps, the etcd majority
 #
-# pve2 MEMORY BUDGET — 64 GB total, and this rebalance is deliberately net-zero:
+# The split follows the hardware. pve2 is an R5 5500: 12 threads, 62.7 GiB, and it also
+# serves every NFS export in the cluster, so its I/O is the contended resource. cyberlab
+# has 24 threads and 128 GiB. Putting general compute and the etcd majority on cyberlab
+# leaves pve2 doing what only pve2 can do — sit next to the disks and the Arc A380.
 #
-#   before:  cp-01  6 + worker-apps 32 + worker-infra  8            = 46 GB
-#   after:   cp-01  6 + cp-02  4 + store-01 24 + infra-01 12        = 46 GB
+# MEMORY BUDGET (do not exceed without re-checking `free -g` on the host):
+#   pve2      TrueNAS 8 + cp-01 4 + media-01 16 + cloud-01 18  = 46 of 62.7 GiB
+#   cyberlab  cp-02 4 + cp-03 4 + work-01 12 + work-02 12      = 32 GiB,
+#             on top of ~71 GiB already held by the cyber range and the AI VMs = 103 of 128
 #
-# The new control plane is paid for by trimming the media worker (which was allocated 32 GB
-# but requesting 5.5 GB) and giving 4 GB of it to the infra worker, which actually runs
-# close to its limits. Do not add a node here without taking the memory from somewhere.
-#
-# DISK SIZES for existing VMs must match what is already provisioned. Terraform can grow a
-# disk but not shrink one, and a shrink forces replacement — which would destroy the node.
+# APPLYING THIS IS NOT A SINGLE `terraform apply`. Three of the changes below are moves or
+# renames that Terraform would otherwise plan as destroy-and-recreate, and one of them
+# carries a GPU and Longhorn replicas. Follow docs/architecture/topology-migration.md.
 # =============================================================================
 nodes = {
 
-  # ── pve2 — R5 5500, 6c/12t, 64 GB. Storage and quorum. ─────────────────────
+  # ── pve2 — storage plane ───────────────────────────────────────────────────
   "k8s-cp-01" = {
-    host        = "pve2"
-    vmid        = 104
-    ip          = "192.168.0.10"
-    role        = "server"
-    pool        = "control"
-    cores       = 2
-    memory      = 6144
-    disk_size   = 80      # existing size — must not shrink
-    machine     = "i440fx" # existing VM — changing this would force replacement
-    description = "k3s control plane — cluster-init, etcd voting member"
+    host      = "pve2"
+    vmid      = 104
+    ip        = "192.168.0.10"
+    role      = "server"
+    pool      = "control"
+    cores     = 2
+    # 6 GiB -> 4. It is an etcd member, not a workload host; the other two run fine on 4
+    # and the 2 GiB is worth more as headroom on the host that carries media and cloud.
+    memory    = 4096
+    disk_size = 80
+    # machine intentionally unset: this VM predates the setting and Proxmox reports the
+    # implicit i440fx, which is not a value the provider accepts. Setting q35 would rewrite
+    # the machine type of a running control plane.
+    description = "k3s control plane — etcd voting member (minority host)"
     tags        = ["control-plane"]
   }
 
+  # ── cyberlab — compute plane ───────────────────────────────────────────────
+  # MOVED from pve2 (was vmid 105). This is the change that fixes quorum: with cp-02 and
+  # cp-03 both here, cyberlab holds 2 of 3 etcd members and the cluster survives losing
+  # pve2. It does NOT survive losing cyberlab — that is the deliberate trade recorded in
+  # var.quorum_host, and it is enforced by a validation in variables.tf.
+  #
+  # Changing `host` and `vmid` together is a replacement, which prevent_destroy blocks.
+  # The migration doc removes the old VM and `terraform state rm`s it first, so Terraform
+  # sees a clean create rather than a move.
   "k8s-cp-02" = {
-    host        = "pve2"
-    vmid        = 105
+    machine     = "q35"
+    host        = "cyberlab"
+    vmid        = 802
     ip          = "192.168.0.11"
     role        = "server"
     pool        = "control"
     cores       = 2
     memory      = 4096
     disk_size   = 60
-    description = "k3s control plane — etcd voting member"
+    description = "k3s control plane — etcd voting member (majority host)"
     tags        = ["control-plane"]
   }
 
-  # Media and NAS-adjacent workloads. Holds the Intel Arc A380 for Plex transcoding —
-  # hostpci is attached through the Proxmox UI and is ignored by Terraform.
-  "k8s-store-01" = {
-    host        = "pve2"
-    vmid        = 107
-    ip          = "192.168.0.12"
-    role        = "agent"
-    pool        = "storage"
-    cores       = 6
-    memory      = 24576
-    disk_size   = 150
+  # Holds the Intel Arc A380 (mapped via hostpci0).
+  #
+  # RENAMED from k8s-store-01 — "store" was never accurate; TrueNAS is the storage, this
+  # is the transcode and library node. The map key is the Proxmox VM name, so this rename
+  # is a `terraform state mv`, NOT an apply. Getting that wrong destroys the node: a bios
+  # change already did exactly that once (commit 2dce49d), and it took the Longhorn
+  # replicas with it.
+  #
+  # The KUBERNETES node name stays `k8s-store-01` until the node is drained and rejoined,
+  # because that name comes from the OS hostname set at k3s install time. Nothing depends
+  # on it — placement is entirely by pool label — and node-topology.yml maps the two.
+  "k8s-media-01" = {
+    host          = "pve2"
+    vmid          = 107
+    ip            = "192.168.0.12"
+    role          = "agent"
+    pool          = "media"
+    machine       = "q35"
+    bios          = "ovmf"
+    efi_datastore = "local-lvm"
+    # 8 -> 6 cores and 24 -> 16 GiB. Plex transcodes on the Arc, not the CPU, and the
+    # measured working set never approached 24. The freed 8 GiB is what makes room for the
+    # cloud node below on a host that had 11 GiB left.
+    cores         = 6
+    memory        = 16384
+    disk_size     = 150
+    hostpci = [
+      {
+        device  = "hostpci0"
+        mapping = "homelab-intel-arc-a380"
+        pcie    = true
+        rombar  = true
+      }
+    ]
     description = "k3s worker — media, Plex (Arc A380), Longhorn replicas"
-    tags        = ["worker", "storage", "gpu"]
-    labels = {
-      "homelab.isaacwallace.dev/gpu"   = "intel-arc"
-      "node-role.kubernetes.io/worker" = "true"
-    }
+    tags        = ["worker", "media", "gpu"]
+    labels      = { "node-role.kubernetes.io/worker" = "true", "homelab.isaacwallace.dev/gpu" = "intel-arc" }
+    # Taint key matches the pool label. Only workloads that ask for the media pool land
+    # here, so nothing competes with Plex for the Arc or with the NFS path for I/O.
+    taints = ["homelab.isaacwallace.dev/pool=media:NoSchedule"]
   }
 
-  "k8s-infra-01" = {
-    host        = "pve2"
-    vmid        = 110
-    ip          = "192.168.0.13"
-    role        = "agent"
-    pool        = "infra"
-    cores       = 4
-    memory      = 12288
-    disk_size   = 100
-    description = "k3s worker — MetalLB, Longhorn, monitoring, Crossplane"
-    tags        = ["worker", "infra"]
-    labels = {
-      "node-role.kubernetes.io/worker" = "true"
-    }
+  # The cloud tier. Nextcloud, Immich, Garage (S3), Vaultwarden, Stirling-PDF and the
+  # CloudNativePG clusters behind them.
+  #
+  # On pve2 because all of it is storage-bound: Nextcloud's files and Immich's originals
+  # live on the TrueNAS exports, and Garage's buckets sit on the same pool. Running them
+  # on cyberlab would push every read and write across the LAN.
+  #
+  # NOT on the media node, even though both are storage-bound: the Arc A380 passes through
+  # to exactly one VM, Plex has it, and Immich's ML would otherwise contend for it. Immich
+  # runs its ML on CPU here. If photo transcoding ever matters more than Plex transcoding,
+  # that is a one-line pool change in the Immich manifest, not a rebuild.
+  "k8s-cloud-01" = {
+    host      = "pve2"
+    vmid      = 108
+    # VERIFY THIS IS FREE before applying — .13 was k8s-infra-01 and is deliberately not
+    # reused, so that a stale ARP entry or known_hosts line cannot point at the new node.
+    ip        = "192.168.0.15"
+    role      = "agent"
+    pool      = "cloud"
+    machine   = "q35"
+    cores     = 4
+    memory    = 18432
+    disk_size = 150
+    description = "k3s worker — Nextcloud, Immich, Garage, Vaultwarden, Stirling-PDF"
+    tags        = ["worker", "cloud"]
+    labels      = { "node-role.kubernetes.io/worker" = "true" }
+    # Same pattern as the media node: a dedicated pool that general workloads cannot drift
+    # onto, so the cloud tier's I/O stays predictable next to TrueNAS.
+    taints = ["homelab.isaacwallace.dev/pool=cloud:NoSchedule"]
   }
 
-  # ── cyberlab — i7-13700KF, 8P+8E/24t, 128 GB. Compute. ─────────────────────
-  # These VMs sit on vmbr0 (the LAN). They are never attached to a range bridge.
+  # ── RETIRED: k8s-infra-01 (pve2, vmid 110, 192.168.0.13) ───────────────────
+  # Deleted rather than rebuilt.
+  #
+  # It was a single point of failure with a dedicated node's cost: Prometheus, Loki,
+  # Grafana, Alertmanager, cloudflared and ntfy all selected node-role.kubernetes.io/infra,
+  # a label only this machine carried, so losing it took out all observability and all
+  # ingress at once. Those workloads now select `pool: apps` and spread across the two
+  # cyberlab workers, which is both more available and 8 GiB cheaper on pve2.
+  #
+  # It also held the legacy Kubernetes name `k3s-worker-infra`, so retiring it removes
+  # half the naming drift by deletion instead of by a risky rebuild.
+  #
+  # Its Longhorn replicas MUST be evicted before the VM is removed. See the migration doc.
+
+  # ── cyberlab (LAN bridge only, never a range bridge) ───────────────────────
   "k8s-cp-03" = {
+    machine         = "q35"
     host            = "cyberlab"
     vmid            = 801
     ip              = "192.168.0.14"
@@ -112,73 +186,49 @@ nodes = {
     pool            = "control"
     cores           = 2
     memory          = 4096
-    memory_floating = 2048 # ballooning matters on this host — see the memory budget
+    memory_floating = 2048
     disk_size       = 60
     description     = "k3s control plane — etcd voting member (minority host)"
     tags            = ["control-plane"]
   }
 
-  # The game node.
+  # ── cyberlab workers ───────────────────────────────────────────────────────
+  # General workloads live here, not on pve2. cyberlab had 53 GiB free while pve2 was
+  # down to 11 GiB with four of the five k8s VMs on it. Sized at 12 GiB each rather than
+  # 16 so the host keeps ~10 GiB of headroom above its 92 GiB of existing allocation.
   #
-  # cpu_affinity pins it to P-core threads only. Kubernetes counts 24 logical CPUs and
-  # cannot tell a P-core from an E-core, so a Minecraft tick thread would otherwise land on
-  # an E-core — a large and completely invisible TPS loss. 0-11 is P-cores 0-5 (both threads
-  # each), leaving P-cores 6-7 and every E-core for the range, the AI nodes, and the host.
-  # VERIFY the numbering first:  lscpu -e=CPU,CORE,MAXMHZ | sort -k3 -rn
-  #
-  # memory_floating is deliberately absent: this node's RAM is genuinely resident in JVM
-  # heaps and world state, and ballooning it causes stalls.
-  "k8s-game-01" = {
-    host         = "cyberlab"
-    vmid         = 802
-    ip           = "192.168.0.15"
-    role         = "agent"
-    pool         = "games"
-    cores        = 12
-    memory       = 57344
-    disk_size    = 100
-    cpu_affinity = "0-11"
-    description  = "k3s worker — game server fleet, exclusive P-cores"
-    tags         = ["worker", "games"]
-
-    # World data on a dedicated NVMe. Verify the datastore name on the cyberlab host.
-    data_disk = {
-      datastore = "secondary"
-      size      = 400
-    }
-
-    labels = {
-      "node-role.kubernetes.io/worker" = "true"
-    }
-
-    # Nothing but game workloads may land here — anything else would be migrated off the
-    # exclusively allocated cores anyway.
-    taints = ["homelab.isaacwallace.dev/pool=games:NoSchedule"]
-
-    # The static CPU manager policy is what actually grants exclusive cores to Guaranteed
-    # pods. It REQUIRES a non-zero reservation, and it cannot be enabled on a node that
-    # already has Guaranteed pods without draining — which is why this node is new rather
-    # than repurposed.
-    kubelet_args = [
-      "cpu-manager-policy=static",
-      "kube-reserved=cpu=1000m,memory=1Gi",
-      "system-reserved=cpu=500m,memory=512Mi",
-    ]
+  # These are also what finally makes longhorn-replicated meaningful: with workers on both
+  # Proxmox hosts, zone anti-affinity places replicas across physical machines instead of
+  # across VMs on the same box.
+  "k8s-work-01" = {
+    host            = "cyberlab"
+    vmid            = 810
+    ip              = "192.168.0.16"
+    role            = "agent"
+    pool            = "apps"
+    machine         = "q35"
+    cores           = 6
+    memory          = 12288
+    memory_floating = 4096
+    disk_size       = 120
+    description     = "k3s worker — general apps, Crossplane, arena"
+    tags            = ["worker", "apps"]
+    labels          = { "node-role.kubernetes.io/worker" = "true" }
   }
 
-  # ── Migration phase 5. Enable only once the memory budget allows. ──────────
-  # "k8s-work-01" = {
-  #   host            = "cyberlab"
-  #   vmid            = 803
-  #   ip              = "192.168.0.16"
-  #   role            = "agent"
-  #   pool            = "platform"
-  #   cores           = 4
-  #   memory          = 12288
-  #   memory_floating = 4096
-  #   disk_size       = 100
-  #   description     = "k3s worker — Crossplane runs, arena workloads"
-  #   tags            = ["worker", "platform"]
-  #   labels          = { "node-role.kubernetes.io/worker" = "true" }
-  # }
+  "k8s-work-02" = {
+    host            = "cyberlab"
+    vmid            = 811
+    ip              = "192.168.0.17"
+    role            = "agent"
+    pool            = "apps"
+    machine         = "q35"
+    cores           = 6
+    memory          = 12288
+    memory_floating = 4096
+    disk_size       = 120
+    description     = "k3s worker — general apps, second Longhorn replica target"
+    tags            = ["worker", "apps"]
+    labels          = { "node-role.kubernetes.io/worker" = "true" }
+  }
 }

@@ -54,24 +54,18 @@ resource "proxmox_virtual_environment_vm" "node" {
 
     # Pin this VM to a specific set of host CPU threads. Null means unpinned.
     #
-    # This exists for the game node. The 13700KF is 8 P-cores (threads 0-15) plus 8 E-cores
-    # (threads 16-23), and Kubernetes cannot tell them apart — it counts 24 logical CPUs and
-    # will happily place a Minecraft tick thread on an E-core, which is a large and totally
-    # invisible TPS loss. Pinning the VM to P-core threads means the kubelet's static CPU
-    # manager hands out exclusive cores from a set that is already all P-cores.
-    #
-    # VERIFY the thread numbering on the host before trusting the default:
-    #     lscpu -e=CPU,CORE,MAXMHZ | sort -k3 -rn
-    # P-core threads have the higher max clock. If they are not 0-15 on your kernel, correct
-    # the affinity in terraform.tfvars rather than here.
+    # Currently unused — it was added for a node whose workload was latency-sensitive
+    # enough that P-core vs E-core placement mattered, and Kubernetes could
+    # not tell P-cores from E-cores. Kept because it is the only way to express core
+    # pinning if a latency-sensitive workload ever returns.
     affinity = each.value.cpu_affinity
   }
 
   memory {
     dedicated = each.value.memory
     # Ballooning: a floating value below dedicated lets an idle VM hand memory back to the
-    # host. The game node deliberately does NOT balloon (floating == dedicated) — its memory
-    # is genuinely resident in JVM heaps and world state, and reclaiming it causes stalls.
+    # host. Set floating == dedicated for a VM whose memory is genuinely resident and
+    # should never be reclaimed.
     floating = each.value.memory_floating
   }
 
@@ -85,8 +79,8 @@ resource "proxmox_virtual_environment_vm" "node" {
     ssd          = true
   }
 
-  # Optional second disk on its own datastore. The game node uses this for world data on a
-  # dedicated NVMe — see docs/architecture/storage.md for why worlds are not on Longhorn.
+  # Optional second disk on its own datastore. No node declares one today; it exists for
+  # a workload that needs bulk local storage separate from the OS disk.
   dynamic "disk" {
     for_each = each.value.data_disk == null ? [] : [each.value.data_disk]
     content {

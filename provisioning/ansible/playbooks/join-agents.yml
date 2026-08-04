@@ -3,12 +3,11 @@
 # join-agents.yml — Install k3s on worker nodes and join them to the cluster.
 #
 #   ansible-playbook playbooks/join-agents.yml
-#   ansible-playbook playbooks/join-agents.yml --limit k8s-game-01
+#   ansible-playbook playbooks/join-agents.yml --limit k8s-cloud-01
 #
 # Per-node kubelet arguments come from the inventory, which Terraform generates from
-# var.nodes. That matters most for the game node: cpu-manager-policy=static CANNOT be
-# enabled later on a node that already has Guaranteed pods without draining it first, so
-# it has to be set at join time. See docs/architecture/game-platform.md §5.1.
+# var.nodes. Some kubelet settings cannot be changed on a node that is already running
+# workloads without draining it first, so they have to be set at join time.
 # =============================================================================
 
 - name: Prepare worker nodes
@@ -33,30 +32,13 @@
         state: started
         enabled: true
 
-    # ── game node: dedicated NVMe for world data ─────────────────────────────
-    # local-path provisions into this directory. Worlds live on local NVMe rather than
-    # Longhorn because replication puts network latency into Minecraft's synchronous chunk
-    # saves, which run on the tick thread. See docs/architecture/storage.md.
+    # k3s's built-in local-path provisioner writes here. Kept because k3s ships it
+    # enabled; no StorageClass in this repo targets it any more.
     - name: Create the local-path data directory
       ansible.builtin.file:
         path: /var/lib/rancher/k3s/storage
         state: directory
         mode: "0755"
-
-    - name: Format the data disk
-      community.general.filesystem:
-        fstype: ext4
-        dev: /dev/sdb
-      when: node_pool | default('') == 'games'
-
-    - name: Mount the data disk at the local-path root
-      ansible.posix.mount:
-        path: /var/lib/rancher/k3s/storage
-        src: /dev/sdb
-        fstype: ext4
-        opts: defaults,noatime
-        state: mounted
-      when: node_pool | default('') == 'games'
 
 - name: Join workers to the cluster
   hosts: agent
@@ -127,33 +109,3 @@
       retries: 30
       delay: 10
       until: node_ready.stdout == "True"
-
-- name: Verify exclusive CPU allocation on the game node
-  hosts: agent
-  become: true
-  gather_facts: false
-
-  tasks:
-    - name: Skip non-game nodes
-      ansible.builtin.meta: end_host
-      when: node_pool | default('') != 'games'
-
-    - name: Read the kubelet CPU manager state
-      ansible.builtin.slurp:
-        src: /var/lib/kubelet/cpu_manager_state
-      register: cpu_state
-      failed_when: false
-
-    - name: Confirm the static policy is active
-      # If this is not "static", every performance assumption in the game platform design
-      # is void: pods get shared CPUs, CFS throttling applies, and tick threads migrate
-      # between cores. Better to fail here than to find out from a laggy server.
-      ansible.builtin.assert:
-        that:
-          - cpu_state.content is defined
-          - '"static" in (cpu_state.content | b64decode)'
-        fail_msg: >-
-          cpu_manager_state on {{ inventory_hostname }} does not show the static policy.
-          The kubelet arguments did not take. Check /etc/rancher/k3s/config.yaml and
-          `journalctl -u k3s-agent`.
-        success_msg: "CPU manager static policy is active on {{ inventory_hostname }}."
