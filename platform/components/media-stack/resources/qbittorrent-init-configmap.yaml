@@ -1,0 +1,99 @@
+# qBittorrent pre-start configuration.
+#
+# Lifted out of an inline `args:` block on the Deployment. Inline Python in YAML cannot be
+# linted, diffed, or run outside the cluster, and it was the single largest reason the old
+# media-stack manifest ran to 596 lines.
+#
+# Two jobs, both idempotent:
+#   1. Set the WebUI password from the sealed secret (the secret is the source of truth).
+#   2. Whitelist the pod CIDR for WebUI auth.
+#
+# (2) is new and it is what makes the split safe. Every *arr app used to reach qBittorrent
+# over localhost because they shared gluetun's network namespace, so qBittorrent's
+# localhost auth bypass applied. Radarr and Sonarr now connect from their own pod IPs,
+# where that bypass does not apply — without the subnet whitelist they would authenticate
+# on every call, and a password rotation would silently break imports.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qbittorrent-init
+  namespace: media
+data:
+  init.py: |
+    import base64
+    import hashlib
+    import os
+
+    CONFIG_DIR = '/data/qBittorrent'
+    CONFIG_FILE = os.path.join(CONFIG_DIR, 'qBittorrent.conf')
+
+    # k3s default cluster CIDR. Pods in this range are inside the cluster and are the only
+    # things that can reach the WebUI port — the Service is what fronts it externally.
+    POD_CIDR = os.environ.get('POD_CIDR', '10.42.0.0/16')
+    password = os.environ.get('WEBUI_PASSWORD', '')
+
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+
+    lines = []
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as f:
+            lines = f.readlines()
+
+    # Strip proxy keys — not needed when sharing gluetun's netns. Includes the qBittorrent
+    # 5.x name (Session\ProxyPeerConnections, under [BitTorrent]) as well as the legacy
+    # Connection\ and Proxy\ spellings.
+    REMOVE_PREFIXES = (
+        'Connection\\ProxyType=',
+        'Connection\\ProxyIp=',
+        'Connection\\ProxyPort=',
+        'Connection\\ProxyPeerConnections=',
+        'Session\\ProxyPeerConnections=',
+        'Proxy\\Type=',
+        'Proxy\\Ip=',
+        'Proxy\\Port=',
+        'Proxy\\PeerConnections=',
+        'Proxy\\HostnameLookupEnabled=',
+        'Proxy\\Profiles\\',
+        # Rewritten below, so drop any previous values first.
+        'WebUI\\AuthSubnetWhitelistEnabled=',
+        'WebUI\\AuthSubnetWhitelist=',
+    )
+    filtered = [l for l in lines if not any(l.lstrip().startswith(p) for p in REMOVE_PREFIXES)]
+
+
+    def ensure_preferences_section(conf_lines):
+        """Return the index of [Preferences], appending the section if absent."""
+        idx = next((i for i, l in enumerate(conf_lines) if l.strip() == '[Preferences]'), None)
+        if idx is None:
+            conf_lines.append('\n[Preferences]\n')
+            idx = len(conf_lines) - 1
+        return idx
+
+
+    if password:
+        # Always overwrite — the sealed secret is authoritative.
+        filtered = [
+            l for l in filtered
+            if 'Password_PBKDF2' not in l and not l.lstrip().startswith('WebUI\\Username=')
+        ]
+        salt = os.urandom(16)
+        key = hashlib.pbkdf2_hmac('sha512', password.encode(), salt, 100000, dklen=64)
+        pw_hash = '@ByteArray({}:{})'.format(
+            base64.b64encode(salt).decode(),
+            base64.b64encode(key).decode(),
+        )
+        i = ensure_preferences_section(filtered)
+        filtered.insert(i + 1, 'WebUI\\Username=admin\n')
+        filtered.insert(i + 2, 'WebUI\\Password_PBKDF2="{}"\n'.format(pw_hash))
+        print('Password set from secret')
+    else:
+        print('WARNING: WEBUI_PASSWORD secret not found, leaving credentials unchanged')
+
+    i = ensure_preferences_section(filtered)
+    filtered.insert(i + 1, 'WebUI\\AuthSubnetWhitelistEnabled=true\n')
+    filtered.insert(i + 2, 'WebUI\\AuthSubnetWhitelist={}\n'.format(POD_CIDR))
+    print('WebUI auth whitelist set to {}'.format(POD_CIDR))
+
+    with open(CONFIG_FILE, 'w') as f:
+        f.writelines(filtered)
+    print('qBittorrent init complete')

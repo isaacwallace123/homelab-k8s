@@ -19,35 +19,41 @@ spec:
   credentials:
     source: InjectedIdentity
 ---
-# ── gameops: the game server fleet ────────────────────────────────────────────
-# Authenticates as the `gameops-provisioner` ServiceAccount instead of the provider's own,
-# through the kubeconfig assembled by kubeconfig-bootstrap.yaml. This is what keeps a bug
-# in a GameServer Composition from being able to touch the arena's resources or anything
-# in a personal namespace.
+# ── cloud: the personal-cloud tier ────────────────────────────────────────────
+# Used by the Database Composition to compose CloudNativePG Clusters in the `cloud`
+# namespace. Separate from `homeops` so a bug in a Database Composition cannot reach the
+# arena's namespaces, and so its ClusterRole can be scoped to CNPG resources alone.
 apiVersion: kubernetes.crossplane.io/v1alpha1
 kind: ProviderConfig
 metadata:
-  name: gameops
-  annotations:
-    argocd.argoproj.io/sync-wave: "3"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  credentials:
-    source: Secret
-    secretRef:
-      namespace: crossplane-system
-      name: gameops-kubeconfig
-      key: kubeconfig
----
-# ── provider-helm ─────────────────────────────────────────────────────────────
-# Used by the Minecraft Composition to manage itzg's chart as a composed Release.
-apiVersion: helm.crossplane.io/v1beta1
-kind: ProviderConfig
-metadata:
-  name: gameops-helm
+  name: cloud
   annotations:
     argocd.argoproj.io/sync-wave: "3"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   credentials:
     source: InjectedIdentity
+---
+# ── garage: the object store's admin API ──────────────────────────────────────
+# Drives bucket and key lifecycle for the Bucket Composition.
+#
+# CHICKEN AND EGG: this points at a Service that only exists once the garage component has
+# synced, and authenticates with a token from the `garage-auth` secret. Both live in the
+# `cloud` namespace, which is why garage sits at the apps tier and the platform-api tier
+# that consumes it reconciles later. On a cold bootstrap this ProviderConfig reports
+# unhealthy until Garage is up; that is expected and self-resolves.
+apiVersion: garage.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: garage
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  endpoint: http://garage.cloud.svc.cluster.local:3903
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: cloud
+      name: garage-auth
+      key: admin-token

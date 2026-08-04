@@ -17,3 +17,24 @@ spec:
   retain: 3
   concurrency: 2
   labels: {}
+---
+# Weekly backup to the Garage target configured in values/chart-prod.yaml.
+#
+# Separate from daily-snapshot on purpose. Snapshots are cheap and local, so they run
+# nightly and keep 3. Backups cross the network into object storage, so they run weekly
+# and keep 4 — roughly a month of recovery points for a fraction of the traffic.
+#
+# Saturday 03:00: after the nightly snapshot has settled, and on the day the cluster is
+# least likely to be doing anything else.
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: weekly-backup
+  namespace: longhorn-system
+spec:
+  cron: "0 3 * * 6"
+  task: backup
+  groups:
+    - default
+  retain: 4
+  concurrency: 1

@@ -12,10 +12,10 @@ with LAN-only TLS means one mis-scoped HTTPRoute can publish an internal service
 the public tunnel. Separate Gateways with separate allowedRoutes make that structurally
 impossible rather than a thing to catch in review.
 
-NOTE: no game protocol traffic passes through any Gateway. Envoy proxies TCP/UDP in
+NOTE: raw TCP/UDP workloads do not pass through a Gateway. Envoy proxies TCP/UDP in
 non-transparent mode only, so the backend would see Envoy's address instead of the
-player's — which breaks IP bans, anti-cheat heuristics, and per-player rate limiting.
-Game Services take MetalLB addresses directly. See docs/architecture/game-platform.md §4.
+client's — which breaks IP bans and per-client rate limiting. Such Services take a
+MetalLB address directly.
 */}}
 {{- range $gw := .Values.gateways }}
 ---

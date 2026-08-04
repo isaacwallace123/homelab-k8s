@@ -195,6 +195,13 @@ spec:
 # radarr/sonarr/prowlarr/qbittorrent/sabnzbd/overseerr now have their own MetalLB
 # IPs (192.168.0.231-.236). LAN clients hit the pod directly via MetalLB L2, so —
 # like Plex above — the allow-same-namespace deny-all would otherwise block them.
+#
+# Selects on `app.kubernetes.io/part-of`, NOT on `app`. The stack used to be a single
+# Deployment whose pod was literally labelled `app: media-stack`; splitting it into
+# per-app Deployments retired that label, and a selector matching it would have silently
+# matched nothing — every one of those LAN addresses would have gone dark while the
+# policy still reported as applied. `part-of` is carried by every pod in the stack and
+# survives any further split.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -203,7 +210,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: media-stack
+      app.kubernetes.io/part-of: media-stack
   policyTypes:
     - Ingress
   ingress:

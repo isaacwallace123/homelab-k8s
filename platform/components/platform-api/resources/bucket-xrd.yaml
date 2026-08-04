@@ -1,0 +1,59 @@
+# Bucket — an S3 bucket, on request.
+#
+# Same idea as the Database XRD: an app asks for storage, not for a specific object store.
+# Nextcloud and Immich both want "a bucket and credentials for it"; neither should carry
+# Garage-specific configuration, and neither should leave a bucket behind when removed.
+#
+# The Composition creates the bucket, a scoped access key, and a Secret in the claimant's
+# namespace. Because the composite is namespaced, deleting the app's namespace collects
+# the bucket and the key with it — which is the part a bootstrap Job never gets right.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: buckets.platform.homelab.isaacwallace.dev
+spec:
+  scope: Namespaced
+  group: platform.homelab.isaacwallace.dev
+  names:
+    kind: Bucket
+    plural: buckets
+  defaultCompositionRef:
+    name: bucket-garage
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                bucketName:
+                  type: string
+                  description: >-
+                    Global alias for the bucket. Garage aliases are cluster-wide, so this
+                    must be unique across every app — prefix it with the namespace.
+                  pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                  maxLength: 63
+                maxSize:
+                  type: string
+                  description: >-
+                    Quota, as bytes. Unset means unlimited, which on a shared TrueNAS pool
+                    is how one app's runaway sync fills the disk for every other app.
+                  pattern: "^[0-9]+$"
+                maxObjects:
+                  type: string
+                  description: Object-count quota. Unset means unlimited.
+                  pattern: "^[0-9]+$"
+              required:
+                - bucketName
+            status:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  description: Secret holding endpoint, bucket, accessKeyId, secretAccessKey.
+                ready:
+                  type: boolean

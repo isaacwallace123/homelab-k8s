@@ -1,0 +1,89 @@
+# Bucket -> Garage.
+#
+# Composes three things per claim: the bucket, a scoped access key, and a Secret in the
+# claimant's namespace carrying endpoint/bucket/accessKeyId/secretAccessKey.
+#
+# The key is per-bucket and granted read+write on that bucket only. That is the reason
+# this is a Composition rather than a one-off script: an app that is removed takes its
+# credential with it, and no app ever holds the Garage admin token.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: bucket-garage
+spec:
+  compositeTypeRef:
+    apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+    kind: Bucket
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $spec := .observed.composite.resource.spec }}
+            {{- $ns := .observed.composite.resource.metadata.namespace }}
+            {{- $name := $spec.bucketName }}
+            apiVersion: garage.crossplane.io/v1alpha1
+            kind: Bucket
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: bucket
+            spec:
+              providerConfigRef:
+                name: garage
+              forProvider:
+                globalAlias: {{ $name }}
+                {{- if or $spec.maxSize $spec.maxObjects }}
+                quotas:
+                  {{- with $spec.maxSize }}
+                  maxSize: {{ . }}
+                  {{- end }}
+                  {{- with $spec.maxObjects }}
+                  maxObjects: {{ . }}
+                  {{- end }}
+                {{- end }}
+            ---
+            apiVersion: garage.crossplane.io/v1alpha1
+            kind: Key
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: key
+            spec:
+              providerConfigRef:
+                name: garage
+              forProvider:
+                name: {{ $name }}
+                # Scoped to this bucket. No createBucket permission — the Composition owns
+                # bucket lifecycle, and an app that can create buckets can outlive its own
+                # claim's garbage collection.
+                permissions:
+                  - bucket: {{ $name }}
+                    read: true
+                    write: true
+                    owner: false
+              writeConnectionSecretToRef:
+                name: {{ $name }}-garage-key
+                namespace: {{ $ns }}
+            ---
+            {{- $ready := false }}
+            {{- with .observed.resources.bucket }}
+            {{-   range .resource.status.conditions | default list }}
+            {{-     if and (eq .type "Ready") (eq .status "True") }}{{ $ready = true }}{{ end }}
+            {{-   end }}
+            {{- end }}
+            apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+            kind: Bucket
+            status:
+              secretName: {{ $name }}-garage-key
+              ready: {{ $ready }}
+
+    - step: ready
+      functionRef:
+        name: function-auto-ready

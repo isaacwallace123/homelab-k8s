@@ -1,0 +1,82 @@
+# ── overseerr (seerr) ─────────────────────────────────────────────────────────
+# The request front-end. It is the most user-facing piece of the stack and the least
+# coupled — it talks to Plex, Radarr and Sonarr over their Services and nothing else — so
+# it has no reason to share a restart domain with a VPN tunnel.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overseerr
+  namespace: media
+  labels:
+    app: overseerr
+    app.kubernetes.io/part-of: media-stack
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: overseerr
+  template:
+    metadata:
+      labels:
+        app: overseerr
+        app.kubernetes.io/part-of: media-stack
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: media
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: media
+          effect: NoSchedule
+        - key: homelab.isaacwallace.dev/workload
+          operator: Equal
+          value: media
+          effect: NoSchedule
+      containers:
+        - name: overseerr
+          image: ghcr.io/seerr-team/seerr:v3.3.0
+          env:
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 5055
+              name: overseerr-ui
+          startupProbe:
+            tcpSocket:
+              port: 5055
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5055
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5055
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: config-overseerr
+              mountPath: /app/config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: config-overseerr
+          persistentVolumeClaim:
+            claimName: config-overseerr

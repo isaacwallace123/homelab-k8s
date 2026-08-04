@@ -31,7 +31,7 @@ spec:
         app: ntfy
     spec:
       nodeSelector:
-        node-role.kubernetes.io/infra: "true"
+        homelab.isaacwallace.dev/pool: apps
       containers:
         - name: ntfy
           image: binwiederhier/ntfy:v2.11.0

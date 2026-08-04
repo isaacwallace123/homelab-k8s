@@ -1,0 +1,149 @@
+# Nextcloud — files, calendar, contacts.
+#
+# STORAGE: the data directory is the TrueNAS NFS dataset, NOT Garage S3 primary storage.
+#
+# The plan called for S3 primary storage, and this deviates deliberately. With S3 primary
+# storage Nextcloud writes every file as an opaque object keyed by file ID — you cannot
+# browse your own data on the NAS, ZFS snapshots of it are not directly restorable, and
+# recovering a single file means going through Nextcloud's database to resolve the ID.
+# On a box that already has ZFS with snapshots and replication, a plain directory is both
+# simpler and far easier to get files out of when something is wrong. Garage still earns
+# its place as the Longhorn backup target and for Immich.
+#
+# DATABASE: a Crossplane `Database` claim, not a hand-rolled Postgres. See
+# platform/components/platform-api/resources/database-xrd.yaml.
+apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+kind: Database
+metadata:
+  name: nextcloud
+  namespace: cloud
+spec:
+  databaseName: nextcloud
+  size: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  namespace: cloud
+  labels:
+    app: nextcloud
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      securityContext:
+        fsGroup: 33          # www-data
+      containers:
+        - name: nextcloud
+          image: nextcloud:31.0.5-apache
+          env:
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-pg-app     # published as status.secretName by the claim
+                  key: host
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-pg-app
+                  key: dbname
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-pg-app
+                  key: user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-pg-app
+                  key: password
+            - name: NEXTCLOUD_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-auth
+                  key: admin-user
+                  optional: true
+            - name: NEXTCLOUD_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-auth
+                  key: admin-password
+                  optional: true
+            - name: NEXTCLOUD_TRUSTED_DOMAINS
+              value: "cloud.isaacwallace.dev 192.168.0.243"
+            # Behind cloudflared, so the app must trust the proxy's forwarded headers or
+            # every login appears to come from the tunnel's pod IP and rate limiting fires.
+            - name: TRUSTED_PROXIES
+              value: "10.42.0.0/16"
+            - name: OVERWRITEPROTOCOL
+              value: https
+          ports:
+            - containerPort: 80
+              name: http
+          startupProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            # First boot runs the installer against an empty database.
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            # The whole html tree, so apps, config and data survive a pod replacement.
+            - name: data
+              mountPath: /var/www/html
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: tank-cloud-nextcloud
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: cloud
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.243"
+spec:
+  type: LoadBalancer
+  selector:
+    app: nextcloud
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http

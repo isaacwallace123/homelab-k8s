@@ -20,7 +20,15 @@ spec:
       # nothing else lands there and competes for the GPU or the NFS path.
       nodeSelector:
         homelab.isaacwallace.dev/pool: media
+      # Two keys during the taxonomy migration. The taint is moving from
+      # `workload=media` to `pool=media` so it matches the label it pairs with; a pod
+      # cannot tolerate a taint it does not yet know about, so both are carried until
+      # every media node has been re-tainted. The `workload` entry is then removed.
       tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: media
+          effect: NoSchedule
         - key: homelab.isaacwallace.dev/workload
           operator: Equal
           value: media

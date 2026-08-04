@@ -1,0 +1,113 @@
+# ── Cloud tier ────────────────────────────────────────────────────────────────
+# Bulk storage for the cloud namespace, on the same TrueNAS box that serves media.
+#
+# THESE DATASETS MUST EXIST AND BE EXPORTED BEFORE THIS SYNCS. An NFS PV binds happily
+# against a path that does not exist and only fails at mount time, inside the consuming
+# pod, as a ContainerCreating that never resolves. On TrueNAS:
+#
+#   zfs create tank/cloud
+#   zfs create tank/cloud/garage
+#   zfs create tank/cloud/nextcloud
+#   zfs create tank/cloud/immich
+#   chown -R 1000:1000 /mnt/tank/cloud
+#
+# and add each as an NFS share with maproot/mapall left OFF — the pods run as UID 1000 and
+# rely on root_squash the same way the media exports do.
+#
+# Reclaim policy is Retain on all of them. These hold the only copy of photos and files;
+# a deleted PVC must never take the dataset with it.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-cloud-garage
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: cloud
+    name: tank-cloud-garage
+  nfs:
+    server: 192.168.0.252
+    path: /mnt/tank/cloud/garage
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-cloud-garage
+  namespace: cloud
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: tank-cloud-garage
+  resources:
+    requests:
+      storage: 1Ti
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-cloud-nextcloud
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: cloud
+    name: tank-cloud-nextcloud
+  nfs:
+    server: 192.168.0.252
+    path: /mnt/tank/cloud/nextcloud
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-cloud-nextcloud
+  namespace: cloud
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: tank-cloud-nextcloud
+  resources:
+    requests:
+      storage: 1Ti
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tank-cloud-immich
+spec:
+  capacity:
+    storage: 2Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: cloud
+    name: tank-cloud-immich
+  nfs:
+    server: 192.168.0.252
+    path: /mnt/tank/cloud/immich
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tank-cloud-immich
+  namespace: cloud
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: tank-cloud-immich
+  resources:
+    requests:
+      storage: 2Ti

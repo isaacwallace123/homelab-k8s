@@ -1,0 +1,361 @@
+# ── media-downloaders ─────────────────────────────────────────────────────────
+# Everything whose traffic must leave through the VPN, and nothing else.
+#
+# gluetun owns the pod's network namespace; the other four containers share it, so their
+# egress is tunnelled with no per-app proxy configuration and no way to leak if the tunnel
+# drops (they have no route except gluetun's).
+#
+# That shared namespace is the ONLY reason these five are still one pod. It is a hard
+# constraint, not convenience:
+#   qbittorrent   torrent traffic
+#   sabnzbd       usenet traffic
+#   prowlarr      talks to indexers and trackers — the traffic most worth tunnelling
+#   flaresolverr  solves challenges on Prowlarr's behalf, so it must share Prowlarr's exit IP
+#
+# Radarr, Sonarr and Overseerr are NOT here. They only talk to Prowlarr, to the download
+# clients, and to your library, so they get their own Deployments and their own restart
+# domains — which is the whole point of the split.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-downloaders
+  namespace: media
+  labels:
+    app: media-downloaders
+    app.kubernetes.io/part-of: media-stack
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the config PVCs are RWO and a second pod would deadlock
+  # waiting for volumes the outgoing pod still holds.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: media-downloaders
+  template:
+    metadata:
+      labels:
+        app: media-downloaders
+        app.kubernetes.io/part-of: media-stack
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: media
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: media
+          effect: NoSchedule
+        - key: homelab.isaacwallace.dev/workload
+          operator: Equal
+          value: media
+          effect: NoSchedule
+
+      initContainers:
+        - name: qbittorrent-init
+          image: python:3.14.6-slim
+          command: [python3, /scripts/init.py]
+          env:
+            - name: WEBUI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: qbittorrent-auth
+                  key: WEBUI_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: qbittorrent-init
+              mountPath: /scripts
+            - name: config-qbittorrent
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+      containers:
+
+        # ── gluetun ──────────────────────────────────────────────────────────
+        # Owns the network namespace. Everything below egresses through it.
+        - name: gluetun
+          image: qmcgaw/gluetun:v3.41.1
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - (ip rule del table 51820; ip -6 rule del table 51820) || true
+          env:
+            - name: VPN_SERVICE_PROVIDER
+              value: nordvpn
+            - name: VPN_TYPE
+              value: wireguard
+            - name: WIREGUARD_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-nordvpn
+                  key: WIREGUARD_PRIVATE_KEY
+            - name: SERVER_COUNTRIES
+              value: Canada
+            - name: UPDATER_PERIOD
+              value: 24h
+            - name: HTTP_CONTROL_SERVER_ADDRESS
+              value: ":8000"
+            # Ports reachable from outside the tunnel. 7878/8989/5055 are gone — Radarr,
+            # Sonarr and Overseerr no longer live in this namespace.
+            - name: FIREWALL_INPUT_PORTS
+              value: "8000,8080,8090,9696,8191"
+            # The *arr apps now reach these ports from their own pod IPs. Without the pod
+            # CIDR as an allowed input subnet, gluetun's firewall drops them.
+            - name: FIREWALL_OUTBOUND_SUBNETS
+              value: "10.42.0.0/16,10.43.0.0/16"
+          ports:
+            - containerPort: 8000
+              name: health
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+        # ── qbittorrent ───────────────────────────────────────────────────────
+        - name: qbittorrent
+          image: lscr.io/linuxserver/qbittorrent:5.2.3_v2.0.13-ls468
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+            - name: WEBUI_PORT
+              value: "8080"
+          ports:
+            - containerPort: 8080
+              name: qbit-ui
+            - containerPort: 6881
+              name: torrent-tcp
+            - containerPort: 6881
+              protocol: UDP
+              name: torrent-udp
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config-qbittorrent
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+        # ── sabnzbd ───────────────────────────────────────────────────────────
+        - name: sabnzbd
+          image: lscr.io/linuxserver/sabnzbd:5.0.4-ls262
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 8090
+              name: sabnzbd-ui
+          startupProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8090
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: config-sabnzbd
+              mountPath: /config
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              # par2 repair is genuinely CPU-hungry and bursty; this is the one container
+              # that legitimately wants two cores.
+              cpu: 2000m
+              memory: 2Gi
+
+        # ── prowlarr ──────────────────────────────────────────────────────────
+        # Stays inside the tunnel: this is the process that contacts indexers and
+        # trackers, so it is the one whose exit IP matters most.
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:2.4.0.5397-ls154
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 9696
+              name: prowlarr-ui
+          startupProbe:
+            tcpSocket:
+              port: 9696
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9696
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9696
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: config-prowlarr
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+        # ── flaresolverr ──────────────────────────────────────────────────────
+        # Must share Prowlarr's exit IP, or the challenge it solves is bound to a
+        # different address than the one that then uses the cookie.
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
+          env:
+            - name: LOG_LEVEL
+              value: info
+            - name: TZ
+              value: America/New_York
+          ports:
+            - containerPort: 8191
+              name: flare-ui
+          startupProbe:
+            tcpSocket:
+              port: 8191
+            initialDelaySeconds: 45
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8191
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8191
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+      volumes:
+        - name: qbittorrent-init
+          configMap:
+            name: qbittorrent-init
+        - name: config-qbittorrent
+          persistentVolumeClaim:
+            claimName: config-qbittorrent
+        - name: config-sabnzbd
+          persistentVolumeClaim:
+            claimName: config-sabnzbd
+        - name: config-prowlarr
+          persistentVolumeClaim:
+            claimName: config-prowlarr
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: nvme-downloads

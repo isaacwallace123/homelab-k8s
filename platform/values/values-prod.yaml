@@ -33,7 +33,6 @@ tiers:
   platform-api: 120   # XRDs and Compositions
   observability: 140  # Prometheus, Loki, Grafana, Alertmanager
   apps: 160           # personal services
-  fleet: 180          # instances of the platform API (game servers)
 
 # -----------------------------------------------------------------------------
 # AppProjects. `sourceRepos` is computed — this repo, plus `extraSourceRepos`, plus
@@ -65,6 +64,14 @@ projects:
       - group: ""
         kind: Namespace
 
+  cloud:
+    description: >-
+      The personal-cloud tier — Nextcloud, Immich, Garage, Vaultwarden, Stirling-PDF and
+      the CloudNativePG clusters behind them. Confined to the `cloud` namespace: this is
+      the tier that holds personal files and photos, and it has no reason to reach the
+      media stack, the arena, or anything cyberlab owns.
+    destinations: [cloud]
+
   monitoring:
     description: Observability hub — homelab metrics plus read-only cross-lab visibility.
     destinations: [monitoring, networking]
@@ -74,15 +81,6 @@ projects:
       - group: rbac.authorization.k8s.io
         kind: ClusterRoleBinding
 
-  games:
-    description: >-
-      Game server fleet. Instances of the GameServer platform API and the router in front
-      of them. Crossplane composes the per-server namespaces; this project owns only the
-      declarations and shared routing.
-    destinations: [games, "game-*"]
-    clusterResourceWhitelist:
-      - group: ""
-        kind: Namespace
 
 # =============================================================================
 # COMPONENTS
@@ -224,8 +222,20 @@ components:
     resources:
       enabled: true            # providers, functions, RBAC, ProviderConfigs
 
+  # CloudNativePG. Installed at the platform tier, not with the apps, because the Database
+  # XRD composes its CRDs — the operator has to be registered before any claim resolves.
+  - name: cloudnative-pg
+    tier: platform
+    waveOffset: 2
+    namespace: cnpg-system
+    chart:
+      repoURL: https://cloudnative-pg.github.io/charts
+      name: cloudnative-pg
+      version: "0.26.0"
+
   # ── platform API (XRDs + Compositions) ──────────────────────────────────────
-  # XRDs and Compositions for LabRun (the Operations Arena) and GameServer (the fleet).
+  # XRDs and Compositions: LabRun (the Operations Arena), plus Database and Bucket
+  # (the cloud tier's Postgres and S3).
   # Destination stays `homeops` — the broker ServiceAccount and its RoleBindings are
   # namespaced there; the XRDs and Compositions are cluster-scoped and unaffected.
   - name: platform-api
@@ -264,6 +274,50 @@ components:
     resources:
       enabled: true
 
+  # ── cloud tier ──────────────────────────────────────────────────────────────
+  # Garage first: the Bucket Composition's ProviderConfig points at its admin API, and
+  # Nextcloud and Immich claim buckets from it.
+  - name: garage
+    tier: apps
+    namespace: cloud
+    project: cloud
+    resources:
+      enabled: true
+
+  # Nextcloud claims a Database, so it must reconcile after garage and after the
+  # platform-api tier has registered the XRD.
+  - name: nextcloud
+    tier: apps
+    waveOffset: 4
+    namespace: cloud
+    project: cloud
+    resources:
+      enabled: true
+
+  - name: immich
+    tier: apps
+    waveOffset: 4
+    namespace: cloud
+    project: cloud
+    resources:
+      enabled: true
+
+  - name: vaultwarden
+    tier: apps
+    waveOffset: 4
+    namespace: cloud
+    project: cloud
+    resources:
+      enabled: true
+
+  - name: stirling-pdf
+    tier: apps
+    waveOffset: 4
+    namespace: cloud
+    project: cloud
+    resources:
+      enabled: true
+
   - name: homepage
     tier: apps
     namespace: networking
@@ -289,30 +343,3 @@ components:
         repoURL: https://github.com/isaacwallace123/portfolio-v3.git
         path: deploy/k8s
 
-  # ── fleet (instances of the platform API) ───────────────────────────────────
-  # DEFERRED. The GameServer API, its Compositions, and the games-pool all ship above and
-  # are ready; what is missing is the node to run servers on. cyberlab currently allocates
-  # ~106 GB of its 128 GB to the cyber range and the three AI VMs (16 + 32 + 16 GB, all
-  # sitting at ~100% usage), so there is no room for a 56 GB game node until either the AI
-  # footprint comes down or those VMs get a balloon floor below their ceiling.
-  #
-  # Turning the fleet on is these two flags plus the k8s-game-01 entry in terraform.tfvars.
-  # See docs/architecture/README.md §3 and docs/architecture/cross-lab.md §4.
-  - name: mc-router
-    tier: fleet
-    enabled: false
-    namespace: games
-    project: games
-    resources:
-      enabled: true
-      templated: true
-
-  - name: games
-    tier: fleet
-    enabled: false
-    waveOffset: 2
-    namespace: games
-    project: games
-    resources:
-      enabled: true
-      templated: true          # the GameServer fleet, rendered from values

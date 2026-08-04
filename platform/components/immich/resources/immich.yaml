@@ -1,0 +1,267 @@
+# Immich — photo and video library with local ML search.
+#
+# NOT on the media node, deliberately. The Arc A380 passes through to exactly one VM and
+# Plex has it, so Immich's ML runs on CPU here. That is a real tradeoff: the initial smart
+# search index over a large library takes hours rather than minutes, and video transcoding
+# is slower. It is the right call while Plex is the thing family actually uses. Moving
+# Immich to the media node later is a `pool` change in this file and nothing else.
+#
+# DATABASE: VectorChord, not stock Postgres. Since v1.133.0 Immich checks the VectorChord
+# extension version on startup and refuses to boot without it, so the claim overrides the
+# Database XRD's default image and preloads the library.
+apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+kind: Database
+metadata:
+  name: immich
+  namespace: cloud
+spec:
+  databaseName: immich
+  size: 20Gi
+  imageName: ghcr.io/tensorchord/cloudnative-vectorchord:17-0.3.0
+  sharedPreloadLibraries:
+    - vchord.so
+  extensions:
+    - vchord
+    - cube
+    - earthdistance
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-server
+  namespace: cloud
+  labels:
+    app: immich-server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-server
+  template:
+    metadata:
+      labels:
+        app: immich-server
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      containers:
+        - name: immich-server
+          image: ghcr.io/immich-app/immich-server:v1.147.0
+          env:
+            - name: DB_HOSTNAME
+              valueFrom:
+                secretKeyRef: { name: immich-pg-app, key: host }
+            - name: DB_DATABASE_NAME
+              valueFrom:
+                secretKeyRef: { name: immich-pg-app, key: dbname }
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef: { name: immich-pg-app, key: user }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: immich-pg-app, key: password }
+            - name: REDIS_HOSTNAME
+              value: immich-redis
+            - name: IMMICH_MACHINE_LEARNING_URL
+              value: http://immich-ml:3003
+          ports:
+            - containerPort: 2283
+              name: http
+          startupProbe:
+            httpGet: { path: /api/server/ping, port: 2283 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            # First boot runs schema migrations against an empty database.
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /api/server/ping, port: 2283 }
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /api/server/ping, port: 2283 }
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: library
+              mountPath: /usr/src/app/upload
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+      volumes:
+        - name: library
+          persistentVolumeClaim:
+            claimName: tank-cloud-immich
+---
+# Machine learning, split out from the server.
+#
+# Its own Deployment because its lifecycle is genuinely different: it holds multi-hundred-MB
+# models in memory, is idle most of the time, and is the piece most likely to be OOM-killed
+# during a bulk index. Restarting it must not restart the API serving the photo library.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-ml
+  namespace: cloud
+  labels:
+    app: immich-ml
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-ml
+  template:
+    metadata:
+      labels:
+        app: immich-ml
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      containers:
+        - name: immich-ml
+          image: ghcr.io/immich-app/immich-machine-learning:v1.147.0
+          ports:
+            - containerPort: 3003
+              name: http
+          startupProbe:
+            httpGet: { path: /ping, port: 3003 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /ping, port: 3003 }
+            periodSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: model-cache
+              mountPath: /cache
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              # CPU inference. This is the single largest consumer on the cloud node and
+              # the reason it is sized at 18 GiB rather than 12.
+              cpu: "3"
+              memory: 6Gi
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: immich-model-cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-model-cache
+  namespace: cloud
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Redis is a job queue here, not a datastore — Immich re-derives its contents. Deliberately
+# emptyDir: persisting it would replicate a cache through Longhorn and back it up weekly
+# to Garage for no recovery value.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-redis
+  namespace: cloud
+  labels:
+    app: immich-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich-redis
+  template:
+    metadata:
+      labels:
+        app: immich-redis
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      containers:
+        - name: redis
+          image: docker.io/valkey/valkey:8.1-alpine
+          ports:
+            - containerPort: 6379
+              name: redis
+          readinessProbe:
+            exec: { command: ["valkey-cli", "ping"] }
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+      volumes:
+        - name: data
+          emptyDir: { sizeLimit: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-ml
+  namespace: cloud
+spec:
+  type: ClusterIP
+  selector:
+    app: immich-ml
+  ports:
+    - port: 3003
+      targetPort: 3003
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-redis
+  namespace: cloud
+spec:
+  type: ClusterIP
+  selector:
+    app: immich-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich
+  namespace: cloud
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.244"
+spec:
+  type: LoadBalancer
+  selector:
+    app: immich-server
+  ports:
+    - port: 80
+      targetPort: 2283
+      name: http

@@ -1,0 +1,103 @@
+# Database — a Postgres database, on request.
+#
+# The point of this XRD is that an app should not have to know how Postgres is run here.
+# Nextcloud and Immich each need "a database and a connection secret"; they should not each
+# ship a StatefulSet, a PVC, a backup schedule and a bespoke Secret layout that drifts.
+#
+# A claim is four fields. The Composition turns it into a CloudNativePG Cluster with
+# replication, scheduled backups and a connection Secret in the claimant's namespace.
+# Swapping the engine underneath (a different operator, an external server) is a
+# Composition change and touches no application manifest.
+#
+# `scope: Namespaced` (Crossplane v2): the composite lives beside the app that asked for
+# it, and composes only namespaced resources. Deleting the app's namespace collects the
+# database with it.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: databases.platform.homelab.isaacwallace.dev
+spec:
+  scope: Namespaced
+  group: platform.homelab.isaacwallace.dev
+  names:
+    kind: Database
+    plural: databases
+  defaultCompositionRef:
+    name: database-cnpg
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                databaseName:
+                  type: string
+                  description: The database to create, and the owner role created with it.
+                  pattern: "^[a-z_][a-z0-9_]*$"
+                  maxLength: 63
+                size:
+                  type: string
+                  description: >-
+                    Storage for the data volume. Small is enough for Nextcloud's metadata;
+                    Immich's asset table is what grows.
+                  enum: ["5Gi", "10Gi", "20Gi", "50Gi"]
+                  default: "10Gi"
+                instances:
+                  type: integer
+                  description: >-
+                    Postgres instances. Default 1 — the cloud pool is a single node, so a
+                    second instance would land on the same machine and buy nothing but
+                    disk. Raise it only if the cloud tier ever spans nodes.
+                  default: 1
+                  minimum: 1
+                  maximum: 3
+                storageClass:
+                  type: string
+                  description: >-
+                    Longhorn, not NFS. Postgres on NFS is a well-known way to corrupt a
+                    database — it needs real POSIX locking and honest fsync.
+                  default: longhorn-replicated
+                imageName:
+                  type: string
+                  description: >-
+                    Postgres image. Defaults to stock CloudNativePG, which is right for
+                    anything that just needs SQL.
+
+                    Immich is the exception and the reason this field exists: since
+                    v1.133.0 it requires the VectorChord extension for smart search, and
+                    it checks the extension version on startup and refuses to boot without
+                    it. It therefore claims a database with a VectorChord-enabled image
+                    rather than this default.
+                  default: ghcr.io/cloudnative-pg/postgresql:17.2
+                sharedPreloadLibraries:
+                  type: array
+                  description: >-
+                    Libraries Postgres loads at startup. Extensions implemented as shared
+                    libraries — VectorChord among them — do not work if merely installed;
+                    they must be preloaded, which needs a restart to change.
+                  items:
+                    type: string
+                  default: []
+                extensions:
+                  type: array
+                  description: >-
+                    Extensions to CREATE in the database after bootstrap. Immich needs
+                    vchord, cube and earthdistance.
+                  items:
+                    type: string
+                  default: []
+              required:
+                - databaseName
+            status:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  description: Secret holding uri, host, port, user, password, dbname.
+                ready:
+                  type: boolean

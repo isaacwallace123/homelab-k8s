@@ -2,7 +2,7 @@
 #
 # `envoy-gateway` keeps its existing name and address (.201). Renaming it would recreate
 # the Service, move the IP, and break every AdGuard override and the Cloudflare Tunnel
-# origin at once. It is the INTERNAL gateway; `edge` and `games-web` are additive.
+# origin at once. It is the INTERNAL gateway; `edge` is additive.
 #
 # .202 and .203 are NOT free: .202 is AdGuard (which is also the nameserver every node is
 # configured with) and .203 is the ArgoCD LoadBalancer. The new gateways take .204/.205.
@@ -15,10 +15,6 @@ certificates:
     issuer: homelab-ca
     dnsNames:
       - "*.lan"
-  - name: games-lan-tls
-    issuer: homelab-ca
-    dnsNames:
-      - "*.games.lan"
 
 redirect:
   gateway: envoy-gateway
@@ -66,19 +62,3 @@ gateways:
         allowedNamespaces:
           homelab.isaacwallace.dev/exposure: public
 
-  # ── games-web: dynmap, admin panels, Satisfactory's web UI ───────────────────
-  # Web surfaces only. Game protocol traffic never passes through a Gateway.
-  - name: games-web
-    pool: platform-pool
-    address: 192.168.0.205
-    listeners:
-      - name: http
-        protocol: HTTP
-        port: 80
-      - name: https
-        protocol: HTTPS
-        port: 443
-        hostname: "*.games.lan"
-        tls:
-          mode: Terminate
-          secretName: games-lan-tls

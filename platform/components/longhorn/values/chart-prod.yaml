@@ -19,6 +19,21 @@ defaultSettings:
   replicaZoneSoftAntiAffinity: true
   replicaAutoBalance: best-effort
 
+  # ── Backup target ───────────────────────────────────────────────────────────
+  # Until this existed the cluster had snapshots and no backups, which are not the same
+  # thing: a snapshot lives on the same disk as the volume it protects, so it survives a
+  # bad `rm` and does not survive losing the node or the pool.
+  #
+  # Garage is in-cluster, so this is not off-site either — it protects against a Longhorn
+  # node or a Longhorn-level mistake, not against losing pve2. The next step for real
+  # durability is replicating the Garage dataset off the box; the TrueNAS side of that is
+  # a ZFS send, not a Longhorn concern.
+  #
+  # The bucket must exist before the first backup runs. Once provider-garage is installed
+  # it can be a Bucket claim; creating it by hand is fine too.
+  backupTarget: s3://longhorn-backups@garage/
+  backupTargetCredentialSecret: longhorn-backup-credentials
+
   # Rebuild ONE replica per node at a time, not the default five.
   #
   # etcd lives on the same pve2 storage as everything else, and it is exquisitely sensitive
@@ -34,9 +49,20 @@ longhornManager:
   nodeSelector:
     node-role.kubernetes.io/worker: "true"
   tolerations: &mediaToleration
+    # Both keys while the taint migrates from `workload=media` to `pool=media`.
+    # See platform/components/plex/resources/deployment.yaml for the rationale.
+    - key: homelab.isaacwallace.dev/pool
+      operator: Equal
+      value: media
+      effect: NoSchedule
     - key: homelab.isaacwallace.dev/workload
       operator: Equal
       value: media
+      effect: NoSchedule
+    # The cloud node is tainted the same way and also holds replicas.
+    - key: homelab.isaacwallace.dev/pool
+      operator: Equal
+      value: cloud
       effect: NoSchedule
 longhornDriver:
   nodeSelector:

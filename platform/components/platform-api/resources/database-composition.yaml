@@ -1,0 +1,119 @@
+# Database -> CloudNativePG.
+#
+# Renders one CNPG Cluster per claim. CNPG itself creates the bootstrap database, the
+# owner role, and a `<cluster>-app` Secret containing uri/host/port/user/password/dbname —
+# so this Composition does not manufacture credentials, which is the part most homegrown
+# database templates get wrong.
+#
+# go-templating rather than patch-and-transform: the resource is a single object whose
+# shape depends on several claim fields at once, and a template reads far better than a
+# column of fromFieldPath/toFieldPath pairs.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: database-cnpg
+spec:
+  compositeTypeRef:
+    apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+    kind: Database
+  mode: Pipeline
+  pipeline:
+    - step: render-cluster
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $spec := .observed.composite.resource.spec }}
+            {{- $name := $spec.databaseName }}
+            {{- $ns := .observed.composite.resource.metadata.namespace }}
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $ns }}-{{ $name }}-pg
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: cluster
+            spec:
+              providerConfigRef:
+                name: cloud
+              forProvider:
+                manifest:
+                  apiVersion: postgresql.cnpg.io/v1
+                  kind: Cluster
+                  metadata:
+                    name: {{ $name }}-pg
+                    namespace: {{ $ns }}
+                  spec:
+                    instances: {{ $spec.instances | default 1 }}
+                    imageName: {{ $spec.imageName | default "ghcr.io/cloudnative-pg/postgresql:17.2" }}
+                    storage:
+                      size: {{ $spec.size | default "10Gi" }}
+                      storageClass: {{ $spec.storageClass | default "longhorn-replicated" }}
+                    {{- with $spec.sharedPreloadLibraries }}
+                    postgresql:
+                      shared_preload_libraries:
+                        {{- range . }}
+                        - {{ . }}
+                        {{- end }}
+                    {{- end }}
+                    bootstrap:
+                      initdb:
+                        database: {{ $name }}
+                        owner: {{ $name }}
+                        {{- with $spec.extensions }}
+                        # CNPG runs these as superuser against the freshly created
+                        # database, which is what extensions like vchord require —
+                        # the owner role cannot CREATE EXTENSION on its own.
+                        postInitApplicationSQL:
+                          {{- range . }}
+                          - CREATE EXTENSION IF NOT EXISTS {{ . }} CASCADE;
+                          {{- end }}
+                        {{- end }}
+                    # The cloud pool is tainted; without this the Cluster schedules
+                    # nowhere and reports as pending storage rather than as a placement
+                    # failure, which is a genuinely confusing way to fail.
+                    affinity:
+                      nodeSelector:
+                        homelab.isaacwallace.dev/pool: cloud
+                      tolerations:
+                        - key: homelab.isaacwallace.dev/pool
+                          operator: Equal
+                          value: cloud
+                          effect: NoSchedule
+                    resources:
+                      requests:
+                        cpu: 100m
+                        memory: 256Mi
+                      limits:
+                        cpu: "1"
+                        memory: 1Gi
+            ---
+            apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+            kind: CompositeConnectionDetails
+            data: {}
+            ---
+            {{- $ready := false }}
+            {{- with .observed.resources.cluster }}
+            {{-   if .resource.status }}
+            {{-     range .resource.status.conditions | default list }}
+            {{-       if and (eq .type "Ready") (eq .status "True") }}
+            {{-         $ready = true }}
+            {{-       end }}
+            {{-     end }}
+            {{-   end }}
+            {{- end }}
+            apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+            kind: Database
+            status:
+              # CNPG names the connection Secret after the cluster, not after the claim.
+              # Publishing it here means apps reference status.secretName and never have
+              # to know that convention.
+              secretName: {{ $spec.databaseName }}-pg-app
+              ready: {{ $ready }}
+
+    - step: ready
+      functionRef:
+        name: function-auto-ready

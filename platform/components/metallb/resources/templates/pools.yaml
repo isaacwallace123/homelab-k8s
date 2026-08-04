@@ -2,7 +2,7 @@
 One IPAddressPool + one L2Advertisement per entry in .Values.pools.
 
 The per-pool `nodeSelectors` is the part that matters on a two-host cluster. Without it,
-MetalLB may elect ANY node as the L2 speaker for an address — so a game server's IP could
+MetalLB may elect ANY node as the L2 speaker for an address — so a workload's IP could
 be announced by a node on pve2 while the pod runs on cyberlab. Every player packet would
 then land on the wrong physical host and be forwarded across the LAN, adding a hop and
 asymmetric return path to a latency-sensitive UDP stream.
@@ -19,7 +19,7 @@ metadata:
   namespace: {{ $.Values.namespace }}
 spec:
   # autoAssign is false for pools whose addresses are pinned per-Service by annotation,
-  # and true for pools handed out by a controller (the game fleet).
+  # and true for pools handed out to workloads by a controller.
   autoAssign: {{ $pool.autoAssign }}
   {{- if $pool.avoidBuggyIPs }}
   avoidBuggyIPs: true

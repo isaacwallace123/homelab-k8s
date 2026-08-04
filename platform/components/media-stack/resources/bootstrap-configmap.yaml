@@ -8,16 +8,30 @@ data:
     #!/usr/bin/env python3
     """
     Wires up the media-stack apps after they start.
-    Runs as a sidecar in the same pod so all URLs are localhost.
+
+    Runs in its own pod and addresses every app by Service DNS. It used to be a sidecar
+    that could rely on localhost, which stopped being true when the stack was split into
+    per-app Deployments: only qbittorrent, sabnzbd, prowlarr and flaresolverr still share
+    a network namespace (gluetun's), and Radarr, Sonarr and Overseerr do not.
+
+    Every name below is a Service in the `media` namespace, so the short name resolves
+    via the namespace's search domain.
+
     Idempotent — skips anything already configured.
     """
     import configparser, http.cookiejar, json, os, re, time, urllib.parse, urllib.request, urllib.error, xml.etree.ElementTree as ET
 
-    RADARR_URL    = "http://localhost:7878"
-    SONARR_URL    = "http://localhost:8989"
-    PROWLARR_URL  = "http://localhost:9696"
-    QB_URL        = "http://localhost:8080"
-    SAB_URL       = "http://localhost:8090"
+    RADARR_URL    = os.environ.get("RADARR_URL",   "http://radarr:7878")
+    SONARR_URL    = os.environ.get("SONARR_URL",   "http://sonarr:8989")
+    PROWLARR_URL  = os.environ.get("PROWLARR_URL", "http://prowlarr:9696")
+    QB_URL        = os.environ.get("QB_URL",       "http://qbittorrent:8080")
+    SAB_URL       = os.environ.get("SAB_URL",      "http://sabnzbd:8090")
+
+    # Hostnames written INTO the apps' own configuration, as opposed to the URLs this
+    # script calls. The *arr apps resolve these themselves, from their own pods.
+    QB_HOST      = os.environ.get("QB_HOST",      "qbittorrent")
+    SAB_HOST     = os.environ.get("SAB_HOST",     "sabnzbd")
+    FLARE_URL    = os.environ.get("FLARE_URL",    "http://flaresolverr:8191")
 
     def read_sabnzbd_key(path, max_wait=600):
         deadline = time.time() + max_wait
@@ -63,7 +77,7 @@ data:
             "removeCompletedDownloads": True,
             "removeFailedDownloads": True,
             "fields": [
-                {"name": "host",       "value": "localhost"},
+                {"name": "host",       "value": SAB_HOST},
                 {"name": "port",       "value": 8090},
                 {"name": "useSsl",     "value": False},
                 {"name": "urlBase",    "value": ""},
@@ -186,9 +200,11 @@ data:
             print(f"qBittorrent login failed: {result} — skipping QB config", flush=True)
             return
 
-        # Sync WebUI credentials from the secret — localhost auth bypass means
-        # bootstrap always gets "Ok." on login, so we must explicitly push the
-        # correct password so external browser logins work.
+        # Sync WebUI credentials from the secret. The pod-CIDR auth whitelist set by
+        # qbittorrent-init means any in-cluster caller — including this one — gets "Ok."
+        # on login regardless of the password, so a successful login here proves nothing
+        # about the stored credentials. Push them explicitly so browser logins from the
+        # LAN, which are NOT whitelisted, keep working.
         creds = json.dumps({
             "web_ui_username": qb_user,
             "web_ui_password": qb_pass,
@@ -260,7 +276,7 @@ data:
             "removeCompletedDownloads": True,
             "removeFailedDownloads": True,
             "fields": [
-                {"name": "host",          "value": "localhost"},
+                {"name": "host",          "value": QB_HOST},
                 {"name": "port",          "value": 8080},
                 {"name": "useSsl",        "value": False},
                 {"name": "urlBase",       "value": ""},
@@ -306,7 +322,7 @@ data:
                 "implementation":  "FlareSolverr",
                 "configContract":  "FlareSolverrSettings",
                 "fields": [
-                    {"name": "host",           "value": "http://localhost:8191"},
+                    {"name": "host",           "value": FLARE_URL},
                     {"name": "requestTimeout", "value": 60},
                 ],
                 "tags": [],
@@ -382,7 +398,7 @@ data:
                 "implementation": app_name,
                 "configContract": f"{app_name}Settings",
                 "fields": [
-                    {"name": "prowlarrUrl",    "value": "http://localhost:9696"},
+                    {"name": "prowlarrUrl",    "value": PROWLARR_URL},
                     {"name": "baseUrl",        "value": app_url},
                     {"name": "apiKey",         "value": app_key},
                     {"name": "syncCategories", "value": cats},

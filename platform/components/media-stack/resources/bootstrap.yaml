@@ -1,0 +1,113 @@
+# ── media-bootstrap ───────────────────────────────────────────────────────────
+# Reconciles the wiring BETWEEN the media apps: download clients in Radarr/Sonarr, the
+# FlareSolverr proxy in Prowlarr, and Prowlarr's app-sync to Radarr and Sonarr.
+#
+# A Deployment rather than a Job because it is a reconciler, not a one-shot: it waits for
+# each app's API to come up, and re-asserts the wiring after any of them is restarted or
+# restored from backup. It is idempotent and cheap when there is nothing to do.
+#
+# It reads each app's API key straight from that app's config, which means mounting four
+# RWO Longhorn volumes that other pods also hold. That works ONLY because every media
+# Deployment is pinned to the same node by `pool: media` — RWO is once-per-NODE, not
+# once-per-pod. If the media apps are ever spread across nodes, this must switch to
+# reading the keys from a Secret instead. That is the one coupling the split leaves behind.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-bootstrap
+  namespace: media
+  labels:
+    app: media-bootstrap
+    app.kubernetes.io/part-of: media-stack
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: media-bootstrap
+  template:
+    metadata:
+      labels:
+        app: media-bootstrap
+        app.kubernetes.io/part-of: media-stack
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: media
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: media
+          effect: NoSchedule
+        - key: homelab.isaacwallace.dev/workload
+          operator: Equal
+          value: media
+          effect: NoSchedule
+      containers:
+        - name: bootstrap
+          image: python:3.14.6-slim
+          command: [python3, /scripts/bootstrap.py]
+          # Run as UID/GID 1000 (not root): the downloads NFS export uses root_squash, so
+          # a root process cannot mkdir in the 1000:1000-owned dataset. Bootstrap only
+          # reads configs and calls the apps' APIs.
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          env:
+            - name: QB_USER
+              value: admin
+            - name: QB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: qbittorrent-auth
+                  key: WEBUI_PASSWORD
+                  optional: true
+            - name: PLEX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: plex-auth
+                  key: PLEX_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: config-radarr
+              mountPath: /config/radarr
+              readOnly: true
+            - name: config-sonarr
+              mountPath: /config/sonarr
+              readOnly: true
+            - name: config-prowlarr
+              mountPath: /config/prowlarr
+              readOnly: true
+            - name: config-sabnzbd
+              mountPath: /config/sabnzbd
+              readOnly: true
+            - name: downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      volumes:
+        - name: scripts
+          configMap:
+            name: media-stack-bootstrap
+        - name: config-radarr
+          persistentVolumeClaim:
+            claimName: config-radarr
+        - name: config-sonarr
+          persistentVolumeClaim:
+            claimName: config-sonarr
+        - name: config-prowlarr
+          persistentVolumeClaim:
+            claimName: config-prowlarr
+        - name: config-sabnzbd
+          persistentVolumeClaim:
+            claimName: config-sabnzbd
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: nvme-downloads

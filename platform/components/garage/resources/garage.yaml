@@ -1,0 +1,187 @@
+# Garage — S3-compatible object storage for the cloud tier.
+#
+# Two jobs here:
+#   1. Buckets for Nextcloud and Immich, provisioned by Crossplane `Bucket` claims rather
+#      than by hand (see platform-api/resources/bucket-*.yaml).
+#   2. A Longhorn backup target. The cluster currently has none, which means Longhorn's
+#      snapshots protect against a replica failure but not against losing the pool.
+#
+# Chosen over MinIO because it is dramatically lighter for a single-node homelab store and
+# has a first-class Crossplane provider (useful/provider-garage), which is what lets the
+# Bucket XRD be a real managed resource instead of a Job wrapped in a Composition.
+#
+# SINGLE NODE, replication_factor 1. This is deliberate: Garage's redundancy would be
+# replication across Garage nodes, and there is exactly one cloud node. Durability comes
+# from the layer below — the data volume is a TrueNAS dataset with its own snapshots and
+# ZFS redundancy. Running three Garage replicas on one machine would cost 3x the disk and
+# protect against nothing.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  namespace: cloud
+data:
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir     = "/var/lib/garage/data"
+    db_engine    = "sqlite"
+
+    replication_factor = 1
+
+    rpc_bind_addr   = "[::]:3901"
+    rpc_public_addr = "127.0.0.1:3901"
+
+    [s3_api]
+    s3_region  = "garage"
+    api_bind_addr = "[::]:3900"
+    root_domain   = ".s3.garage.lan"
+
+    [admin]
+    # The Crossplane provider drives this endpoint. It is ClusterIP-only — never exposed
+    # on the LAN — because the admin token it authenticates with can create and delete
+    # every bucket in the store.
+    api_bind_addr = "[::]:3903"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: garage
+  namespace: cloud
+  labels:
+    app: garage
+spec:
+  serviceName: garage
+  replicas: 1
+  selector:
+    matchLabels:
+      app: garage
+  template:
+    metadata:
+      labels:
+        app: garage
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: garage
+          image: dxflrs/garage:v2.1.0
+          env:
+            # rpc_secret and admin_token are read from the environment rather than baked
+            # into the ConfigMap, so the config can stay in git and the secrets cannot.
+            - name: GARAGE_RPC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: garage-auth
+                  key: rpc-secret
+            - name: GARAGE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: garage-auth
+                  key: admin-token
+          ports:
+            - containerPort: 3900
+              name: s3
+            - containerPort: 3901
+              name: rpc
+            - containerPort: 3903
+              name: admin
+          startupProbe:
+            tcpSocket:
+              port: 3903
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: 3900
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 3901
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/garage.toml
+              subPath: garage.toml
+            - name: meta
+              mountPath: /var/lib/garage/meta
+            - name: data
+              mountPath: /var/lib/garage/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: garage-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: tank-cloud-garage
+  volumeClaimTemplates:
+    # Metadata is a SQLite database — small, latency-sensitive, and the one part that must
+    # NOT live on NFS. Longhorn gives it real POSIX locking and honest fsync. The bulk
+    # object data goes to the TrueNAS export mounted above.
+    - metadata:
+        name: meta
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn-replicated
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage
+  namespace: cloud
+spec:
+  type: ClusterIP
+  selector:
+    app: garage
+  ports:
+    - port: 3900
+      targetPort: 3900
+      name: s3
+    - port: 3901
+      targetPort: 3901
+      name: rpc
+    - port: 3903
+      targetPort: 3903
+      name: admin
+---
+# S3 endpoint on the LAN, so Longhorn's backup target and any desktop client can reach it.
+# The admin port is deliberately NOT published here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage-s3
+  namespace: cloud
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.240"
+spec:
+  type: LoadBalancer
+  selector:
+    app: garage
+  ports:
+    - port: 80
+      targetPort: 3900
+      name: http
+    - port: 3900
+      targetPort: 3900
+      name: s3

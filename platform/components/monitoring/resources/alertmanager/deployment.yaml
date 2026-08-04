@@ -41,7 +41,7 @@ spec:
         app: alertmanager
     spec:
       nodeSelector:
-        node-role.kubernetes.io/infra: "true"
+        homelab.isaacwallace.dev/pool: apps
       securityContext:
         fsGroup: 65534
         runAsNonRoot: true

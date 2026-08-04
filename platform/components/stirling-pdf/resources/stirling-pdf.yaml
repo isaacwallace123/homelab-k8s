@@ -1,0 +1,99 @@
+# Stirling-PDF — local PDF toolkit (merge, split, OCR, convert).
+#
+# Stateless by design: files are uploaded, operated on, and returned. Nothing is persisted,
+# which is the point — the reason to self-host this is not wanting documents on someone
+# else's PDF site. The only volume is scratch space, and emptyDir is correct for it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stirling-pdf
+  namespace: cloud
+  labels:
+    app: stirling-pdf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stirling-pdf
+  template:
+    metadata:
+      labels:
+        app: stirling-pdf
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      containers:
+        - name: stirling-pdf
+          image: docker.io/stirlingtools/stirling-pdf:1.4.0
+          env:
+            - name: DOCKER_ENABLE_SECURITY
+              value: "false"
+            - name: LANGS
+              value: en_GB
+            # OCR language packs are downloaded on first use into /usr/share/tessdata.
+            - name: INSTALL_BOOK_AND_ADVANCED_HTML_OPS
+              value: "false"
+          ports:
+            - containerPort: 8080
+              name: http
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            # Slow first boot: it unpacks LibreOffice and the OCR toolchain.
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: tessdata
+              mountPath: /usr/share/tessdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              # LibreOffice conversions are memory-hungry in bursts.
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: tessdata
+          emptyDir:
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stirling-pdf
+  namespace: cloud
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.242"
+spec:
+  type: LoadBalancer
+  selector:
+    app: stirling-pdf
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http

@@ -4,7 +4,7 @@
 #
 #   .10 – .19   k8s nodes (static, cloud-init)
 #   .201 – .209 platform-pool   pinned    gateways, ArgoCD
-#   .210 – .219 games-pool      AUTO      one per published game server
+#   .210 – .219 (free)          —         reclaimed from the retired game fleet
 #   .220 – .250 services-pool   pinned    dashboards, media, monitoring
 
 namespace: networking
@@ -27,16 +27,3 @@ pools:
     addresses:
       - 192.168.0.220-192.168.0.250
 
-  # The game fleet. autoAssign is TRUE here — servers are created and destroyed by the
-  # GameServer Composition, which cannot sensibly pick addresses by hand.
-  #
-  # Previously this range was excluded with a comment reserving it for "the other Proxmox
-  # k8s/agones cluster". No such cluster exists; the k8s nodes live at .10-.13. Reclaimed.
-  - name: games-pool
-    autoAssign: true
-    addresses:
-      - 192.168.0.210-192.168.0.219
-    # Announced ONLY from the game node, which is on the cyberlab host. This is what keeps
-    # player traffic from being announced by a pve2 node and forwarded back across the LAN.
-    nodeSelectors:
-      - homelab.isaacwallace.dev/pool: games

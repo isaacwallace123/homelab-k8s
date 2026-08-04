@@ -38,32 +38,36 @@ spec:
   runtimeConfigRef:
     name: provider-kubernetes
 ---
-# ── provider-helm ─────────────────────────────────────────────────────────────
-# Lets a Composition manage a Helm release as a composed resource. The Minecraft
-# Composition uses this: itzg's chart already handles modpack download, EULA, JVM flags,
-# and RCON through values alone, so composing a Release is far less code — and far less to
-# get wrong — than rendering a StatefulSet by hand.
+# ── provider-garage ───────────────────────────────────────────────────────────
+# Manages Garage buckets and access keys as composed resources, via Garage's admin API.
+#
+# This is what makes the Bucket XRD real rather than a Job wrapped in a Composition.
+# Nextcloud and Immich declare a Bucket claim and get a bucket, a scoped access key, and a
+# Secret — with deletion collected by Crossplane instead of left behind.
+#
+# NOT crossplane-contrib. Verify the package before a fresh bootstrap:
+#   https://marketplace.upbound.io/providers/useful/provider-garage
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
-  name: provider-helm
+  name: provider-garage
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   serviceAccountTemplate:
     metadata:
-      name: provider-helm
+      name: provider-garage
 ---
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: provider-helm
+  name: provider-garage
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  package: xpkg.upbound.io/crossplane-contrib/provider-helm:v0.20.4
+  package: xpkg.upbound.io/useful/provider-garage:v1.0.4
   runtimeConfigRef:
-    name: provider-helm
+    name: provider-garage
 ---
 # ── composition functions ─────────────────────────────────────────────────────
 # patch-and-transform drives the existing LabRun Composition.
@@ -76,13 +80,12 @@ metadata:
 spec:
   package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.10.7
 ---
-# go-templating drives the GameServer Compositions.
+# go-templating drives the Database and Bucket Compositions.
 #
 # The LabRun Composition is ~400 lines of patch-and-transform for one workload, and each
-# new field costs another six-line patch block. A GameServer composes a namespace, quota,
-# limit range, PVC, workload, service, backup job, and network policy — expressed as
-# patches that would be unreadable. Templating states it as what it is: a manifest with
-# variables in it.
+# new field costs another six-line patch block. A Database composes a CNPG Cluster whose
+# shape depends on several claim fields at once — image, preloaded libraries, extensions —
+# and a template states that as what it is: a manifest with variables in it.
 apiVersion: pkg.crossplane.io/v1
 kind: Function
 metadata:

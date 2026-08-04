@@ -6,6 +6,12 @@
 #   Overseerr  http://192.168.0.236
 # Each service also keeps its native port so in-cluster widgets keep working.
 # NOTE: requires the allow-media-external NetworkPolicy (default-deny otherwise).
+#
+# Every address above is unchanged by the split — the IPs are pinned, so bookmarks, Plex
+# clients and the Homepage widgets keep working. What changed is the selector: these used
+# to all point at one `app: media-stack` pod, and now point at the Deployment that
+# actually owns each port. qbittorrent, sabnzbd, prowlarr and flaresolverr still resolve
+# to the same pod, because those four share gluetun's network namespace.
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,7 +22,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: media-stack
+    app: media-downloaders
   ports:
     - port: 80
       targetPort: 8080
@@ -28,6 +34,60 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: sabnzbd
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.235"
+spec:
+  type: LoadBalancer
+  selector:
+    app: media-downloaders
+  ports:
+    - port: 80
+      targetPort: 8090
+      name: http
+    - port: 8090
+      targetPort: 8090
+      name: webui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.233"
+spec:
+  type: LoadBalancer
+  selector:
+    app: media-downloaders
+  ports:
+    - port: 80
+      targetPort: 9696
+      name: http
+    - port: 9696
+      targetPort: 9696
+      name: webui
+---
+# FlareSolverr has no UI worth exposing and is only ever called by Prowlarr, so it gets a
+# ClusterIP rather than one of the finite MetalLB addresses.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  type: ClusterIP
+  selector:
+    app: media-downloaders
+  ports:
+    - port: 8191
+      targetPort: 8191
+      name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: radarr
   namespace: media
   annotations:
@@ -35,7 +95,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: media-stack
+    app: radarr
   ports:
     - port: 80
       targetPort: 7878
@@ -54,51 +114,13 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: media-stack
+    app: sonarr
   ports:
     - port: 80
       targetPort: 8989
       name: http
     - port: 8989
       targetPort: 8989
-      name: webui
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prowlarr
-  namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.233"
-spec:
-  type: LoadBalancer
-  selector:
-    app: media-stack
-  ports:
-    - port: 80
-      targetPort: 9696
-      name: http
-    - port: 9696
-      targetPort: 9696
-      name: webui
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: sabnzbd
-  namespace: media
-  annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.235"
-spec:
-  type: LoadBalancer
-  selector:
-    app: media-stack
-  ports:
-    - port: 80
-      targetPort: 8090
-      name: http
-    - port: 8090
-      targetPort: 8090
       name: webui
 ---
 apiVersion: v1
@@ -111,7 +133,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: media-stack
+    app: overseerr
   ports:
     - port: 80
       targetPort: 5055

@@ -52,7 +52,7 @@ spec:
         app: loki
     spec:
       nodeSelector:
-        node-role.kubernetes.io/infra: "true"
+        homelab.isaacwallace.dev/pool: apps
       securityContext:
         fsGroup: 10001
         runAsUser: 10001

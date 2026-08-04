@@ -48,8 +48,13 @@ resourcesCrossplane:
     cpu: 100m
     memory: 256Mi
 
-# Keep the control plane off the game node — its cores are exclusively allocated and a
-# Crossplane pod landing there would be evicted from them anyway.
+# Crossplane belongs on the general-purpose pool, which lives on cyberlab.
+#
+# `worker=true` was too loose: it also matches the media and cloud nodes on pve2, and
+# Crossplane reconciling on the storage host competes for the same spindles and CPU that
+# etcd, Plex transcodes, and the NFS exports need. Nothing here is latency-sensitive
+# enough to justify that. The apps pool is untainted, so no tolerations are required —
+# which is also what keeps it off the media and cloud nodes.
 nodeSelector:
-  node-role.kubernetes.io/worker: "true"
+  homelab.isaacwallace.dev/pool: apps
 tolerations: []
