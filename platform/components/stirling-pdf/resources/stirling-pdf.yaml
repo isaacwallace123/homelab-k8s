@@ -88,7 +88,7 @@ metadata:
   name: stirling-pdf
   namespace: cloud
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.242"
+    metallb.io/loadBalancerIPs: "192.168.0.247"
 spec:
   type: LoadBalancer
   selector:

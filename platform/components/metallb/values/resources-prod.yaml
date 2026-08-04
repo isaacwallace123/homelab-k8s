@@ -5,7 +5,17 @@
 #   .10 – .19   k8s nodes (static, cloud-init)
 #   .201 – .209 platform-pool   pinned    gateways, ArgoCD
 #   .210 – .219 (free)          —         reclaimed from the retired game fleet
-#   .220 – .250 services-pool   pinned    dashboards, media, monitoring
+#   .220 – .250 services-pool   pinned    dashboards, media, monitoring, cloud
+#
+# ALLOCATED (check this before pinning a new address — the pool is pinned, so a duplicate
+# request silently stays <pending> forever with no event explaining why):
+#   .220 homepage      .222 ntfy
+#   .230 plex          .231 radarr      .232 sonarr     .233 prowlarr
+#   .234 qbittorrent   .235 sabnzbd     .236 overseerr
+#   .240 grafana       .241 prometheus  .242 alertmanager
+#   .243 nextcloud     .244 immich      .245 garage-s3  .246 vaultwarden
+#   .247 stirling-pdf
+# Free: .221, .223-.229, .237-.239, .248-.250
 
 namespace: networking
 

@@ -108,7 +108,7 @@ metadata:
   name: vaultwarden
   namespace: cloud
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.0.241"
+    metallb.io/loadBalancerIPs: "192.168.0.246"
 spec:
   type: LoadBalancer
   selector:
