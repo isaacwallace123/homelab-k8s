@@ -35,13 +35,33 @@ progress: 100, state: "complete", isRebuilding: false
 
 A replica that finishes rebuilding but is never promoted never gets `healthyAt` set, so
 Longhorn's one-rebuild-at-a-time bookkeeping never clears. Those two occupied the slot
-permanently and every remaining eviction queued behind them **forever**. It was not slow.
-It was deadlocked, and it presented identically to slow.
+permanently and every remaining eviction queued behind them. It was not slow. It was
+deadlocked, and it presented identically to slow.
+
+`WO` turned out to be one of several states a wedged replica can sit in. The general
+mechanism is below.
 
 ## Root cause
 
-Deleting the wedged replicas freed the slot, and the stall immediately reappeared on the
-next node. Chasing it there produced the actual mechanism:
+**The blocker is a replica stuck in `rebuilding` state.** `concurrentReplicaRebuildPerNodeLimit`
+is 1, so exactly one replica per node may rebuild at a time. If that one never finishes,
+the slot is never released and every other eviction on that node waits forever. The
+manager log names the culprit explicitly:
+
+```
+Replica rebuildings for map[pvc-2891cfc1-...-r-692c59f9:{}] are in progress on this node,
+which reaches or exceeds the concurrent limit value 1
+```
+
+Cross-check that against `isRebuilding` across all engines. If the log says a rebuild is in
+progress and **no engine reports `isRebuilding: true`**, that replica is wedged. Delete it —
+it always has healthy siblings, or the volume would not report `healthy`.
+
+### A snapshot-purge failure is one way replicas get wedged
+
+One instance had a distinct trigger worth recording. Longhorn purges snapshots before every
+rebuild, and that purge contacts every replica in the engine's `replicaModeMap` — including
+dead ones:
 
 ```
 Starting snapshot purge before rebuilding
@@ -49,34 +69,37 @@ Failed to start snapshot purge before rebuilding
   error: tcp://10.42.3.188:10833: connect: connection refused
 ```
 
-**Longhorn runs a snapshot purge before every rebuild, and that purge contacts every
-replica in the engine's `replicaModeMap` — including dead ones.**
-
 `10.42.3.188` was an instance-manager pod on `k3s-worker-infra` that had since been
-replaced. Three engines still held entries pointing at that address. One was not even a
-real replica; it was recorded literally as `UNKNOWN-tcp://10.42.3.188:10833`.
+replaced. Three engines still held entries pointing at it; one was not even a real replica,
+recorded literally as `UNKNOWN-tcp://10.42.3.188:10833`.
 
-So: dead address → purge fails → rebuild never starts → the rebuild slot is never released
-→ every other eviction on that node queues behind it forever. Self-sustaining, and it
-presents as silence.
+Dead address → purge fails → that rebuild wedges → slot never released. Restarting the pod
+holding those volumes cleared that particular wedge, and rebuilds resumed within a minute.
 
-**Deleting Replica CRs cannot fix this.** The stale entries live in the *engine's* status,
-not as Replica objects — there is no CR named `UNKNOWN-tcp://...` to delete. Replica
-deletion only moves the stall to whichever volume takes the slot next.
+### What `ERR` entries are NOT
+
+An earlier version of this document claimed the `ERR` entries in `replicaModeMap` were
+themselves the blocker, and that only an engine reset could clear them. **Both were wrong.**
+
+Those entries are stale records of replicas that have since been deleted. They persist
+across pod restarts and even across a full Deployment replacement — media-stack was pruned
+and rebuilt as five separate Deployments and three `ERR` entries rode straight through it.
+They are also **harmless**: `config-overseerr` began rebuilding normally while still
+carrying one.
+
+They are cosmetic noise. Chasing them cost about an hour. The signal that matters is
+`isRebuilding` versus what the log says is in progress.
 
 ## Fix
 
-Reset the engine by detaching and reattaching the volume, which rebuilds `replicaModeMap`
-from live replicas and drops the dead entries. In practice that means restarting the pod
-that holds the volume:
+Delete the replica the log names as rebuilding. Verify it has healthy siblings first — it
+will, or the volume would not report `healthy`:
 
 ```bash
-kubectl rollout restart deployment/media-stack -n media
+kubectl delete replicas.longhorn.io -n longhorn-system <the-wedged-replica>
 ```
 
-All three affected volumes (`config-prowlarr`, `config-sabnzbd`, `config-qbittorrent`)
-belonged to one pod, so a single restart cleared it. Rebuilds resumed immediately —
-`prometheus-data` went from stalled to 53% within a minute.
+Rebuilds resume within seconds.
 
 ## Two things that made this hard to see
 
@@ -94,24 +117,27 @@ per-volume state transitions, not totals.
 
 ## How to detect it next time
 
-The symptom is silence, so check for the cause directly. A stalled eviction with **zero
-active rebuilds** and a non-empty stuck count is this bug:
+The symptom is silence, so check the two facts that disagree. Longhorn believes a rebuild
+is running; ask whether one actually is.
 
 ```bash
-# Any replica the engine does not consider RW is a candidate blocker.
+# 1. What does Longhorn think is holding the slot?
+kubectl logs -n longhorn-system <longhorn-manager-on-that-node> --since=2m   | grep "reaches or exceeds the concurrent limit"
+
+# 2. Is anything really rebuilding?
 kubectl get engines.longhorn.io -n longhorn-system -o json | python -c "
 import json,sys
-for e in json.load(sys.stdin)['items']:
-    bad={k:v for k,v in ((e.get('status') or {}).get('replicaModeMap') or {}).items() if v!='RW'}
-    if bad: print(e['spec']['volumeName'], bad)
+a=[(e['spec']['volumeName'], i.get('progress'))
+   for e in json.load(sys.stdin)['items']
+   for _,i in ((e.get('status') or {}).get('rebuildStatus') or {}).items() if i.get('isRebuilding')]
+print('active rebuilds:', a or 'NONE')
 "
-
-# If that lists entries while nothing is rebuilding, the engines need resetting —
-# restart the pods holding those volumes, do not delete replicas.
 ```
 
-An entry whose key starts with `UNKNOWN-tcp://` is conclusive: the engine is holding an
-address with no replica behind it.
+A named replica in (1) with `NONE` in (2) is the bug. Delete the replica named in (1).
+
+Ignore `replicaModeMap` entries that are not `RW` — they are stale records of deleted
+replicas, and rebuilds proceed normally alongside them.
 
 ## Follow-ups
 
