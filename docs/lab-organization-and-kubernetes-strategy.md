@@ -24,7 +24,7 @@ If the AI lab later gets its own k3s cluster, either run a separate AI-owned Arg
 
 ## Crossplane Position
 
-> **Updated.** Crossplane now serves two APIs, not one — `LabRun` and `GameServer`. The principle
+> **Updated.** Crossplane now serves three APIs, not one — `LabRun`, `Database` and `Bucket`. The principle
 > below is unchanged and is what bounds the second one: Crossplane composes only in-cluster
 > Kubernetes objects, never Proxmox, VMs, DNS, or guest lifecycle. Each API gets its own identity
 > and its own RBAC. See [architecture/README.md](architecture/README.md) §6.
@@ -40,16 +40,16 @@ Crossplane is NOT the main lab control plane. Broader self-service APIs such as 
 `LabService`, or `CyberScenario` that compose VMs, DNS, secrets, and monitoring remain out of scope —
 Terraform, Packer, and Ansible are still the clearer source of truth for Proxmox and guest lifecycle.
 
-`GameServer` qualified under the same test the posture already set: it composes namespaces,
+`Database` and `Bucket` qualify under the same test the posture already set: they compose
 quotas, network policies, PVCs, StatefulSets, Services, and CronJobs — all in-cluster, all in
 namespaces it creates itself, under an identity that cannot touch secrets, RBAC, or anything
-outside a `game-*` namespace.
+outside the namespace that asked for them.
 
 Current posture:
 
 - Keep Terraform as the Proxmox source of truth. Crossplane never manages Proxmox or guest lifecycle.
 - Crossplane's blast radius is capped per API by a separate identity and ClusterRole: `homeops` for
-  the arena, `gameops` for the fleet. Neither can reach the other's resources, and neither can
+  the arena, `cloud` and `garage` for the cloud tier. Neither can reach the other's resources, and neither can
   create secrets or RBAC.
 - Grow the platform API only when a new API is as low-risk and in-cluster as `LabRun`.
 - Never use Crossplane to bypass cyberlab isolation review.
@@ -72,7 +72,7 @@ Improve the homelab as the shared operations hub without expanding its ownership
 `sourceRepos` is then COMPUTED from the chart repos its components use, so a new upstream chart
 cannot produce an Application that syncs in `default` but fails once projects are enforced.
 
-Projects: `infrastructure`, `applications`, `portfolio`, `monitoring`, `games`. The root app stays
+Projects: `infrastructure`, `applications`, `portfolio`, `cloud`, `monitoring`. The root app stays
 on `default`; every generated child app is scoped.
 
 ## Future Server Layout

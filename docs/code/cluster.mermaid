@@ -1,4 +1,8 @@
 %%{ init: { "theme": "dark" } }%%
+%% Two Proxmox hosts, one stretched k3s cluster.
+%%   pve2      storage plane — TrueNAS, media, cloud, one etcd member
+%%   cyberlab  compute plane — general apps, the etcd majority
+%% See docs/architecture/README.md §3.
 flowchart TB
     subgraph LAN["LAN — 192.168.0.0/24"]
         Client["LAN Clients"]
@@ -6,27 +10,43 @@ flowchart TB
         CF["Cloudflare\nTunnel"]
     end
 
-    subgraph Proxmox["Proxmox VE — pve2"]
-        TrueNAS["TrueNAS NFS\n192.168.0.252\n/tank — 7.3 TB"]
+    subgraph PVE2["Proxmox — pve2 · storage plane · R5 5500 · 64 GB"]
+        TrueNAS["TrueNAS NFS\n192.168.0.252\n/tank · /flash"]
+        CP1["k8s-cp-01\netcd — minority"]
 
-        subgraph CP["k3s-control-plane"]
-            ETCD["etcd"]
-            API["API Server"]
-            Sched["Scheduler"]
+        subgraph MediaNode["k8s-media-01 · pool=media · Intel Arc A380"]
+            subgraph ns_media["namespace: media"]
+                Plex["Plex\n192.168.0.230:32400"]
+                Downloaders["media-downloaders\ngluetun · qbittorrent\nsabnzbd · prowlarr · flaresolverr"]
+                Radarr["radarr\n.231"]
+                Sonarr["sonarr\n.232"]
+                Overseerr["overseerr\n.236"]
+            end
         end
 
-        subgraph Workers["k3s-worker-01 / 02"]
+        subgraph CloudNode["k8s-cloud-01 · pool=cloud"]
+            subgraph ns_cloud["namespace: cloud"]
+                Garage["Garage S3\n.240"]
+                Nextcloud["Nextcloud\n.243"]
+                Immich["Immich\nserver · ML · valkey\n.244"]
+                Vaultwarden["Vaultwarden\n.241"]
+                Stirling["Stirling-PDF\n.242"]
+                CNPG["CloudNativePG\nclusters"]
+            end
+        end
+    end
+
+    subgraph CYBERLAB["Proxmox — cyberlab · compute plane · i7-13700KF · 128 GB"]
+        CP2["k8s-cp-02\netcd — majority"]
+        CP3["k8s-cp-03\netcd — majority"]
+
+        subgraph AppNodes["k8s-work-01 / 02 · pool=apps"]
             subgraph ns_networking["namespace: networking"]
                 EnvoyGW["Envoy Gateway\n192.168.0.201"]
                 AdGuard["AdGuard Home\nDNS 192.168.0.202"]
-                Homepage["Homepage\nDashboard"]
+                Homepage["Homepage"]
                 Cloudflared["cloudflared"]
                 ntfy["ntfy"]
-            end
-
-            subgraph ns_media["namespace: media"]
-                Plex["Plex\n192.168.0.230:32400"]
-                MediaStack["media-stack\ngluetun · qbittorrent · radarr\nsonarr · prowlarr · sabnzbd\noverseerr · flaresolverr"]
             end
 
             subgraph ns_monitoring["namespace: monitoring"]
@@ -38,11 +58,13 @@ flowchart TB
             end
 
             subgraph ns_portfolio["namespace: portfolio"]
-                Frontend["Next.js\nfrontend"]
+                Frontend["Next.js sites"]
                 InfraAgent["infra-agent"]
                 Postgres["PostgreSQL"]
-                Redis["Redis"]
-                MinIO["MinIO S3"]
+            end
+
+            subgraph ns_platform["namespace: crossplane-system / homeops"]
+                Crossplane["Crossplane\nLabRun · Database · Bucket"]
             end
 
             subgraph ns_infra["namespace: argocd / secrets / cert-manager"]
@@ -51,16 +73,14 @@ flowchart TB
                 CertMgr["cert-manager"]
             end
 
-            subgraph storage["Storage"]
-                Longhorn["Longhorn\nBlock Storage"]
+            subgraph storage["Cluster storage"]
+                Longhorn["Longhorn\nreplicated across zones"]
                 MetalLB["MetalLB\nL2 Pool"]
             end
         end
-    end
 
-    subgraph FederatedLabs["Federated lab systems"]
-        Cyberlab["cyberlab\nProxmox range VMs"]
-        AINode["ai-node-01 planned\nAI-owned VM"]
+        RangeVMs["cyber range VMs"]
+        AINodes["ai-node-01/02 · ai-core-01"]
     end
 
     Client -->|"*.lan HTTPS"| EnvoyGW
@@ -71,35 +91,49 @@ flowchart TB
     Cloudflared --> EnvoyGW
 
     EnvoyGW --> Homepage
-    EnvoyGW --> AdGuard
     EnvoyGW --> ntfy
     EnvoyGW --> ArgoCD
     EnvoyGW --> Grafana
-    EnvoyGW --> Prometheus
-    EnvoyGW --> Alertmanager
-    EnvoyGW --> Loki
-    EnvoyGW --> Plex
-    EnvoyGW --> MediaStack
     EnvoyGW --> Frontend
+    EnvoyGW --> Nextcloud
+    EnvoyGW --> Immich
+    EnvoyGW --> Vaultwarden
     Client -->|"direct :32400"| Plex
+
+    Radarr --> Downloaders
+    Sonarr --> Downloaders
+    Overseerr --> Radarr
+    Overseerr --> Sonarr
 
     InfraAgent -->|"PromQL"| Prometheus
     Alertmanager -->|"webhook"| ntfy
     Prometheus -->|"scrape"| NodeExp
-    Prometheus -.->|"read-only metrics"| Cyberlab
-    Prometheus -.->|"read-only metrics"| AINode
+    Prometheus -.->|"read-only metrics"| RangeVMs
+    Prometheus -.->|"read-only metrics"| AINodes
+
+    Crossplane -->|"composes Database"| CNPG
+    Crossplane -->|"composes Bucket"| Garage
+    Nextcloud --> CNPG
+    Immich --> CNPG
 
     Longhorn --> Prometheus
     Longhorn --> Grafana
     Longhorn --> Loki
     Longhorn --> Postgres
-    Longhorn --> Redis
+    Longhorn --> Vaultwarden
+    Longhorn -->|"weekly backup"| Garage
 
-    TrueNAS -->|"NFS /tank"| MediaStack
+    TrueNAS -->|"NFS /tank · /flash"| Downloaders
     TrueNAS -->|"NFS /tank"| Plex
-    TrueNAS -->|"NFS /tank"| MinIO
+    TrueNAS -->|"NFS /tank"| Radarr
+    TrueNAS -->|"NFS /tank"| Sonarr
+    TrueNAS -->|"NFS /tank/cloud"| Nextcloud
+    TrueNAS -->|"NFS /tank/cloud"| Immich
+    TrueNAS -->|"NFS /tank/cloud"| Garage
 
     ArgoCD -->|"sync"| ns_networking
     ArgoCD -->|"sync"| ns_media
+    ArgoCD -->|"sync"| ns_cloud
     ArgoCD -->|"sync"| ns_monitoring
     ArgoCD -->|"sync"| ns_portfolio
+    ArgoCD -->|"sync"| ns_platform

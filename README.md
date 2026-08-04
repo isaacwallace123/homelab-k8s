@@ -12,7 +12,8 @@ installs k3s, and ArgoCD continuously reconciles every service and workload from
 The cluster spans **both** Proxmox hosts as one stretched k3s cluster: three control planes,
 workers pooled by role, and physical hosts exposed as topology zones so storage replication and
 pod spreading describe a real failure domain. On top of it, Crossplane serves a small platform
-API — disposable scenario namespaces for the public Operations Arena, and the game server fleet.
+API — disposable scenario namespaces for the public Operations Arena, and the cloud tier's
+Postgres databases and S3 buckets.
 
 **Start here:** [docs/architecture/](docs/architecture/README.md)
 
@@ -39,7 +40,7 @@ will provide its isolated scenario runtime and sanitized event feed; see
 | Virtualization | Proxmox VE (×2 hosts) | One stretched cluster; hosts exposed as topology zones |
 | VM lifecycle | Terraform (bpg/proxmox) | Map-driven; generates the Ansible inventory |
 | Bootstrap | Ansible | Installs k3s, labels/taints nodes, tunes the kubelet |
-| Platform API | Crossplane v2 | `LabRun` (arena) and `GameServer` (fleet) |
+| Platform API | Crossplane v2 | `LabRun` (arena), `Database` (CNPG), `Bucket` (Garage) |
 | GitOps | ArgoCD | Self-heals cluster state from this repo |
 | Secrets | Sealed Secrets | Encrypted secrets committed safely to git |
 
@@ -72,7 +73,6 @@ host, so Longhorn replica anti-affinity and pod topology spread express a real f
 | `k8s-cp-03` | cyberlab | control plane | — |
 | `k8s-store-01` | pve2 | worker | `storage` — media, Plex (Arc A380), Longhorn |
 | `k8s-infra-01` | pve2 | worker | `infra` — MetalLB, monitoring, Crossplane |
-| `k8s-game-01` | cyberlab | worker | `games` — tainted, exclusive P-cores |
 
 Quorum sits on `pve2` deliberately: with two physical hosts you get VM-level HA, not host-level,
 and `pve2` also runs TrueNAS — losing it means storage is gone regardless. See
@@ -83,7 +83,6 @@ and `pve2` also runs TrueNAS — losing it means storage is gone regardless. See
 | Pool | Range | Assignment |
 | :--- | :--- | :--- |
 | `platform-pool` | `.201 – .209` | Pinned — gateways, ArgoCD, AdGuard |
-| `games-pool` | `.210 – .219` | Auto — `.210` mc-router, rest per game server |
 | `services-pool` | `.220 – .250` | Pinned — dashboards, media, monitoring |
 
 ```mermaid
@@ -238,24 +237,6 @@ The entire \*arr stack runs as a single pod (`media-stack`) in the `media` names
 | Overseerr | Request management |
 | FlareSolverr | Cloudflare bypass for Prowlarr |
 
-### Game Servers
-
-Hosted on the `games` node pool on the cyberlab host, declared as `GameServer` composite
-resources and composed by Crossplane. One entry in
-`platform/components/games/values/resources-prod.yaml` produces a namespace, quota, isolation
-policy, world volume, a Guaranteed-QoS workload holding exclusive P-cores, a LoadBalancer
-address, and a quiesced backup to the NAS.
-
-| Game | Composition | Published as |
-| :--- | :--- | :--- |
-| Minecraft (vanilla, Paper, Fabric, Forge, modpacks) | `gameserver-minecraft` (itzg chart) | mc-router at `.210:25565`, routed by hostname |
-| Satisfactory, Terraria, Rust, Gmod, LinuxGSM titles | `gameserver-container` (game catalogue) | Own IP from `games-pool` |
-
-Adding a **server** is a values entry. Adding a **game** is a catalogue entry in the container
-Composition. Neither Agones nor Pterodactyl is used, and
-[game-platform.md](docs/architecture/game-platform.md) explains why — every game here is a
-persistent world, not a match session.
-
 ### Platform
 
 | App | Purpose |
@@ -304,7 +285,6 @@ Current remediation guidance: [Storage pressure recovery plan (2026-07-18)](docs
 | :--- | :--- | :--- |
 | `longhorn-replicated` *(default)* | Longhorn, 3 replicas, zone anti-affinity | Anything whose loss hurts — databases, ArgoCD, Grafana |
 | `longhorn-single` | Longhorn, 1 replica | Rebuildable caches and scratch |
-| `nvme-local` | local-path on the game node's NVMe | Game worlds — see [storage](docs/architecture/storage.md) |
 | `nfs-nas` (RWX) | TrueNAS `/tank` at `192.168.0.252` | Movies (4 Ti), TV (4 Ti), Downloads, backup targets |
 
 Longhorn volumes have daily snapshots with 7-day retention via `RecurringJob`.
@@ -333,9 +313,8 @@ kubectl create secret generic my-secret --from-literal=key=value \
 | `platform/values/values-prod.yaml` | **The platform, declared once** — every component, its tier, its chart |
 | `platform/templates/` | Application + AppProject generator, shared sync policy and ignoreDifferences |
 | `platform/components/<name>/` | Per-component manifests and values |
-| `platform/components/crossplane/` | Providers, functions, and the two scoped identities (`homeops`, `gameops`) |
-| `platform/components/platform-api/` | `LabRun` and `GameServer` XRDs + Compositions |
-| `platform/components/games/` | The game server fleet |
+| `platform/components/crossplane/` | Providers, functions, and the scoped identities (`homeops`, `cloud`, `garage`) |
+| `platform/components/platform-api/` | `LabRun`, `Database`, and `Bucket` XRDs + Compositions |
 | `provisioning/terraform/` | VMs on both Proxmox hosts; generates the Ansible inventory |
 | `provisioning/ansible/` | k3s HA install, node labels/taints, kubelet tuning |
 | `docs/architecture/` | How and why the platform is shaped this way |
@@ -346,7 +325,7 @@ kubectl create secret generic my-secret --from-literal=key=value \
 | Script | Purpose |
 | :--- | :--- |
 | `validate-platform.sh` | Render the chart, check every component resolves, diff against the live cluster |
-| `test-compositions.sh` | Render the GameServer Compositions against mock composites |
+| `test-compositions.sh` | Render the Crossplane Compositions against mock composites |
 | `pre-cutover.sh` | One-time: strip prune finalizers before the Application rename |
 | `tf-state-migrate.sh` | One-time: move existing VMs into the Terraform `for_each` map |
 

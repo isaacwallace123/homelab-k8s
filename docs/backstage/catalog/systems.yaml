@@ -36,7 +36,7 @@ apiVersion: backstage.io/v1alpha1
 kind: System
 metadata:
   name: portfolio-system
-  description: Public portfolio at isaacwallace.dev — Next.js, PostgreSQL, MinIO, infra-agent
+  description: Public portfolio at isaacwallace.dev — Next.js, PostgreSQL, infra-agent
   tags:
     - portfolio
     - public

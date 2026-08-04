@@ -8,7 +8,6 @@ Companion documents:
 
 - [Networking and address plan](networking.md)
 - [Storage tiers](storage.md)
-- [Game server platform](game-platform.md)
 - [Cross-lab integration](cross-lab.md)
 - [Migration plan](migration.md)
 
@@ -49,97 +48,116 @@ running at 86% of its memory limits and 165% of its CPU limits.
 
 ## 3. Physical topology
 
-Two Proxmox hosts, one stretched k3s cluster.
+Two Proxmox hosts, one stretched k3s cluster. **pve2 is the storage plane; cyberlab is the
+compute plane.** The split follows the hardware: pve2 has 12 threads and also serves every NFS
+export, so its I/O is the contended resource; cyberlab has 24 threads and twice the RAM.
 
 ```
                         ┌─────────────────────── one k3s cluster ───────────────────────┐
                         │                                                               │
   pve2                  │  zone=pve2                          zone=cyberlab             │  cyberlab
   R5 5500 · 6c/12t      │                                                               │  i7-13700KF · 8P+8E/24t
-  64 GB DDR4            │  k8s-cp-01     control-plane        k8s-cp-03  control-plane   │  128 GB DDR4
-                        │  k8s-cp-02     control-plane                                  │
-  ├─ TrueNAS (100)      │  k8s-store-01  pool=storage         k8s-game-01 pool=games     │  ├─ cyber range VMs
-  └─ k8s VMs            │  k8s-infra-01  pool=infra           (k8s-work-01 pool=platform)│  ├─ ai-node/ai-core
+  64 GB DDR4            │  k8s-cp-01     control-plane        k8s-cp-02  control-plane   │  128 GB DDR4
+                        │                                     k8s-cp-03  control-plane   │
+  ├─ TrueNAS (100)      │  k8s-media-01  pool=media           k8s-work-01 pool=apps      │  ├─ cyber range VMs
+  └─ k8s VMs            │  k8s-cloud-01  pool=cloud           k8s-work-02 pool=apps      │  ├─ ai-node/ai-core
                         │                                                               │  └─ k8s VMs
                         └───────────────────────────────────────────────────────────────┘
 ```
 
 ### Control plane placement
 
-Three control planes: **two on `pve2`, one on `cyberlab`**. This is a deliberate, and limited,
-choice — with only two physical hosts you cannot have true host-level HA. What you get:
+Three control planes: **two on `cyberlab`, one on `pve2`.**
 
-- Any *single VM* can fail or be upgraded without losing the API server. That covers rolling k3s
-  upgrades, which is when a single-server cluster actually bites you.
-- The `cyberlab` host can be rebooted, have its range torn down, or have VMs snapshotted without
-  taking the cluster API down. That host sees the most churn, so it holds the minority.
-- Losing `pve2` **does** take the cluster down. That is accepted: `pve2` also hosts TrueNAS, so a
-  `pve2` outage means storage is gone regardless. Quorum is placed on the host whose loss you
-  cannot work around anyway.
+This reverses the original design, which put the majority on `pve2`. That argument was: losing
+`pve2` also loses TrueNAS, so storage is gone regardless — put quorum where you cannot work
+around the outage anyway.
+
+It was wrong in practice, for two reasons found the hard way:
+
+- **Not everything depends on storage.** The portfolio sites, the arena, ingress, and monitoring
+  all run on `cyberlab` and need only the API server. Under the old placement a `pve2` reboot
+  took *those* down too, which is a strictly larger outage than losing NFS.
+- **`pve2` is the machine least able to carry it.** 12 threads against 24, ~11 GiB free against
+  ~29, and it is the one doing NFS and ZFS. etcd is intensely sensitive to fsync latency, and
+  putting the majority on the most I/O-contended host is exactly backwards — a Longhorn rebuild
+  storm on `pve2` once cost etcd its leader leases and dropped the API server twice.
+
+With two hosts and three members, one host always holds the majority; the choice is *which host
+you are willing to lose*. That decision is now explicit in `var.quorum_host` and enforced by a
+validation in `variables.tf`, so it cannot drift silently again.
+
+Losing `pve2` costs media, the cloud tier and NFS. It no longer costs the cluster.
 
 ### VM inventory
 
 | Host | VMID | Name | vCPU | RAM | Disk | IP | Role |
 | :--- | ---: | :--- | ---: | ---: | :--- | :--- | :--- |
-| pve2 | 104 | `k8s-cp-01` | 2 | 6 GB | 60 GB | .10 | control-plane (existing) |
-| pve2 | 105 | `k8s-cp-02` | 2 | 4 GB | 60 GB | .11 | control-plane (**new**) |
-| pve2 | 107 | `k8s-store-01` | 6 | 24 GB | 150 GB | .12 | `pool=storage`, Intel Arc A380 (existing) |
-| pve2 | 110 | `k8s-infra-01` | 4 | 12 GB | 100 GB | .13 | `pool=infra` (existing) |
-| cyberlab | 801 | `k8s-cp-03` | 2 | 4 GB | 60 GB | .14 | control-plane (**new**) |
-| cyberlab | 802 | `k8s-game-01` | 12 | 56 GB | 400 GB NVMe | .15 | `pool=games` (**new**) |
-| cyberlab | 803 | `k8s-work-01` | 4 | 12 GB | 100 GB | .16 | `pool=platform` (**phase 5**) |
+| pve2 | 100 | `TrueNAS` | 4 | 8 GB | 50 GB | .252 | NAS — `tank`, `flash`, all NFS exports |
+| pve2 | 104 | `k8s-cp-01` | 2 | 4 GB | 80 GB | .10 | control-plane (etcd minority) |
+| pve2 | 107 | `k8s-media-01` | 6 | 16 GB | 150 GB | .12 | `pool=media`, Intel Arc A380 |
+| pve2 | 108 | `k8s-cloud-01` | 4 | 18 GB | 150 GB | .15 | `pool=cloud` |
+| cyberlab | 801 | `k8s-cp-03` | 2 | 4 GB | 60 GB | .14 | control-plane (etcd majority) |
+| cyberlab | 802 | `k8s-cp-02` | 2 | 4 GB | 60 GB | .11 | control-plane (etcd majority) |
+| cyberlab | 810 | `k8s-work-01` | 6 | 12 GB | 120 GB | .16 | `pool=apps` |
+| cyberlab | 811 | `k8s-work-02` | 6 | 12 GB | 120 GB | .17 | `pool=apps` |
 
-Existing VMs keep their current node names until you choose to recycle them — every workload
-selects on labels, so the rename is cosmetic and can happen at any time (see
-[migration.md](migration.md) §6).
+Getting from the previous topology to this one is **not** a single `terraform apply` — see
+[topology-migration.md](topology-migration.md).
+
+The Kubernetes node name for VM 107 remains `k8s-store-01` until it is drained and rejoined; the
+name comes from the OS hostname, not from Terraform, and every workload selects on labels.
 
 ### The memory budget — read this before sizing up
 
-`cyberlab` is not as free as 128 GB suggests. Current dedicated allocations:
+| Host | Consumer | RAM |
+| :--- | :--- | ---: |
+| pve2 | TrueNAS | 8 GB |
+| pve2 | `k8s-cp-01` + `k8s-media-01` + `k8s-cloud-01` | 38 GB |
+| **pve2 total** | | **46 of 62.7 GB** |
+| cyberlab | Cyber range (gw, controller, access, kali, soc) | ~26 GB |
+| cyberlab | `ai-node-01`, `ai-node-02`, `ai-core-01` | ~80 GB |
+| cyberlab | `k8s-cp-02` + `k8s-cp-03` + `k8s-work-01` + `k8s-work-02` | 32 GB |
+| **cyberlab total** | | **~138 of 128 GB** |
 
-| Consumer | RAM | Owner |
-| :--- | ---: | :--- |
-| Cyber range (gw, controller, access, kali, soc) | ~26 GB | cyberlab repo |
-| `ai-node-01` | 32 GB | ailab repo |
-| `ai-node-02` | ~32 GB | ailab repo |
-| `ai-core-01` | 16 GB | ailab repo |
-| **Subtotal** | **~106 GB** | |
-| `k8s-cp-03` + `k8s-game-01` (new) | 60 GB | this repo |
-| **Total if everything runs at once** | **~166 GB** | over a 128 GB host |
+cyberlab is overcommitted, and that is only safe because the workloads are time-separated: the
+range runs during exercises, the AI nodes during AI work. The mitigation belongs in *those*
+repos — the cyberlab and ailab Terraform pin `memory_floating == memory`, which disables
+ballooning. Setting a floor below the ceiling lets idle range and AI VMs hand memory back. See
+[cross-lab.md](cross-lab.md) §4.
 
-That is an overcommit, and it is only safe because these workloads are time-separated: the cyber
-range runs during exercises, the AI nodes run during AI work, and game servers run continuously.
-Three mitigations, all part of this design:
-
-1. **Balloon the non-game VMs.** The cyberlab and ailab Terraform currently pin
-   `memory_floating_mb = memory_mb`, which disables ballooning. Setting a floor below the ceiling
-   lets idle range and AI VMs hand memory back to the host. This change belongs in *those* repos —
-   see [cross-lab.md](cross-lab.md) §4.
-2. **Cap the fleet in Kubernetes, not in hope.** Every game pod is Guaranteed QoS with
-   `requests == limits`, so the scheduler's memory accounting is exact. When the node is full the
-   next server stays `Pending` with an `Insufficient memory` event, rather than scheduling and
-   having the kernel OOM-kill a world that is already running.
-3. **Scale idle servers to zero.** Every `GameServer` supports `idle.shutdownAfter`. With six
-   servers defined and two actually in use, the fleet's real footprint is the two.
-
-`k8s-work-01` is deliberately deferred to phase 5 for exactly this reason.
+A fifth worker (`k8s-work-03`) is one tfvars entry away once that is done, and not before.
 
 ## 4. Node pools
 
-Placement is expressed with labels, never node names.
+Placement is expressed with labels, never node names, and there is exactly **one** taxonomy.
+
+That last part is load-bearing. Two competing schemes — `node-role.kubernetes.io/*` and
+`homelab.isaacwallace.dev/pool` — once disagreed about the same node, and the result was three
+separate outages in one afternoon: media, Homepage, and the entire portfolio namespace all went
+`Pending` selecting labels that lived only on a node that had been tainted.
 
 | Label | Values | Meaning |
 | :--- | :--- | :--- |
 | `topology.kubernetes.io/zone` | `pve2`, `cyberlab` | Physical host — the real failure domain |
-| `homelab.isaacwallace.dev/pool` | `storage`, `infra`, `games`, `platform` | Workload class |
+| `homelab.isaacwallace.dev/pool` | `control`, `apps`, `media`, `cloud` | Workload class — **the only placement selector** |
+| `node-role.kubernetes.io/worker` | `true` | Any of the four workers |
 | `homelab.isaacwallace.dev/gpu` | `intel-arc` | Present only where an Arc A380 is passed through |
+
+Terraform sets all of them, from `var.nodes`. A pool value outside that list fails validation,
+because an unrecognised pool is a workload that will never schedule.
 
 Taints:
 
 | Node | Taint | Why |
 | :--- | :--- | :--- |
-| `k8s-game-01` | `pool=games:NoSchedule` | Game servers hold exclusive CPU cores; nothing else may land there and steal them |
-| control planes | `node-role.kubernetes.io/control-plane:NoSchedule` | Standard |
+| `k8s-media-01` | `pool=media:NoSchedule` | Nothing may compete with Plex for the Arc or with the NFS path for I/O |
+| `k8s-cloud-01` | `pool=cloud:NoSchedule` | Keeps the cloud tier's I/O predictable next to TrueNAS |
+| control planes | `node-role.kubernetes.io/control-plane:NoSchedule` | Standard — and applied to **all three**, not just one |
+
+The taint key matches the pool label deliberately. They were previously
+`workload=media` against `pool=media`, which meant a pod could select the right node and still
+be repelled by it.
 
 Zone labels are what make the two-host setup pay off: Longhorn replicates across
 `topology.kubernetes.io/zone`, so a replicated volume survives losing a whole Proxmox host, and
@@ -217,7 +235,6 @@ Sync waves are derived from a named tier. Nobody writes an integer.
 | `platform-api` | 120 | XRDs and Compositions |
 | `observability` | 140 | Prometheus, Loki, Grafana, Alertmanager |
 | `apps` | 160 | Plex, media stack, homepage, ntfy, portfolio |
-| `fleet` | 180 | Game servers and other platform-API instances |
 
 A component may set `waveOffset` for fine ordering inside its tier. Tiers are spaced by 20 so
 `pre`/`chart`/`resources` (−1/0/+1) plus offsets never collide with the next tier.
@@ -248,19 +265,21 @@ What changes from the previous posture is scope, not principle. Crossplane gradu
 
 | API | Scope | Purpose |
 | :--- | :--- | :--- |
-| `LabRun` | Cluster | Disposable scenario namespaces for the public Operations Arena (unchanged) |
-| `GameServer` | Cluster | The game hosting fleet — see [game-platform.md](game-platform.md) |
+| `LabRun` | Cluster | Disposable scenario namespaces for the public Operations Arena |
+| `Database` | Namespaced | A Postgres database and its connection Secret, via CloudNativePG |
+| `Bucket` | Namespaced | An S3 bucket and a scoped access key, via Garage |
 
-Both are Crossplane v2 idioms: **no claims** (v2 removes the XR/claim split, so the XR is what you
+All are Crossplane v2 idioms: **no claims** (v2 removes the XR/claim split, so the XR is what you
 create), composition selection under `spec.crossplane`, and pipeline Compositions built on
 `function-go-templating` rather than several hundred lines of `patch-and-transform`.
 
-Both are `scope: Cluster` for the same reason: each composes a `Namespace`. Crossplane v2 defaults
-XRDs to `Namespaced`, and a namespaced XR *will* create a cluster-scoped resource — but without an
-owner reference, because Kubernetes does not permit a namespaced object to own a cluster-scoped one.
-The Namespace would then survive deletion of the `GameServer` that created it, leaking a namespace
-per server. Cluster scope is the documented answer when a composite composes cluster-scoped
-resources.
+Scope differs by what each composes. `LabRun` is `scope: Cluster` because it composes a
+`Namespace`: Crossplane v2 defaults XRDs to `Namespaced`, and a namespaced XR *will* create a
+cluster-scoped resource — but without an owner reference, because Kubernetes does not permit a
+namespaced object to own a cluster-scoped one. The Namespace would then survive deletion of the
+XR that created it. `Database` and `Bucket` are `Namespaced`: they compose only namespaced
+objects and live beside the app that asked for them, so deleting that app's namespace collects
+its database and bucket with it.
 
 ### Bounded blast radius
 
@@ -269,10 +288,11 @@ Each consumer gets its own identity rather than sharing one over-privileged prov
 | ProviderConfig | Identity | May touch |
 | :--- | :--- | :--- |
 | `homeops` | SA `homeops-provisioner` | Namespaces, quotas, limit ranges, network policies, and the arena's own workload objects |
-| `gameops` | SA `gameops-provisioner` | Game namespaces, StatefulSets, Services, PVCs, CronJobs — **not** secrets, RBAC, or anything outside a `game-*` namespace |
+| `cloud` | Provider SA, `cloud:provider-kubernetes` role | CloudNativePG `Cluster`/`Database` objects and reading the Secrets CNPG generates — **not** secrets cluster-wide, and no workload API |
+| `garage` | Garage admin token | Buckets and access keys in the object store, nothing in Kubernetes |
 
-`provider-kubernetes` supports per-`ProviderConfig` credentials, so both run through one provider
-deployment while authenticating as different ServiceAccounts. A bug in a game Composition cannot
+`provider-kubernetes` supports per-`ProviderConfig` credentials, so these run through one provider
+deployment while authenticating as different identities. A bug in a `Database` Composition cannot
 reach the arena's resources, and neither can reach the media stack.
 
 ## 7. Boundaries that do not change

@@ -1,5 +1,10 @@
 # Migration Plan
 
+> **Historical.** This records the migration as executed. The game server fleet it refers
+> to has since been removed, and the topology it produced has been superseded by
+> [topology-migration.md](topology-migration.md). Kept because the failure modes it
+> documents are still the ones that bite.
+
 Six phases, ordered so that each one is independently verifiable and revertible. Phase 1 changes no
 cluster behaviour at all — it only changes how the same state is expressed.
 
@@ -170,7 +175,8 @@ kubectl exec -n game-test deploy/... -- cat /sys/fs/cgroup/cpuset.cpus.effective
 ```
 
 If that returns every CPU on the node, the static policy is not in effect and every performance
-assumption in [game-platform.md](game-platform.md) §5 is void.
+assumption in the game platform design was void. (That platform has since been retired;
+this section is kept as a record of the migration as it was executed.)
 
 ---
 

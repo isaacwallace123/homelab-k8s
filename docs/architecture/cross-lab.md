@@ -52,7 +52,7 @@ system" without any repo depending on another's contents.
 | Convention | Rule |
 | :--- | :--- |
 | Public | `<lab>.isaacwallace.dev` |
-| Internal | `<service>.lan`, `<service>.games.lan` |
+| Internal | `<service>.lan` |
 | Metric label | Every scrape target carries `lab="homelab" \| "cyberlab" \| "ailab"` |
 | Grafana | One folder per lab; a top-level "All labs" overview |
 | Backstage | Each repo owns its `catalog-info.yaml`; homelab's Backstage aggregates by URL |
@@ -63,7 +63,7 @@ alert can scope itself without needing separate instances.
 ## 4. One change requested of the other repos
 
 Both `cyberlab` and `ailab` Terraform currently set `memory_floating_mb = memory_mb`, which pins
-each VM's memory and **disables ballooning**. With the game node added, the cyberlab host is
+each VM's memory and **disables ballooning**. With the k8s nodes added, the cyberlab host is
 overcommitted on paper (see [README.md](README.md) §3).
 
 Setting a floating floor below the dedicated ceiling lets idle range and AI VMs return memory to
@@ -75,5 +75,5 @@ memory_floating_mb = 8192    # floor — idle VMs give the rest back
 ```
 
 This change belongs in those repositories and is **not** made from here — it is listed as a
-dependency, not applied. Until it is done, run the full game fleet or the full cyber range, not
+dependency, not applied. Until it is done, run the full AI stack or the full cyber range, not
 both.

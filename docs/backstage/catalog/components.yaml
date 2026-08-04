@@ -353,20 +353,6 @@ spec:
   lifecycle: production
   owner: group:homelab-ops
   system: portfolio-system
----
-apiVersion: backstage.io/v1alpha1
-kind: Component
-metadata:
-  name: portfolio-minio
-  description: MinIO S3-compatible object storage for portfolio image uploads (NFS-backed, 50Gi)
-  tags:
-    - portfolio
-    - storage
-spec:
-  type: service
-  lifecycle: production
-  owner: group:homelab-ops
-  system: portfolio-system
 
 # -- Cross-Lab Status ----------------------------------------------------------
 

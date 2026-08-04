@@ -12,10 +12,10 @@ The current design: what runs where, which layer owns which decision, and why.
 | :--- | :--- |
 | [architecture/README.md](architecture/README.md) | Topology across both Proxmox hosts, node pools, repo layout, Crossplane's position, the memory budget |
 | [architecture/networking.md](architecture/networking.md) | Address plan, MetalLB pools and per-pool speakers, the three Gateways, DNS |
-| [architecture/storage.md](architecture/storage.md) | The four storage classes and why game worlds are deliberately not replicated |
-| [architecture/game-platform.md](architecture/game-platform.md) | Game server hosting — what was chosen, what was rejected, and the four things that actually decide performance |
+| [architecture/storage.md](architecture/storage.md) | The storage classes, the NFS exports, and the Longhorn backup target |
 | [architecture/cross-lab.md](architecture/cross-lab.md) | How homelab, cyberlab, and ailab connect without merging ownership |
 | [architecture/migration.md](architecture/migration.md) | Six-phase rollout, the rename hazard, and the rollback for each phase |
+| [architecture/topology-migration.md](architecture/topology-migration.md) | Getting from the old topology to two planes — the steps Terraform cannot do on its own |
 
 ### Shared context
 
@@ -59,3 +59,13 @@ npx mmdc -i docs/code/homelab-architecture.mermaid -o docs/images/homelab-archit
 npx mmdc -i docs/code/argo-architecture.mermaid    -o docs/images/argo-architecture.svg
 npx mmdc -i docs/code/observability.mermaid        -o docs/images/observability.svg
 ```
+
+## Post-mortems
+
+Incidents worth not repeating. Each one records what broke, why it was hard to see, and
+what changed as a result.
+
+| Date | Incident |
+| :--- | :--- |
+| 2026-08-03 | [Three services down from one label](post-mortems/2026-08-03-label-taxonomy-triple-outage.md) — two competing label taxonomies, and a selector in another repo |
+| 2026-08-03 | [A Longhorn eviction that could never finish](post-mortems/2026-08-03-longhorn-eviction-deadlock.md) — replicas stuck `WO`, deadlock presenting as slowness |
