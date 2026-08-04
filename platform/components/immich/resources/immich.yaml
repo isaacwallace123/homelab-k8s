@@ -45,6 +45,11 @@ spec:
       labels:
         app: immich-server
     spec:
+      # Kubernetes injects IMMICH_PORT=tcp://10.43.x.x:80 for the Service named `immich`,
+      # and Immich parses IMMICH_PORT as an integer, so it crashes on startup:
+      #   immich_port  Input should be a valid integer ... input_value='tcp://10.43.38.66:80'
+      # Service discovery via env vars is legacy; DNS covers everything here.
+      enableServiceLinks: false
       nodeSelector:
         homelab.isaacwallace.dev/pool: cloud
       tolerations:
@@ -128,6 +133,11 @@ spec:
       labels:
         app: immich-ml
     spec:
+      # Kubernetes injects IMMICH_PORT=tcp://10.43.x.x:80 for the Service named `immich`,
+      # and Immich parses IMMICH_PORT as an integer, so it crashes on startup:
+      #   immich_port  Input should be a valid integer ... input_value='tcp://10.43.38.66:80'
+      # Service discovery via env vars is legacy; DNS covers everything here.
+      enableServiceLinks: false
       nodeSelector:
         homelab.isaacwallace.dev/pool: cloud
       tolerations:
@@ -199,6 +209,11 @@ spec:
       labels:
         app: immich-redis
     spec:
+      # Kubernetes injects IMMICH_PORT=tcp://10.43.x.x:80 for the Service named `immich`,
+      # and Immich parses IMMICH_PORT as an integer, so it crashes on startup:
+      #   immich_port  Input should be a valid integer ... input_value='tcp://10.43.38.66:80'
+      # Service discovery via env vars is legacy; DNS covers everything here.
+      enableServiceLinks: false
       nodeSelector:
         homelab.isaacwallace.dev/pool: cloud
       tolerations:
