@@ -31,6 +31,15 @@ jobs:
       - name: Install Python validators
         run: pip install yamllint pyyaml
 
+      # The "Validate Terraform" step below has never run: nothing installed the binary,
+      # so it exited 127 with "terraform: command not found". Earlier steps in this job
+      # failed first for long enough that it was never reached.
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
       - name: Lint YAML syntax
         # platform/**/templates is excluded: those are Helm templates, not YAML, and a
         # linter reading `{{- range }}` as a document is noise rather than signal.
