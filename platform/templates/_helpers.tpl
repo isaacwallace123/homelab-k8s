@@ -137,6 +137,32 @@ ignoreDifferences:
       - .spec
       - .metadata.labels
       - .metadata.annotations
+  # Crossplane composites are mutated in place after they are applied, so a manifest
+  # declaring three fields is compared against a live object carrying nine:
+  #
+  #   spec.crossplane      Crossplane's own bookkeeping -- compositionRef,
+  #                        compositionRevisionRef, resourceRefs
+  #   the rest             XRD defaults materialised by the API server (imageName,
+  #                        instances, storageClass, sharedPreloadLibraries, extensions)
+  #
+  # Without this every claim sits permanently OutOfSync while Healthy, which trains you to
+  # ignore OutOfSync -- the state that is supposed to mean something is wrong.
+  #
+  # Only the composite's own spec is ignored. What it COMPOSES is still reconciled by
+  # Crossplane, and drift there still surfaces on the composed resources themselves.
+  - group: platform.homelab.isaacwallace.dev
+    kind: Database
+    jqPathExpressions:
+      - .spec.crossplane
+      - .spec.imageName
+      - .spec.instances
+      - .spec.storageClass
+      - .spec.sharedPreloadLibraries
+      - .spec.extensions
+  - group: platform.homelab.isaacwallace.dev
+    kind: Bucket
+    jqPathExpressions:
+      - .spec.crossplane
 {{- end -}}
 
 {{/*
