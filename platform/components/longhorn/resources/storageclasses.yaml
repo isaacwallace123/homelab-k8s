@@ -29,8 +29,15 @@ parameters:
   numberOfReplicas: "3"
   staleReplicaTimeout: "30"
   fsType: ext4
-  replicaZoneSoftAntiAffinity: "true"
-  replicaSoftAntiAffinity: "false"
+  # These take enabled/disabled/ignored, NOT booleans. With "true"/"false" the CSI
+  # provisioner rejects every request -- "invalid ReplicaSoftAntiAffinity setting: false" --
+  # so this class has never successfully provisioned a volume despite being the default.
+  # Every existing PVC quietly landed on the plain `longhorn` class instead.
+  #
+  #   disabled = strict: never put two replicas of a volume on one node (the intent of "false")
+  #   enabled  = soft:   prefer spreading across zones but allow it (the intent of "true")
+  replicaZoneSoftAntiAffinity: "enabled"
+  replicaSoftAntiAffinity: "disabled"
   dataLocality: best-effort
 ---
 # One replica. Rebuildable caches and scratch that still wants Longhorn snapshots.
