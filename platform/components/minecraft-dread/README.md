@@ -191,7 +191,36 @@ So the path is a port forward, and the trade is that the record publishes the ho
 | | |
 | :--- | :--- |
 | DNS | `A` record, `mc` → home WAN IP, **proxy off** |
-| Forward | 25565 → `192.168.0.221`, protocol **Both** (TCP game, UDP voice) |
+| Forward | external 25565 → **`192.168.0.221:25565`**, protocol **Both** (TCP game, UDP voice) |
+
+### The router forwards to the address, not to the MAC it shows you
+
+The Bell gateway renders a MAC in its *Local IP address / Device name* column once a rule is
+saved. That reads as though it delivers to that device's own IP — it does not. It delivers to
+the address you typed; the MAC is cosmetic.
+
+This matters because "translate the internal port to the Service's nodePort" is the natural
+next move once you believe the MAC, and it **breaks inbound traffic**: kube-proxy binds a
+nodePort on the NODE address and never on the MetalLB VIP, so `192.168.0.221:31900` is closed
+while `192.168.0.17:31900` is open. Measured:
+
+| | |
+| :--- | :--- |
+| `192.168.0.221:25565` | OPEN — VIP on the service port, what the forward must target |
+| `192.168.0.221:31900` | CLOSED — the VIP does not answer on the nodePort |
+| `192.168.0.17:31900` | OPEN — nodePort, but on the node address |
+
+The control that settles it is the pre-existing Plex rule, identical in shape: its node
+address `192.168.0.12:32400` is closed and only the VIP `192.168.0.230:32400` listens, yet an
+external probe of the public IP on 32400 answers OPEN. The VIP has to be the delivery target.
+
+### Testing from inside the LAN does not work
+
+Connecting to `mc.isaacwallace.dev` from your own network fails with a timeout even when
+everything is correct — the gateway does not hairpin. Use `192.168.0.221` at home, or add a
+DNS rewrite in AdGuard (`mc.isaacwallace.dev` → `192.168.0.221`) so one hostname works from
+both sides. Verify public reachability from outside — a phone on mobile data, or a TCP probe
+service — never from a LAN client.
 
 No `SRV` record is needed — `_minecraft._tcp` exists to point players at a non-standard port,
 and this is on 25565. Add one only if the public port ever has to change.

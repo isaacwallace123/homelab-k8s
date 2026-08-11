@@ -247,23 +247,26 @@ spec:
   # (mixed-protocol LoadBalancers are GA and MetalLB honours it), and doing so collapses the
   # public surface to a single forwarded port: 25565.
   #
-  # nodePort is PINNED, and the router depends on it. The Bell gateway binds a forward to a
-  # DEVICE, not to an address, so pointing it at the MetalLB VIP silently resolves to whichever
-  # node answered ARP for .221 and then forwards to THAT NODE'S OWN IP. Nothing listens on
-  # node-IP:25565 — kube-proxy binds the VIP and the nodePort, never the node IP on the service
-  # port — so every external connection was refused while the LAN worked perfectly.
+  # The router forwards straight to THIS address on THIS port: external 25565 -> 192.168.0.221
+  # :25565. No nodePort is involved and none is pinned.
   #
-  # The forward therefore targets k8s-work-02:31900, and this value must not drift. Left
-  # unset, Kubernetes allocates it at random from 30000-32767 whenever the Service is
-  # recreated, which would break inbound traffic with no visible change to anything else.
+  # The Bell gateway displays a MAC in its "Local IP address / Device name" column, which
+  # reads as though it delivers to that device's own IP. It does not — it delivers to the
+  # address you typed, and the MAC is cosmetic. Proven against the pre-existing Plex rule,
+  # which has the identical shape:
+  #
+  #   192.168.0.12:32400   (node)  CLOSED     while an external probe of the public IP
+  #   192.168.0.230:32400  (VIP)   OPEN       on 32400 answered OPEN from three countries
+  #
+  # If the VIP were not the delivery target, Plex could not be reachable at all. Do not
+  # "fix" this by translating to a nodePort — that breaks it, because kube-proxy binds the
+  # nodePort on the NODE address, never on the VIP.
   ports:
     - name: minecraft
       port: 25565
       targetPort: 25565
-      nodePort: 31900
       protocol: TCP
     - name: voicechat
       port: 25565
       targetPort: 25565
-      nodePort: 31900
       protocol: UDP
