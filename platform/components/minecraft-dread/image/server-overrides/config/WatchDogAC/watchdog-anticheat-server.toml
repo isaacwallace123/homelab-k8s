@@ -1,0 +1,60 @@
+
+["Server Config for Watchdog AntiCheat!"]
+	#test
+	#This allows to enable or disable the whole anticheat.
+	#
+	# SERVER OVERRIDE. The version of this file shipped in the CurseForge pack is configured
+	# for DREAD's OWN public server, where the pack author controls every client. Used
+	# unchanged on a self-hosted server it kicks everybody, including the owner:
+	#
+	#   "Whitelisted TexturePacks" = ""   -> any resource pack at all is a kick, and the pack
+	#                                        itself ships DREAD PACK.zip, DREAD SOUNDTRACK.zip,
+	#                                        FreshAnimations, and several more
+	#   "Whitelisted Mods"         = 3 MD5s (minecraft, watchdog, forge) against 91 client mods
+	#   "Whitelisted Player Names" = "FireIsH0t,TestUser"  -> the pack author, not you
+	#
+	# Both whitelists are therefore OFF. The anticheat itself stays enabled so the behavioural
+	# checks below remain available to turn on.
+	"Enable AntiCheat" = true
+	#test
+	#You can enable or disable this option if you want the mod anticheat to be checking for cheaters.
+	#
+	# OFF: whitelisting mods means collecting an MD5 list from every client and re-collecting
+	# it after every pack update. On a server whose players are people you know, that cost buys
+	# nothing — they are running your pack because you gave it to them.
+	"Enable Mod Whitelist" = false
+	#You can enable or disable this option if you want the texturepack anticheat to be checking for cheaters.
+	#
+	# OFF for the same reason, and more urgently: this is the check that produced the kick.
+	# Resource packs are cosmetic and per-player by design.
+	"Enable TexturePack Whitelist" = false
+	#Paste the list from the generated-mods-list.txt from the client into this value.
+	"Whitelisted Mods" = "115FCBF8DC0C7B8993824EE39FA228AD-minecraft,A2A17B1C3C0BBB9F77422A1151404243-watchdog,87574F2EBC8EFB8D4B9D3D8AD08C5E4A-forge"
+	#Paste the list from the generated-texturepacks-list.txt from the client into this value.
+	"Whitelisted TexturePacks" = ""
+	#This allows for a player to bypass the anticheat.
+	#
+	# Cleared. The upstream value listed the pack author's own accounts, which would have let
+	# two strangers bypass checks on your server had the whitelists stayed on.
+	"Whitelisted Player Names" = ""
+	#Add your own discord link here to display the link when a player gets kicked.
+	#
+	# Cleared: a kick from THIS server should not send your friends to the pack author's
+	# Discord to ask about a server he does not run.
+	"Discord Link" = ""
+	#Add your own discord webhook link here to send messages when a player gets kicked.
+	"Discord Webhook Link" = ""
+	#Add your own kick message. Color Guide: https://wiki.ess3.net/mc/ (Use /n for newlines)
+	"Kick Message" = "&cYou have been kicked.\n\n&9The anti-cheat flagged something on your client.\n\nAsk Isaac — this is a private server, so it is far more likely to be a false positive than you."
+	#Checks if the player's gamma value in the options.txt file has been modified.
+	#
+	# Left off. Full-bright removes the entire point of a horror pack, so this is the one check
+	# here worth considering — but SereneSeasons and the pack's own shaders move gamma around,
+	# and a false kick mid-session is worse than a friend cheating at being scared.
+	"Gamma Checker" = false
+	#Set the MAX value that the player's gamma value could be.
+	"Max Gamma Value" = 1.0
+	#Checks if a player is (left or right) clicking too fast.
+	"Auto Click Checker" = false
+	#Set the MAX value that a player can click PER second (left or right).
+	"Max Auto Click Value" = 50
