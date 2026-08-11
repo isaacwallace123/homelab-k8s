@@ -1,13 +1,13 @@
 # DREAD — Minecraft server
 
 DREAD 3.1.1 (`A Horror Survival Pack`), Minecraft 1.19.2 on Forge 43.5.0.
-Public at `mc.isaacwallace.dev`, internal at `192.168.0.221`.
+Public at `mc.isaacwallace.dev`, internal at `192.168.0.226`.
 
 | | |
 | :--- | :--- |
 | Namespace | `games` |
 | Node | `k8s-work-02` (pinned — see [Memory](#memory-and-why-the-node-is-pinned)) |
-| Address | `192.168.0.221`, MetalLB `services-pool` |
+| Address | `192.168.0.226`, MetalLB `services-pool` |
 | Ports | 25565 TCP (game) and 25565 UDP (Simple Voice Chat) |
 | Storage | `minecraft-dread-data`, 20Gi `longhorn-replicated`, nightly snapshot + weekly backup |
 | Image | `ghcr.io/isaacwallace123/dread-server:3.1.3`, built from [`image/`](image/) — **private**, see [Registry access](#registry-access) |
@@ -191,7 +191,7 @@ So the path is a port forward, and the trade is that the record publishes the ho
 | | |
 | :--- | :--- |
 | DNS | `A` record, `mc` → home WAN IP, **proxy off** |
-| Forward | external 25565 → **`192.168.0.221:25565`**, protocol **Both** (TCP game, UDP voice) |
+| Forward | external 25565 → **`192.168.0.226:25565`**, protocol **Both** (TCP game, UDP voice) |
 
 ### The router forwards to the address, not to the MAC it shows you
 
@@ -201,13 +201,13 @@ the address you typed; the MAC is cosmetic.
 
 This matters because "translate the internal port to the Service's nodePort" is the natural
 next move once you believe the MAC, and it **breaks inbound traffic**: kube-proxy binds a
-nodePort on the NODE address and never on the MetalLB VIP, so `192.168.0.221:31900` is closed
+nodePort on the NODE address and never on the MetalLB VIP, so `192.168.0.226:31900` is closed
 while `192.168.0.17:31900` is open. Measured:
 
 | | |
 | :--- | :--- |
-| `192.168.0.221:25565` | OPEN — VIP on the service port, what the forward must target |
-| `192.168.0.221:31900` | CLOSED — the VIP does not answer on the nodePort |
+| `192.168.0.226:25565` | OPEN — VIP on the service port, what the forward must target |
+| `192.168.0.226:31900` | CLOSED — the VIP does not answer on the nodePort |
 | `192.168.0.17:31900` | OPEN — nodePort, but on the node address |
 
 The control that settles it is the pre-existing Plex rule, identical in shape: its node
@@ -217,8 +217,8 @@ external probe of the public IP on 32400 answers OPEN. The VIP has to be the del
 ### Testing from inside the LAN does not work
 
 Connecting to `mc.isaacwallace.dev` from your own network fails with a timeout even when
-everything is correct — the gateway does not hairpin. Use `192.168.0.221` at home, or add a
-DNS rewrite in AdGuard (`mc.isaacwallace.dev` → `192.168.0.221`) so one hostname works from
+everything is correct — the gateway does not hairpin. Use `192.168.0.226` at home, or add a
+DNS rewrite in AdGuard (`mc.isaacwallace.dev` → `192.168.0.226`) so one hostname works from
 both sides. Verify public reachability from outside — a phone on mobile data, or a TCP probe
 service — never from a LAN client.
 

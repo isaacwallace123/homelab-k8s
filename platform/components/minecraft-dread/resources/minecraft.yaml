@@ -234,7 +234,7 @@ metadata:
   namespace: games
   annotations:
     metallb.io/address-pool: services-pool
-    metallb.io/loadBalancerIPs: "192.168.0.221"
+    metallb.io/loadBalancerIPs: "192.168.0.226"
 spec:
   type: LoadBalancer
   selector:
@@ -247,7 +247,7 @@ spec:
   # (mixed-protocol LoadBalancers are GA and MetalLB honours it), and doing so collapses the
   # public surface to a single forwarded port: 25565.
   #
-  # The router forwards straight to THIS address on THIS port: external 25565 -> 192.168.0.221
+  # The router forwards straight to THIS address on THIS port: external 25565 -> 192.168.0.226
   # :25565. No nodePort is involved and none is pinned.
   #
   # The Bell gateway displays a MAC in its "Local IP address / Device name" column, which
