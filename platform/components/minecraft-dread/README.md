@@ -10,7 +10,7 @@ Public at `mc.isaacwallace.dev`, internal at `192.168.0.226`.
 | Address | `192.168.0.226`, MetalLB `services-pool` |
 | Ports | 25565 TCP (game) and 25565 UDP (Simple Voice Chat) |
 | Storage | `minecraft-dread-data`, 20Gi `longhorn-replicated`, nightly snapshot + weekly backup |
-| Image | `ghcr.io/isaacwallace123/dread-server:3.1.3`, built from [`image/`](image/) — **private**, see [Registry access](#registry-access) |
+| Image | `ghcr.io/isaacwallace123/dread-server:3.1.5`, built from [`image/`](image/) — **private**, see [Registry access](#registry-access) |
 | Console | [`scripts/mc.sh`](../../../scripts/mc.sh) |
 
 ## Why the pack is baked into an image

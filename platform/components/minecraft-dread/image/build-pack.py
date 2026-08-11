@@ -36,10 +36,20 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_INSTANCE = r"C:\Users\isaac\curseforge\minecraft\Instances\DREAD - A Horror Survival Pack"
 
-# Copied verbatim into the pack. `config` carries the pack's tuning — including
-# biome_replacer.properties, which is what actually drives DREAD's worldgen — and
-# `defaultconfigs` is what Forge seeds a new world's serverconfig from.
-COPY_DIRS = ("config", "defaultconfigs")
+# Copied verbatim into the pack.
+#
+#   config          the pack's tuning, including biome_replacer.properties, which is what
+#                   actually drives DREAD's worldgen
+#   defaultconfigs  what Forge seeds a new world's serverconfig from
+#   tacz            TACZ gun packs — 61 MB of them. NOT optional and NOT client-only: each
+#                   pack ships a data/ half defining the guns, their recipes and ammo, which
+#                   the server has to load for those items to exist properly. Leaving it out
+#                   is silent — the mod loads, the world runs, and specific guns come up
+#                   wrong. Directories of content living OUTSIDE mods/ are easy to miss;
+#                   check the instance root when the pack updates.
+#   scripts         CraftTweaker scripts run server-side. Empty in 3.1.1, included so it
+#                   does not become the next thing quietly left behind.
+COPY_DIRS = ("config", "defaultconfigs", "tacz", "scripts")
 
 
 def _mods_toml(jar: str) -> str:
