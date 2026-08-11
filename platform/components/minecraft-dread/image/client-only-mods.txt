@@ -56,7 +56,6 @@ BorderlessWindow-1.19.1-1.5.2.jar
 CameraOverhaul-v2.0.6-forge+mc[1.19.0-1.19.2].jar
 ShoulderSurfing-Forge-1.19.2-4.22.1.jar
 firstperson-forge-2.5.0-mc1.19.2.jar
-player-animation-lib-forge-1.0.2.jar           # firstperson library
 notenoughanimations-forge-1.9.3-mc1.19.2.jar
 smoothswapping-0.9.2-1.19.2-forge.jar
 ItemPhysic_FORGE_v1.6.7_mc1.19.2.jar
@@ -89,4 +88,13 @@ Essential_1-4-0-3_forge_1-19-2.jar
 #   ThisRocks-1.19.2-1.2.5.jar       client-only mixins, but ships data ns `rocks`
 #   CreativeCore_FORGE_v2.11.28_mc1.19.2.jar  its client consumers are gone, but WaterFrames needs it
 #   smoothboot(reloaded)-mc1.19.2-0.0.4.jar   thread-priority tuning, harmless server-side
+#
+#   player-animation-lib-forge-1.0.2.jar
+#       Client-only mixins, and its obvious consumer (firstperson) is client-side — which is
+#       why this was removed at first, and why the server then refused to boot:
+#           Mod bettercombat requires playeranimator 0.9.9 or above - not installed
+#       bettercombat is server-side and declares it mandatory, side=BOTH. A library being
+#       client-shaped says nothing about who depends on it. build-pack.py now verifies every
+#       mandatory dependency resolves, so this class of mistake fails the build instead of
+#       the server.
 # =============================================================================
