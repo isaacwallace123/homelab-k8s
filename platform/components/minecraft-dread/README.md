@@ -10,7 +10,7 @@ Public at `mc.isaacwallace.dev`, internal at `192.168.0.221`.
 | Address | `192.168.0.221`, MetalLB `services-pool` |
 | Ports | 25565 TCP (game) and 25565 UDP (Simple Voice Chat) |
 | Storage | `minecraft-dread-data`, 20Gi `longhorn-replicated`, nightly snapshot + weekly backup |
-| Image | `ghcr.io/isaacwallace123/dread-server:<pack version>`, built from [`image/`](image/) — **private**, see [Registry access](#registry-access) |
+| Image | `ghcr.io/isaacwallace123/dread-server:3.1.3`, built from [`image/`](image/) — **private**, see [Registry access](#registry-access) |
 | Console | [`scripts/mc.sh`](../../../scripts/mc.sh) |
 
 ## Why the pack is baked into an image
@@ -26,12 +26,12 @@ day — and the image tag becomes the pack version.
 
 | Archive | Contents | Source |
 | :--- | :--- | :--- |
-| `dread-server.zip` | 93 mods + `config/` + `defaultconfigs/` | the CurseForge instance, minus [`client-only-mods.txt`](image/client-only-mods.txt) |
+| `dread-server.zip` | 91 mods + `config/` + `defaultconfigs/` | the CurseForge instance, minus [`client-only-mods.txt`](image/client-only-mods.txt) |
 | `server-extras.zip` | server-only mods + config overrides | [`image/server-mods/`](image/server-mods/), [`image/server-overrides/`](image/server-overrides/) |
 
 `server-extras` is applied second, so it wins on any file both contain.
 
-### The 45 removed mods
+### The 47 removed mods
 
 [`client-only-mods.txt`](image/client-only-mods.txt) documents the reasoning per entry. The
 classification combined three signals — itzg's curated `globalExcludes`, jars whose mixin
@@ -41,7 +41,16 @@ is a content mod the server needs to generate and validate the world. That rule 
 keeps `ThisRocks` (data namespace `rocks`) in.
 
 The list fails the build loudly if a filename in it no longer exists in the instance, so a
-pack update cannot silently put a client mod back on the server.
+pack update cannot silently put a client mod back on the server. `build-pack.py` also
+resolves every kept mod's **mandatory** dependencies and fails if one was removed — that
+check exists because removing `playeranimator` (client-only mixins, client-side consumer)
+broke `bettercombat`, which is server-side and requires it.
+
+**Know the limit of all of this: metadata can prove a mod is client-only, it can never prove
+a mod is server-safe.** Two of the removals above were found only by booting the server —
+`watermedia` refuses to load headless, and `VoidFog` touches the client renderer during
+CONSTRUCT while carrying no client signal in its metadata whatsoever. When adding mods,
+expect a boot to be the real test.
 
 ### The three added mods
 
@@ -114,8 +123,8 @@ desync worldgen from the client.
 ```sh
 cd platform/components/minecraft-dread/image
 python build-pack.py
-docker build -t ghcr.io/isaacwallace123/dread-server:3.1.2 .
-docker push ghcr.io/isaacwallace123/dread-server:3.1.2
+docker build -t ghcr.io/isaacwallace123/dread-server:3.1.4 .
+docker push ghcr.io/isaacwallace123/dread-server:3.1.4
 # then bump the tag in resources/minecraft.yaml and commit
 ```
 
@@ -127,7 +136,7 @@ the new mods **and removes the previous revision's** — without touching `world
 This is the **only** component in the cluster with an `imagePullSecret`. Every other image
 here is public on GHCR and pulls anonymously, which is why nothing else needs one.
 
-The exception is deliberate: this image bundles ~190 MB of redistributed CurseForge mod
+The exception is deliberate: this image bundles ~155 MB of redistributed CurseForge mod
 jars, and CurseForge projects default to All-Rights-Reserved licensing that does not permit
 republishing them. Making the package public would hand those jars to anyone who guessed the
 package name, so it stays private and the cluster authenticates.

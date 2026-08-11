@@ -212,7 +212,13 @@ spec:
               # No CPU limit on purpose: the main tick loop is single-threaded and latency
               # bound, and CFS throttling at a quota boundary shows up directly as TPS loss.
               # The node's other workloads are protected by requests, not by capping this.
-              memory: 10Gi
+              #
+              # 11Gi, not 10: measured at 9094Mi idle with zero players. Aikar's flags set
+              # AlwaysPreTouch, so the whole 8G heap is resident from boot and everything
+              # above it — metaspace, code cache, Netty direct buffers — has to fit in what
+              # is left. Those scale with players and loaded chunks, and exceeding the limit
+              # is an OOMKill mid-session rather than a slow tick. 10Gi left ~11% margin.
+              memory: 11Gi
           volumeMounts:
             - name: data
               mountPath: /data
