@@ -50,6 +50,16 @@ projects:
     description: >-
       Personal user-facing services. Must not manage cyberlab or AI lab infrastructure.
     destinations: [media, networking, portfolio, games]
+    # Every Application here inherits `CreateNamespace=true` from platform.syncPolicy, which
+    # makes the destination Namespace a managed resource — and an AppProject denies
+    # cluster-scoped kinds unless listed. The namespaces themselves are still declared
+    # centrally in components/namespaces and created at the bootstrap tier; this only grants
+    # the permission that syncOption implies. Without it the sync fails with:
+    #   resource :Namespace is not permitted in project applications
+    # The portfolio project carries the identical entry for the identical reason.
+    clusterResourceWhitelist:
+      - group: ""
+        kind: Namespace
 
   portfolio:
     description: >-
