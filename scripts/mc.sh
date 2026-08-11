@@ -139,8 +139,11 @@ EOF
     ;;
 
   tps)
-    # spark ships in server-extras.zip.
-    rcon spark tps
+    # Forge's built-in, not `spark tps`: spark writes its report to the invoking player's
+    # chat rather than the command's return value, so over RCON it comes back empty.
+    # `forge tps` returns real text and breaks the figure down per dimension.
+    # spark is still what `profile` uses — it just cannot report through this path.
+    rcon forge tps
     ;;
 
   profile)
@@ -154,11 +157,26 @@ EOF
   pregen)
     [[ $# -eq 1 ]] || die "usage: $0 pregen <radius-in-blocks>   e.g. $0 pregen 3000"
     # Pre-generating is the single biggest TPS win available here: it moves Terralith's
-    # expensive worldgen off the tick loop that players are waiting on. Run it while
-    # nobody is online.
+    # expensive worldgen off the tick loop that players are waiting on.
+    #
+    # It must run with NOBODY ONLINE. Chunky generates on the server main thread — the same
+    # thread that answers keepalive packets — so a player connected during a run stops being
+    # heard from and is dropped with "lost connection: Timed out". The server is fine; it is
+    # simply too busy to say so. Hence the refusal below.
+    online=$(rcon list 2>/dev/null | grep -oE 'There are ([0-9]+)' | grep -oE '[0-9]+' || echo 0)
+    if [[ "${online:-0}" -gt 0 ]]; then
+      rcon list
+      die "players are online — pregen would time them out. Use '$0 cmd \"chunky continue\"' once they leave."
+    fi
     rcon chunky radius "$1"
     rcon chunky start
-    echo "started; watch with: $0 cmd 'chunky progress'"
+    cat <<EOF
+started; watch with: $0 cmd 'chunky progress'
+
+Before anyone joins:  $0 cmd 'chunky pause'
+After they leave:     $0 cmd 'chunky continue'
+Progress is persisted, so pausing costs nothing.
+EOF
     ;;
 
   *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
