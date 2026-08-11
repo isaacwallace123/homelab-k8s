@@ -246,12 +246,24 @@ spec:
   # One port number, both protocols. A Service may repeat a port under a different protocol
   # (mixed-protocol LoadBalancers are GA and MetalLB honours it), and doing so collapses the
   # public surface to a single forwarded port: 25565.
+  #
+  # nodePort is PINNED, and the router depends on it. The Bell gateway binds a forward to a
+  # DEVICE, not to an address, so pointing it at the MetalLB VIP silently resolves to whichever
+  # node answered ARP for .221 and then forwards to THAT NODE'S OWN IP. Nothing listens on
+  # node-IP:25565 — kube-proxy binds the VIP and the nodePort, never the node IP on the service
+  # port — so every external connection was refused while the LAN worked perfectly.
+  #
+  # The forward therefore targets k8s-work-02:31900, and this value must not drift. Left
+  # unset, Kubernetes allocates it at random from 30000-32767 whenever the Service is
+  # recreated, which would break inbound traffic with no visible change to anything else.
   ports:
     - name: minecraft
       port: 25565
       targetPort: 25565
+      nodePort: 31900
       protocol: TCP
     - name: voicechat
       port: 25565
       targetPort: 25565
+      nodePort: 31900
       protocol: UDP
