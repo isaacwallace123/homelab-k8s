@@ -49,7 +49,7 @@ projects:
   applications:
     description: >-
       Personal user-facing services. Must not manage cyberlab or AI lab infrastructure.
-    destinations: [media, networking, portfolio]
+    destinations: [media, networking, portfolio, games]
 
   portfolio:
     description: >-
@@ -317,6 +317,17 @@ components:
     waveOffset: 4
     namespace: cloud
     project: cloud
+    resources:
+      enabled: true
+
+  # ── games ───────────────────────────────────────────────────────────────────
+  # DREAD (Minecraft 1.19.2 / Forge). Pinned to k8s-work-02, the only worker sized with
+  # ballooning disabled — the JVM heap has to be genuinely resident. The pack ships in the
+  # image built from platform/components/minecraft-dread/image/.
+  - name: minecraft-dread
+    tier: apps
+    namespace: games
+    project: applications
     resources:
       enabled: true
 

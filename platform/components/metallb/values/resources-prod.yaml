@@ -9,12 +9,15 @@
 #
 # ALLOCATED (check this before pinning a new address — the pool is pinned, so a duplicate
 # request silently stays <pending> forever with no event explaining why):
-#   .220 homepage      .222 ntfy
+#   .220 homepage      .221 minecraft-dread (DREAD)   .222 ntfy
 #   .230 plex          .231 radarr      .232 sonarr     .233 prowlarr
 #   .234 qbittorrent   .235 sabnzbd     .236 overseerr
 #   .240 grafana       .241 prometheus  .242 alertmanager
 #   .244 immich        .245 garage-s3   .247 stirling-pdf
-# Free: .221, .223-.229, .237-.239, .243, .246, .248-.250
+# Free: .223-.229, .237-.239, .243, .246, .248-.250
+#
+# .221 is the only address in here the router forwards to from the internet — 25565, both
+# TCP (game) and UDP (voice chat). Do not reassign it without removing the forward first.
 
 namespace: networking
 

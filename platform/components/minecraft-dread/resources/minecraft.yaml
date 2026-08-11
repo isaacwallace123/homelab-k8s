@@ -1,0 +1,251 @@
+# DREAD 3.1.1 — Minecraft 1.19.2 / Forge 43.5.0, 93 server-side mods.
+#
+# The pack is baked into the image (see ../image/) rather than fetched at boot: DREAD
+# publishes no server pack, so the mod set is built from the CurseForge client instance
+# minus a reviewed client-only list. The image tag is the pack version.
+#
+# NOT in a NetworkPolicy: players connect from the LAN and from the internet through a
+# port forward, so their source addresses are arbitrary external IPs. The
+# `allow-same-namespace` pattern used by the media/monitoring namespaces is namespaceSelector
+# based and would drop every one of them. The games namespace is intentionally left without
+# an ingress policy; RCON is protected by a password instead (see sealed-secret.yaml).
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minecraft-dread-data
+  namespace: games
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    # A world friends have played in for months is the definition of hard-to-rebuild, so it
+    # opts into the nightly snapshot + weekly backup group. Churn is bursty but small —
+    # autosave rewrites only the chunks that changed — so it does not have the bloat problem
+    # that kept Plex's cache and the Prometheus TSDB out of this group.
+    recurring-job-group.longhorn.io/default: enabled
+spec:
+  storageClassName: longhorn-replicated
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Terralith + Structory + YUNG's generate large, dense worlds. 20Gi is roughly 4x a
+      # year of casual play; the class allows expansion if it is ever tight.
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft-dread
+  namespace: games
+  labels:
+    app: minecraft-dread
+spec:
+  replicas: 1
+  strategy:
+    # Never two servers on one world directory. Recreate, not RollingUpdate: the second pod
+    # would fail to take the session lock and crash-loop while the first still held it.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minecraft-dread
+  template:
+    metadata:
+      labels:
+        app: minecraft-dread
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: apps
+      # Pinned to work-02 specifically. Both apps-pool workers are 12 GiB in Terraform, but
+      # work-02 is the one sized to 16 GiB with ballooning disabled — see
+      # provisioning/terraform/terraform.tfvars. On work-01 the balloon leaves the kubelet
+      # reporting ~4 GiB and this pod would never schedule.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: ["k8s-work-02"]
+      # The one imagePullSecret in this cluster. Everything else pulls anonymously from
+      # public GHCR packages; this image stays private because it bundles redistributed
+      # CurseForge mod jars. Generate the secret with scripts/seal-ghcr-pull-secret.sh —
+      # without it the pod sits in ImagePullBackOff with a 401 from ghcr.io.
+      imagePullSecrets:
+        - name: ghcr-pull
+      # The JVM heap is genuinely resident and the world save on SIGTERM is not instant.
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: minecraft
+          image: ghcr.io/isaacwallace123/dread-server:3.1.1
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: TYPE
+              value: FORGE
+            - name: VERSION
+              value: "1.19.2"
+            - name: FORGE_VERSION
+              value: "43.5.0"
+            # The pack, baked into the image at build time. itzg checksums the archive and
+            # tracks what it unpacked, so a new image tag both applies the new mods and
+            # removes the previous revision's — without touching world/.
+            # Applied in order, so server-extras wins where both touch a file. The first is
+            # the pack; the second is server-only mods (spark, Chunky, MemoryLeakFix) and
+            # the config overrides in ../image/server-overrides/.
+            - name: GENERIC_PACKS
+              value: /packs/dread-server.zip,/packs/server-extras.zip
+
+            # ── memory ────────────────────────────────────────────────────────
+            # Aikar's flags want Xms == Xmx, so MEMORY sets both. 8G is sized for the
+            # worldgen spike (Terralith biome replacement is the expensive part), not the
+            # steady state, which sits well under it with six players.
+            - name: MEMORY
+              value: 8G
+            - name: USE_AIKAR_FLAGS
+              value: "true"
+
+            # ── modded-server essentials ──────────────────────────────────────
+            # Forge's watchdog kills the server if a tick exceeds 60s. Generating a
+            # Terralith chunk on first exploration legitimately can, and the kill happens
+            # mid-write. Disabling it is standard for modded servers.
+            - name: MAX_TICK_TIME
+              value: "-1"
+            # ParCool's movement (wall-running, vaulting) reads as flight to the vanilla
+            # check and gets players kicked without this.
+            - name: ALLOW_FLIGHT
+              value: "true"
+            # Run the server as PID 1 so SIGTERM reaches it directly and the world saves.
+            - name: EXEC_DIRECTLY
+              value: "true"
+
+            # ── gameplay ──────────────────────────────────────────────────────
+            - name: MOTD
+              value: "DREAD — A Horror Survival Pack"
+            - name: DIFFICULTY
+              value: hard
+            - name: MAX_PLAYERS
+              value: "10"
+            - name: VIEW_DISTANCE
+              value: "8"
+            - name: SIMULATION_DISTANCE
+              value: "6"
+            - name: SPAWN_PROTECTION
+              value: "0"
+            - name: ONLINE_MODE
+              value: "true"
+            - name: TZ
+              value: America/Toronto
+            # Load-bearing, not boilerplate. Simple Voice Chat is configured onto UDP 25565
+            # so that one port forward covers both game and voice; the query listener would
+            # want that same UDP port and the collision is what the mod's docs warn can crash
+            # the server. Enabling query means moving voice back to 24454 first — see
+            # ../image/server-overrides/config/voicechat/voicechat-server.properties.
+            - name: ENABLE_QUERY
+              value: "false"
+
+            # ── access control ────────────────────────────────────────────────
+            # Whitelist OFF by choice: the server is open to anyone who resolves
+            # mc.isaacwallace.dev. ONLINE_MODE above still forces a real Mojang account, so
+            # this is "any authenticated player", not "anyone at all" — but on a horror pack
+            # with WorldEdit installed, an uninvited guest with a grudge is a bad afternoon.
+            #
+            # To close it again: flip both to "true", set WHITELIST to a comma-separated list
+            # of usernames, commit. Or, to close it RIGHT NOW without waiting for a sync:
+            #   ./scripts/mc.sh cmd "whitelist on"
+            #   ./scripts/mc.sh whitelist add <player>
+            # ...remembering that a restart reapplies whatever is in this file.
+            - name: ENABLE_WHITELIST
+              value: "false"
+            - name: ENFORCE_WHITELIST
+              value: "false"
+            # Operator. Resolved from the instance's usernamecache.json
+            # (c57569f2-36f8-43b1-95ed-82dd9ccf47d6). Reapplied on every restart, so this
+            # file stays the source of truth for who holds op.
+            - name: OPS
+              value: "isaacwallace123"
+
+            # ── console ───────────────────────────────────────────────────────
+            - name: ENABLE_RCON
+              value: "true"
+            - name: RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minecraft-rcon
+                  key: password
+          ports:
+            - name: minecraft
+              containerPort: 25565
+              protocol: TCP
+            # Simple Voice Chat, on the same port NUMBER over UDP. A separate socket — the
+            # game is TCP — so one forwarded port number carries both. Safe only while query
+            # is off; see ENABLE_QUERY above.
+            - name: voicechat
+              containerPort: 25565
+              protocol: UDP
+          startupProbe:
+            exec:
+              command: ["mc-health"]
+            # First boot is Forge bootstrapping 93 mods and generating spawn chunks under
+            # Terralith. Ten minutes is not generous here, it is realistic.
+            periodSeconds: 15
+            failureThreshold: 40
+          readinessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 20
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 30
+            # Deliberately slack. A modded server pauses for seconds at a time under
+            # chunk generation, and restarting it mid-worldgen is worse than waiting.
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: "2"
+              memory: 9Gi
+            limits:
+              # No CPU limit on purpose: the main tick loop is single-threaded and latency
+              # bound, and CFS throttling at a quota boundary shows up directly as TPS loss.
+              # The node's other workloads are protected by requests, not by capping this.
+              memory: 10Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minecraft-dread-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft-dread
+  namespace: games
+  annotations:
+    metallb.io/address-pool: services-pool
+    metallb.io/loadBalancerIPs: "192.168.0.221"
+spec:
+  type: LoadBalancer
+  selector:
+    app: minecraft-dread
+  # Preserves the player's real source address, which is what makes bans, the anti-cheat
+  # and the connection log meaningful. It also constrains MetalLB to announcing .221 only
+  # from the node actually running the pod.
+  externalTrafficPolicy: Local
+  # One port number, both protocols. A Service may repeat a port under a different protocol
+  # (mixed-protocol LoadBalancers are GA and MetalLB honours it), and doing so collapses the
+  # public surface to a single forwarded port: 25565.
+  ports:
+    - name: minecraft
+      port: 25565
+      targetPort: 25565
+      protocol: TCP
+    - name: voicechat
+      port: 25565
+      targetPort: 25565
+      protocol: UDP

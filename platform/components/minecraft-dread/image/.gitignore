@@ -1,0 +1,3 @@
+# Build output — ~190 MiB of mod jars. Rebuild with build-pack.py; the image in GHCR is
+# the artifact that gets kept, not the zip.
+dist/

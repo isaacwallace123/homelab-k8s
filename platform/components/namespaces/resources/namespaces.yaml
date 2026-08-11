@@ -33,6 +33,14 @@ kind: Namespace
 metadata:
   name: secrets
 ---
+# games: player-facing game servers. Deliberately has no NetworkPolicy — players arrive
+# from arbitrary external addresses through a port forward, which a namespaceSelector-based
+# ingress rule would drop. Nothing sensitive lives here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: games
+---
 # homeops: control namespace for the public Operations Arena. Holds LabRun claims (the platform API
 # the homelab.isaacwallace.dev run-broker submits); the disposable per-run namespaces Crossplane
 # composes from those claims are created dynamically and are NOT declared here.
