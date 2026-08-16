@@ -266,12 +266,17 @@ spec:
               # at a quota boundary shows up directly as TPS loss. Other workloads on the
               # node are protected by requests, not by capping this.
               #
-              # 16Gi against a 12G heap. Aikar's flags set AlwaysPreTouch, so the whole heap
+              # 18Gi against a 12G heap. Aikar's flags set AlwaysPreTouch, so the whole heap
               # is resident from boot, and everything above it — metaspace for 244 mods,
               # code cache, Netty direct buffers — has to fit in the remainder. Those scale
               # with players and loaded chunks, and exceeding the limit is an OOMKill
               # mid-session, not a slow tick.
-              memory: 16Gi
+              #
+              # Measured 13815Mi at idle with zero players — ~1.5Gi of non-heap on top of the
+              # pre-touched 12G. 16Gi left only ~2.2Gi of headroom, which is not enough to
+              # start a multi-hour Chunky run on: pre-generation is exactly what grows the
+              # off-heap chunk buffers. The node has 23.5Gi allocatable and runs nothing else.
+              memory: 18Gi
           volumeMounts:
             - name: data
               mountPath: /data
