@@ -330,17 +330,6 @@ components:
     resources:
       enabled: true
 
-  # ── games ───────────────────────────────────────────────────────────────────
-  # DREAD (Minecraft 1.19.2 / Forge). Pinned to k8s-work-02, the only worker sized with
-  # ballooning disabled — the JVM heap has to be genuinely resident. The pack ships in the
-  # image built from platform/components/minecraft-dread/image/.
-  - name: minecraft-dread
-    tier: apps
-    namespace: games
-    project: applications
-    resources:
-      enabled: true
-
   - name: homepage
     tier: apps
     namespace: networking

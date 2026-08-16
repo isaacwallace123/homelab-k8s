@@ -5,7 +5,7 @@
 #
 # components/*/image/ holds container build context: Dockerfiles, and build output that can
 # run to hundreds of MiB. Without this, `helm template platform platform` fails with
-#   Error: chart file "dread-server.zip" is larger than the maximum file size 5242880
+#   Error: chart file "<name>.zip" is larger than the maximum file size 5242880
 #
 # Helm's ignore syntax has no double-star: a trailing-slash pattern matches the directory
 # and everything under it, which is what is wanted here.
