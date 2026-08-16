@@ -148,8 +148,14 @@ The `ad_astra:*_orbit` dimensions are deliberately excluded: they are empty spac
 Chunky would spend hours writing void. Dimension IDs in the plan were read out of the mod
 jars' `data/<ns>/dimension/*.json`, not guessed.
 
-Expect roughly 35-40 GiB of region data at the planned radii, which is what the 100Gi claim
-and the disk expansion are for.
+**Measured on the first overworld run**, rather than estimated: ~32 chunks/sec and ~13.7 KB
+of region data per chunk, at ~2.2 cores. That is the radius-5000 overworld in about 3h15m
+for roughly 5 GB, and the whole plan in well under 20 GB — several times smaller than the
+35-40 GiB first guessed from DREAD's numbers. The 100Gi claim and the disk expansion are
+therefore sized for years of growth, not for the pre-generation itself.
+
+Watch it with `./scripts/mc.sh pregen-status`. The Chunky subcommand is `progress`;
+`chunky status` is not a command and answers "Incorrect argument for command".
 
 ## Networking
 

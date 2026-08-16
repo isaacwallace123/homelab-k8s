@@ -23,6 +23,10 @@
 #   ./scripts/mc.sh pregen-all              the full plan below, dimension by dimension
 #   ./scripts/mc.sh pregen-status           Chunky progress
 #
+# Measured on the first overworld run: ~32 chunks/sec and ~13.7 KB of region data per chunk.
+# That puts the radius-5000 overworld at roughly 3h15m and ~5 GB, and the whole plan below at
+# well under 20 GB — so the 100Gi claim is sized for growth, not for the pre-generation.
+#
 # `whitelist add` through RCON changes the running server but NOT the WHITELIST env var in
 # platform/components/minecraft-valhelsia/resources/minecraft.yaml, and that env var is
 # reapplied on every restart. Add the player in both places, or they fall off at the next
@@ -206,12 +210,15 @@ EOF
       rcon chunky center 0 0
       rcon chunky radius "$rad"
       rcon chunky start
-      # Poll until Chunky reports this task done.
+      # Poll until Chunky stops reporting a running task. The subcommand is `progress`,
+      # not `status` — `chunky status` is not a command and answers "Incorrect argument",
+      # which a loop keying off the absence of a word would read as "finished" and skip
+      # every dimension in about a second.
       while true; do
         sleep 60
-        out=$(rcon chunky status 2>/dev/null || true)
-        echo "  $(echo "$out" | tr '\n' ' ' | cut -c1-140)"
-        echo "$out" | grep -qiE "no tasks|not running|complete" && break
+        out=$(rcon chunky progress 2>/dev/null | tr -d '\r' || true)
+        echo "  $(echo "$out" | tr '\n' ' ' | cut -c1-150)"
+        echo "$out" | grep -q "Task running" || break
       done
       rcon save-all flush || true
     done
@@ -219,7 +226,7 @@ EOF
     ;;
 
   pregen-status)
-    rcon chunky status
+    rcon chunky progress
     ;;
 
   *)
