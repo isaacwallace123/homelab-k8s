@@ -1,0 +1,29 @@
+# The `default` BackupTarget, declared explicitly.
+#
+# `defaultSettings.backupTarget` in values/chart-prod.yaml looks like it should be enough,
+# and it is not: Longhorn applies that setting only when it FIRST creates this resource. The
+# chart was installed before the value was added, so the CR already existed with an empty
+# URL and the setting was quietly ignored from then on.
+#
+# The visible symptom was a cluster that believed it was backed up and was not — the
+# weekly-backup RecurringJob ran on schedule against an empty target, produced no
+# backups.longhorn.io objects, and raised nothing. That is how the DREAD Minecraft world
+# ended up with only same-disk snapshots. Declaring the CR here is what actually sets it,
+# and keeps it set.
+#
+# Verify with:
+#   kubectl -n longhorn-system get backuptarget default -o jsonpath='{.status.available}'
+# `true` means Longhorn reached the bucket. If it is false, check the endpoint and the
+# credentials in sealed-secret-backup-credentials.yaml.
+apiVersion: longhorn.io/v1beta2
+kind: BackupTarget
+metadata:
+  name: default
+  namespace: longhorn-system
+spec:
+  # s3://<bucket>@<region>/<path> — the region is Garage's `s3_region`, "garage", NOT an AWS
+  # region. Getting this wrong presents as a signature mismatch, not as a bad-region error.
+  backupTargetURL: s3://longhorn-backups@garage/
+  credentialSecret: longhorn-backup-credentials
+  # How often Longhorn re-checks that the target is reachable.
+  pollInterval: 5m0s

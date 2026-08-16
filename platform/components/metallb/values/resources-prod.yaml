@@ -9,12 +9,12 @@
 #
 # ALLOCATED (check this before pinning a new address — the pool is pinned, so a duplicate
 # request silently stays <pending> forever with no event explaining why):
-#   .220 homepage      .222 ntfy
+#   .220 homepage      .222 ntfy        .226 minecraft-valhelsia
 #   .230 plex          .231 radarr      .232 sonarr     .233 prowlarr
 #   .234 qbittorrent   .235 sabnzbd     .236 overseerr
 #   .240 grafana       .241 prometheus  .242 alertmanager
 #   .244 immich        .245 garage-s3   .247 stirling-pdf
-# Free: .223-.229, .237-.239, .243, .246, .248-.250
+# Free: .223-.225, .227-.229, .237-.239, .243, .246, .248-.250
 #
 # DO NOT USE .221 — a cyberlab Proxmox VM answers ARP for it and beats MetalLB's speaker to
 # the address. MetalLB still reports it as owned and announced, so the conflict is invisible
@@ -22,10 +22,10 @@
 # the router's cache flips. Cost an evening in Aug 2026. An address missing from this list
 # means nobody wrote it down, NOT that nobody is using it — ARP it before pinning it.
 #
-# No address in here is currently forwarded from the internet. The retired Minecraft server
-# held .226 (router forwarded 25565 TCP+UDP to it, and .226 was ARP-verified unclaimed before
-# use). That forward is now stale: remove it at the router, or re-point it when a replacement
-# server claims .226 again.
+# .226 is the only address in here the router forwards to from the internet: external 25565
+# -> 192.168.0.226:25565. TCP only now — DREAD needed UDP on the same port number for Simple
+# Voice Chat, and Valhelsia 6 ships no voice mod, so the UDP half of that forward can go.
+# Do not reassign .226 without removing the forward first.
 
 namespace: networking
 

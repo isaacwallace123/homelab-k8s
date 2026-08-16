@@ -216,6 +216,18 @@ nodes = {
     labels          = { "node-role.kubernetes.io/worker" = "true" }
   }
 
+  # 24 GiB with ballooning OFF (floating == memory), and 250G of disk. Both are for the
+  # Minecraft server pinned here — 244 mods on a 12G pre-touched heap, and a world
+  # pre-generated across a dozen dimensions on strict-local Longhorn storage.
+  #
+  # Ballooning and Kubernetes do not mix: the kubelet computes allocatable from the memory
+  # resident when it reads /proc/meminfo, not from the VM's configured maximum. work-01,
+  # deflated, advertises ~3.9 GiB of its configured 12 and could not run that pod at all.
+  #
+  # NOTE: `disk_size` is honoured at CREATE only — nodes.tf has `disk` in ignore_changes so
+  # Terraform can never detach k8s-store-01's passed-through media drive. Growing a disk on
+  # an existing node is manual: `qm resize <vmid> scsi0 <size>` on the Proxmox host, then
+  # growpart + resize2fs inside the guest. Memory, by contrast, does apply from here.
   "k8s-work-02" = {
     host            = "cyberlab"
     vmid            = 811
@@ -224,10 +236,10 @@ nodes = {
     pool            = "apps"
     machine         = "q35"
     cores           = 6
-    memory          = 12288
-    memory_floating = 4096
-    disk_size       = 120
-    description     = "k3s worker — general apps, second Longhorn replica target"
+    memory          = 24576
+    memory_floating = 24576
+    disk_size       = 250
+    description     = "k3s worker — general apps, game servers, second Longhorn replica target"
     tags            = ["worker", "apps"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
   }

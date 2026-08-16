@@ -330,6 +330,18 @@ components:
     resources:
       enabled: true
 
+  # ── games ───────────────────────────────────────────────────────────────────
+  # Valhelsia 6 (Minecraft 1.20.1 / Forge, 244 mods). Pinned to k8s-work-02: it is the only
+  # worker sized with ballooning disabled, and the world is on strict-local storage that
+  # lives on that node. The pack is an object in Garage, not a baked image — see the
+  # component README.
+  - name: minecraft-valhelsia
+    tier: apps
+    namespace: games
+    project: applications
+    resources:
+      enabled: true
+
   - name: homepage
     tier: apps
     namespace: networking

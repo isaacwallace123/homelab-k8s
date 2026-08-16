@@ -1,0 +1,311 @@
+# Valhelsia 6 (6.2.3) — Minecraft 1.20.1 / Forge 47.4.0, 244 mods, ~12 dimensions.
+#
+# Unlike the DREAD server this replaced, Valhelsia PUBLISHES a server pack, so there is no
+# image build and no private GHCR package here. The pack is an object in Garage
+# (bucket `modpacks`), pulled by an initContainer and handed to itzg as a GENERIC_PACKS
+# archive. That is why this component has no image/ directory.
+#
+# NOT in a NetworkPolicy, for the same reason DREAD wasn't: players arrive from arbitrary
+# external addresses through a port forward, and the namespaceSelector-based
+# `allow-same-namespace` pattern would drop every one of them. RCON is password-protected
+# and is deliberately absent from the LoadBalancer.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minecraft-valhelsia-data
+  namespace: games
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    # Nightly snapshot + weekly backup. Unlike DREAD, the weekly backup now actually goes
+    # somewhere: the Garage S3 target was empty the whole time DREAD ran, so that world had
+    # snapshots on the same disk as the volume and nothing else. See
+    # platform/components/longhorn/resources/sealed-secret-backup-credentials.yaml.
+    recurring-job-group.longhorn.io/default: enabled
+spec:
+  # ONE replica, strict-local — not longhorn-replicated. A Minecraft main loop is latency
+  # bound and single threaded, and every autosave on a 3-replica volume is a synchronous
+  # network write to two other nodes. strict-local keeps the data on the same node as the
+  # pod, so chunk writes are local-disk writes.
+  #
+  # The durability that buys back is the S3 backup target above plus nightly snapshots.
+  # Losing work-02's disk costs time-since-last-backup, which is the trade that was chosen
+  # deliberately — see the README.
+  storageClassName: longhorn-single
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Sized for Chunky pre-generation across every dimension, which is the whole point of
+      # the number being this large. Estimated ~35-40 GiB of region data at the radii in the
+      # README, plus the 800 MiB pack, plus room for the world to keep growing. work-02's
+      # disk was grown 120G -> 250G in the same change to make this schedulable.
+      storage: 100Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft-valhelsia
+  namespace: games
+  labels:
+    app: minecraft-valhelsia
+spec:
+  replicas: 1
+  strategy:
+    # Never two servers on one world directory: the second would fail to take the session
+    # lock and crash-loop while the first still held it.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minecraft-valhelsia
+  template:
+    metadata:
+      labels:
+        app: minecraft-valhelsia
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: apps
+      # Pinned to work-02. work-01 is the other apps-pool worker but reports ~3.9 GiB
+      # allocatable because its balloon deflates it, so this pod would never schedule there.
+      # work-02 is 24 GiB with ballooning off — see provisioning/terraform/terraform.tfvars.
+      # strict-local storage also means the volume lives on this node specifically.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: ["k8s-work-02"]
+      # 244 mods with a 12G pre-touched heap do not stop quickly, and the world save on
+      # SIGTERM is the part that must not be cut short.
+      terminationGracePeriodSeconds: 180
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        # Pulls the pack from Garage. `s3 sync` rather than `cp`, so a restart with an
+        # unchanged pack transfers nothing and the server boots straight away; publishing a
+        # new pack version is what makes it transfer again.
+        - name: fetch-packs
+          image: amazon/aws-cli:2.36.24
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              aws --endpoint-url "$S3_ENDPOINT" s3 sync \
+                "s3://modpacks/valhelsia/${PACK_VERSION}/" /packs/ --no-progress
+              echo "--- /packs ---"; ls -la /packs
+          env:
+            - name: S3_ENDPOINT
+              value: http://garage.cloud.svc.cluster.local:3900
+            - name: AWS_DEFAULT_REGION
+              value: garage
+            - name: PACK_VERSION
+              value: "6.2.3"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: valhelsia-packs-s3
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: valhelsia-packs-s3
+                  key: AWS_SECRET_ACCESS_KEY
+          volumeMounts:
+            - name: data
+              mountPath: /packs
+              subPath: packs
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      containers:
+        - name: minecraft
+          # java17, not a newer JVM: Minecraft 1.20.1 and Forge 47 are built against 17 and
+          # mods in this pack load classes that later JVMs reject.
+          image: itzg/minecraft-server:2026.8.0-java17
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: TYPE
+              value: FORGE
+            - name: VERSION
+              value: "1.20.1"
+            - name: FORGE_VERSION
+              value: "47.4.0"
+            # Applied in order, so server-extras wins where both touch a file. itzg
+            # checksums each archive and tracks what it unpacked, so publishing a new pack
+            # version both adds the new mods and removes the previous version's — without
+            # touching world/.
+            #
+            #   valhelsia-6.2.3-server.zip  the published server pack, 244 mods
+            #   valhelsia-server-extras.zip ModernFix, MemoryLeakFix, Ksyxis
+            #
+            # The extras are server-only and the players' clients do not have them. That is
+            # only safe for mods Forge's handshake ignores; all three were checked, and the
+            # reasoning — including why ModernFix looked unsafe and is not — is in the
+            # README under "The three added mods".
+            - name: GENERIC_PACKS
+              value: /packs/valhelsia-6.2.3-server.zip,/packs/valhelsia-server-extras.zip
+
+            # ── memory ────────────────────────────────────────────────────────
+            # Aikar's flags want Xms == Xmx, so MEMORY sets both.
+            #
+            # 12G, not the 20G the node could now technically give it. Past the working set,
+            # a bigger G1 heap buys longer pauses rather than more headroom, and pauses are
+            # what players feel as lag. 12G covers 244 mods plus the Chunky pre-generation
+            # spike, which is the real peak — steady state with 7 players sits well under it.
+            # If `mc.sh tps` ever shows GC pressure, the node has room to go to 16G.
+            - name: MEMORY
+              value: 12G
+            - name: USE_AIKAR_FLAGS
+              value: "true"
+
+            # ── modded-server essentials ──────────────────────────────────────
+            # Forge's watchdog kills the server if a single tick exceeds 60s. Generating a
+            # chunk with BoP + the full Yung's suite legitimately can, and the kill lands
+            # mid-write. Disabling it is standard for a pack this size.
+            - name: MAX_TICK_TIME
+              value: "-1"
+            # Run the server as PID 1 so SIGTERM reaches it directly and the world saves.
+            - name: EXEC_DIRECTLY
+              value: "true"
+            # Several Valhelsia mods (Aether, Ad Astra jetpacks, Create contraptions) move
+            # players in ways the vanilla check reads as flight.
+            - name: ALLOW_FLIGHT
+              value: "true"
+
+            # ── gameplay ──────────────────────────────────────────────────────
+            - name: MOTD
+              value: "Valhelsia 6"
+            - name: DIFFICULTY
+              value: hard
+            - name: MAX_PLAYERS
+              value: "10"
+            # 8/6, not the pack default 10/10. View distance is the single biggest lever on
+            # both tick time and memory on a modded server: cost scales with the square of
+            # it, and every loaded chunk is entities and block entities being ticked. At 8
+            # the difference is barely visible to a player and the saving is large. Chunky
+            # having pre-generated the terrain means this costs nothing in worldgen either.
+            - name: VIEW_DISTANCE
+              value: "8"
+            - name: SIMULATION_DISTANCE
+              value: "6"
+            - name: SPAWN_PROTECTION
+              value: "0"
+            - name: ONLINE_MODE
+              value: "true"
+            - name: TZ
+              value: America/Toronto
+            # No voice chat mod in this pack — unlike DREAD, which needed UDP on the same
+            # port number. The Service below is TCP only, and so is the router forward.
+            - name: ENABLE_QUERY
+              value: "false"
+
+            # ── access control ────────────────────────────────────────────────
+            # Whitelist ON, unlike DREAD, which was open to anyone who resolved the
+            # hostname. Add players in BOTH places or they fall off at the next restart:
+            # this list is reapplied on every start and overwrites the running server's.
+            #   ./scripts/mc.sh whitelist add <player>   (takes effect now)
+            #   ...and add them here                     (survives a restart)
+            - name: ENABLE_WHITELIST
+              value: "true"
+            - name: ENFORCE_WHITELIST
+              value: "true"
+            - name: WHITELIST
+              value: "isaacwallace123"
+            - name: OPS
+              value: "isaacwallace123"
+
+            # ── console ───────────────────────────────────────────────────────
+            - name: ENABLE_RCON
+              value: "true"
+            - name: RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minecraft-rcon
+                  key: password
+          ports:
+            - name: minecraft
+              containerPort: 25565
+              protocol: TCP
+          startupProbe:
+            exec:
+              command: ["mc-health"]
+            # First boot is Forge bootstrapping 244 mods, running KubeJS, and generating
+            # spawn under BoP + Yung's. 20 minutes is not generous for that, it is realistic
+            # — and this probe is the only thing standing between a slow first boot and a
+            # kubelet restart loop that never lets it finish.
+            periodSeconds: 15
+            failureThreshold: 80
+          readinessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 20
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 30
+            # Deliberately slack. A pack this size pauses for seconds at a time under chunk
+            # generation, and restarting it mid-worldgen is worse than waiting. Chunky
+            # pre-generation in particular will hold the server busy for hours.
+            failureThreshold: 20
+          resources:
+            requests:
+              # 4 of work-02's 6 cores. The main tick loop is one thread, but Chunky
+              # pre-generation, chunk I/O and GC are genuinely parallel and this pod is the
+              # reason the node is sized the way it is.
+              cpu: "4"
+              memory: 14Gi
+            limits:
+              # No CPU limit on purpose: the tick loop is latency bound, and CFS throttling
+              # at a quota boundary shows up directly as TPS loss. Other workloads on the
+              # node are protected by requests, not by capping this.
+              #
+              # 16Gi against a 12G heap. Aikar's flags set AlwaysPreTouch, so the whole heap
+              # is resident from boot, and everything above it — metaspace for 244 mods,
+              # code cache, Netty direct buffers — has to fit in the remainder. Those scale
+              # with players and loaded chunks, and exceeding the limit is an OOMKill
+              # mid-session, not a slow tick.
+              memory: 16Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minecraft-valhelsia-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft-valhelsia
+  namespace: games
+  annotations:
+    metallb.io/address-pool: services-pool
+    metallb.io/loadBalancerIPs: "192.168.0.226"
+spec:
+  type: LoadBalancer
+  selector:
+    app: minecraft-valhelsia
+  # Preserves the player's real source address, which is what makes bans and the connection
+  # log meaningful. It also constrains MetalLB to announcing .226 only from the node
+  # actually running the pod.
+  externalTrafficPolicy: Local
+  # .226, inherited from DREAD along with the router's forward. Do NOT move this to .221:
+  # a cyberlab Proxmox VM answers ARP for that address and beats MetalLB's speaker to it,
+  # which presents as "works on the LAN, dead from the WAN". See the address plan in
+  # platform/components/metallb/values/resources-prod.yaml.
+  #
+  # The router forwards external 25565 straight to THIS address on THIS port. No nodePort is
+  # involved and none is pinned — kube-proxy binds nodePorts on the NODE address, never on
+  # the VIP, so translating this to a nodePort breaks it.
+  ports:
+    - name: minecraft
+      port: 25565
+      targetPort: 25565
+      protocol: TCP
