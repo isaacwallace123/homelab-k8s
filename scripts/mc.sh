@@ -74,6 +74,30 @@ pod() {
 # environment from the sealed secret — it never has to travel through this script.
 rcon() { kubectl exec -n "$NS" -i "$(pod)" -- rcon-cli "$@"; }
 
+# spark ships with the pack, but it answers on the SERVER CONSOLE and not down the RCON
+# connection: `rcon-cli spark tps` returns an empty string and looks like a broken command.
+# Issue it, then read the report back out of the log.
+#
+# Read it back by tail, not by `--since-time`: that takes an RFC3339 timestamp compared
+# against the CLUSTER's clock, and generating it from the local clock silently returns
+# nothing whenever the two disagree — which looks identical to "spark said nothing".
+spark_report() {
+  local p
+  p=$(pod)
+  rcon spark "$@" >/dev/null 2>&1 || true
+  sleep 4
+  # Strip the log prefix, keep only spark's own lines, and show the most recent block.
+  # spark tags its output with a [⚡] marker on this version and a bare "> " on older ones,
+  # so match either — and the indented continuation lines that carry the actual numbers.
+  kubectl logs -n "$NS" "$p" --tail=150 2>/dev/null \
+    | tr -d '\r' \
+    | sed 's/^\[[0-9:]*\] \[[^]]*\] \[[^]]*\]: //' \
+    | grep -E '^(\[⚡\]|> |[[:space:]]+[0-9*\[])' \
+    | sed 's/^\[⚡\] \{0,1\}//' \
+    | grep -v '^\[' \
+    | tail -${SPARK_LINES:-9} || echo "(no spark output found — is spark loaded?)"
+}
+
 cmd=${1:-status}
 shift || true
 
@@ -167,16 +191,15 @@ EOF
     ;;
 
   tps)
-    # spark ships with the pack.
-    rcon spark tps
+    spark_report tps
     ;;
 
   profile)
     secs=${1:-60}
-    echo "profiling for ${secs}s..."
-    rcon spark profiler start --timeout "$secs"
-    sleep $((secs + 10))
-    rcon spark profiler stop
+    echo "profiling for ${secs}s — the report URL appears at the end..."
+    rcon spark profiler start --timeout "$secs" >/dev/null 2>&1 || true
+    sleep $((secs + 12))
+    SPARK_LINES=25 spark_report profiler stop
     ;;
 
   pregen)
