@@ -134,6 +134,25 @@ to fit above it. Exceeding the limit is an OOMKill mid-session, not a slow tick.
 
 If `./scripts/mc.sh tps` shows GC pressure, there is room to go to 16G/20Gi.
 
+### CPU: the VM is pinned to P-cores
+
+The cyberlab host is an **i7-13700KF — 8 P-cores at 5.3-5.4 GHz and 8 E-cores at 4.2 GHz.**
+By default the VM's threads float across all 24, so the single-threaded server tick could be
+scheduled onto an E-core, which is slower on both clock and IPC. For a latency-bound loop
+that is a direct TPS loss, and it is invisible: the host looks unloaded either way.
+
+```sh
+qm set 811 --affinity 0-15                      # persists, but applies only at VM start
+taskset -acp 0-15 $(cat /var/run/qemu-server/811.pid)   # apply to the RUNNING vm, no reboot
+```
+
+CPUs 0-15 are the P-core threads. **`qm set --affinity` alone does not touch a running VM** —
+after setting it, `taskset -cp <pid>` still reported `0-23` until the second command was run,
+so do both or the change silently does nothing until the next reboot.
+
+Terraform does not manage affinity, so this lives here and in `terraform.tfvars.example`.
+The host governor is already `performance`; there is nothing to win there.
+
 ## Pre-generation
 
 Generating a chunk is the single most expensive thing this server does, and doing it while

@@ -228,6 +228,12 @@ nodes = {
   # Terraform can never detach k8s-store-01's passed-through media drive. Growing a disk on
   # an existing node is manual: `qm resize <vmid> scsi0 <size>` on the Proxmox host, then
   # growpart + resize2fs inside the guest. Memory, by contrast, does apply from here.
+  #
+  # ALSO NOT MANAGED HERE: this VM is pinned to the host's P-cores with
+  # `qm set 811 --affinity 0-15`. cyberlab is an i7-13700KF, so CPUs 0-15 are P-core threads
+  # at 5.3-5.4 GHz and 16-23 are E-cores at 4.2 GHz; unpinned, the single-threaded Minecraft
+  # tick can land on an E-core. Note `qm set --affinity` applies only at VM start — use
+  # `taskset -acp 0-15 $(cat /var/run/qemu-server/811.pid)` to change a running VM.
   "k8s-work-02" = {
     host            = "cyberlab"
     vmid            = 811

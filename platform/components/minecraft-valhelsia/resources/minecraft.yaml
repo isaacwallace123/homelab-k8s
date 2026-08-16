@@ -126,7 +126,16 @@ spec:
         - name: minecraft
           # java17, not a newer JVM: Minecraft 1.20.1 and Forge 47 are built against 17 and
           # mods in this pack load classes that later JVMs reject.
-          image: itzg/minecraft-server:2026.8.0-java17
+          #
+          # -graalvm: same Java 17, better JIT. Minecraft's hot loops are exactly the shape
+          # Graal optimises well, and the server tick is latency-bound on one thread, so JIT
+          # quality shows up directly as tick headroom. Aikar's flags below are still valid —
+          # Graal CE uses G1 as well.
+          #
+          # This is the one change here with real mod-compatibility risk. If something in the
+          # 244 misbehaves, roll back by dropping "-graalvm" from this tag and restarting;
+          # nothing else in this file depends on it.
+          image: itzg/minecraft-server:2026.8.0-java17-graalvm
           env:
             - name: EULA
               value: "TRUE"
@@ -206,19 +215,35 @@ spec:
               value: "false"
 
             # ── access control ────────────────────────────────────────────────
-            # Whitelist ON, unlike DREAD, which was open to anyone who resolved the
-            # hostname. Add players in BOTH places or they fall off at the next restart:
-            # this list is reapplied on every start and overwrites the running server's.
-            #   ./scripts/mc.sh whitelist add <player>   (takes effect now)
-            #   ...and add them here                     (survives a restart)
+            # Whitelist OFF by choice — the server is open to anyone who can reach .226.
+            # ONLINE_MODE above still forces a real Mojang account, so this is "any
+            # authenticated player", not "anyone at all".
+            #
+            # These variables are reapplied on EVERY start and overwrite whatever the running
+            # server has, which is the trap: `mc.sh whitelist off` alone lasts only until the
+            # next restart, and the server then comes back locked. Flipping it here is what
+            # makes it stick.
+            #
+            # To close it again: set both to "true", put a comma-separated list in WHITELIST,
+            # commit. To close it RIGHT NOW without waiting for a sync:
+            #   ./scripts/mc.sh cmd "whitelist on"
             - name: ENABLE_WHITELIST
-              value: "true"
+              value: "false"
             - name: ENFORCE_WHITELIST
-              value: "true"
-            - name: WHITELIST
-              value: "isaacwallace123"
+              value: "false"
             - name: OPS
               value: "isaacwallace123"
+
+            # ── entity tracking ───────────────────────────────────────────────
+            # 50%, down from the default 100. This is the range at which the server tracks
+            # and broadcasts entities to each client, and on a 244-mod pack the entity count
+            # is the expensive part of a tick — it costs both server CPU and per-player
+            # bandwidth, and it scales with the number of players who can see each entity.
+            # Halving it is one of the few levers that helps CPU and network at once.
+            # The visible cost is that distant mobs appear a little later.
+            - name: CUSTOM_SERVER_PROPERTIES
+              value: |
+                entity-broadcast-range-percentage=50
 
             # ── console ───────────────────────────────────────────────────────
             - name: ENABLE_RCON
