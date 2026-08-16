@@ -275,6 +275,15 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            # The same PVC, at the same subPath the initContainer wrote to. Without this the
+            # archives exist on the volume but not at the path GENERIC_PACKS names, and the
+            # container crash-loops on "Unsupported archive type: cannot open ... (No such
+            # file or directory)" — the zips are under /data/packs, and /packs is nothing.
+            # read-only: only the initContainer should ever write here.
+            - name: data
+              mountPath: /packs
+              subPath: packs
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
