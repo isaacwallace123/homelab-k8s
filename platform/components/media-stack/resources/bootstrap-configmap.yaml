@@ -162,6 +162,73 @@ data:
         except Exception as e:
             print(f"SABnzbd: could not flatten category dirs: {e}", flush=True)
 
+    def configure_sabnzbd_fill_server(api_key, config_path):
+        """Add Frugal's separate bonus network as a missing-article fill server.
+
+        Credentials stay in SABnzbd's PVC.  They are read from the existing
+        primary server entry and sent only to SABnzbd's localhost API; no
+        Usenet credential is stored in this ConfigMap.
+        """
+        try:
+            with open(config_path) as f:
+                content = f.read()
+            block = re.search(
+                r"(?ms)^\s*\[\[news\.frugalusenet\.com\]\](.*?)"
+                r"(?=^\s*\[\[|^\[|\Z)",
+                content,
+            )
+            if not block:
+                print("SABnzbd: Frugal primary server not configured; skipping fill server", flush=True)
+                return
+
+            def value(name):
+                match = re.search(
+                    rf"(?m)^\s*{re.escape(name)}\s*=\s*(.*?)\s*$",
+                    block.group(1),
+                )
+                return match.group(1) if match else ""
+
+            username = value("username")
+            password = value("password")
+            if not username or not password:
+                print("SABnzbd: Frugal credentials unavailable; skipping fill server", flush=True)
+                return
+
+            settings = {
+                "mode": "set_config",
+                "section": "servers",
+                "name": "bonus.frugalusenet.com",
+                "displayname": "Frugal Bonus (fill)",
+                "host": "bonus.frugalusenet.com",
+                "port": 563,
+                "username": username,
+                "password": password,
+                "connections": 20,
+                "ssl": 1,
+                "ssl_verify": 3,
+                "enable": 1,
+                "required": 0,
+                "optional": 0,
+                "priority": 1,
+                "retention": 0,
+                "send_group": 0,
+                "timeout": 120,
+                "apikey": api_key,
+                "output": "json",
+            }
+            req = urllib.request.Request(
+                f"{SAB_URL}/api",
+                data=urllib.parse.urlencode(settings).encode(),
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read())
+            if result.get("error"):
+                raise RuntimeError(result["error"])
+            print("SABnzbd: Frugal bonus fill server configured at priority 1", flush=True)
+        except Exception as e:
+            print(f"SABnzbd: could not configure Frugal fill server: {e}", flush=True)
+
     def configure_qbittorrent(qb_user, qb_pass):
         jar = http.cookiejar.CookieJar()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -431,6 +498,7 @@ data:
         print(f"SABnzbd: could not set host_whitelist: {e}", flush=True)
 
     configure_sabnzbd_folders(sabnzbd_key)
+    configure_sabnzbd_fill_server(sabnzbd_key, "/config/sabnzbd/sabnzbd.ini")
     configure_qbittorrent(qb_user, qb_pass)
     add_root_folder(RADARR_URL, radarr_key, "Radarr", "/movies")
     add_root_folder(SONARR_URL, sonarr_key, "Sonarr", "/tv")
