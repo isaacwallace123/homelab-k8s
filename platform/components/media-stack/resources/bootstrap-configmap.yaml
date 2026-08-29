@@ -178,12 +178,18 @@ data:
             raise RuntimeError("qBittorrent not ready")
         print("qBittorrent ready", flush=True)
 
-        # Login
+        # Login. qBittorrent <=4.x answers "Ok." in the body; 5.x answers
+        # 204 No Content with an empty body and puts the session in the
+        # QBT_SID cookie. Treat the cookie as the source of truth -- checking
+        # for "Ok." alone made 5.x look like an auth failure and silently
+        # skipped the tun0 bind below, which is what keeps libtorrent inside
+        # the tunnel.
         data = urllib.parse.urlencode({"username": qb_user, "password": qb_pass}).encode()
         resp = opener.open(f"{QB_URL}/api/v2/auth/login", data)
         result = resp.read().decode().strip()
-        if result != "Ok.":
-            print(f"qBittorrent login failed: {result} — skipping QB config", flush=True)
+        authed = any(c.name.startswith("QBT_SID") for c in jar)
+        if result not in ("Ok.", "") or not authed:
+            print(f"qBittorrent login failed: {result!r} — skipping QB config", flush=True)
             return
 
         # Sync WebUI credentials from the secret — localhost auth bypass means
