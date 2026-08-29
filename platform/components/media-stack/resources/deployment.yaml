@@ -147,6 +147,10 @@ spec:
               value: ":8000"
             - name: FIREWALL_INPUT_PORTS
               value: "8000,8080,8090,7878,8989,9696,8191,5055"
+            # Plex has a reserved MetalLB address. Let the applications reach
+            # that address directly instead of routing it through NordVPN.
+            - name: FIREWALL_OUTBOUND_SUBNETS
+              value: "192.168.0.230/32"
           ports:
             - containerPort: 8000
               name: health
@@ -561,6 +565,9 @@ spec:
               readOnly: true
             - name: config-sabnzbd
               mountPath: /config/sabnzbd
+              readOnly: true
+            - name: config-overseerr
+              mountPath: /config/overseerr
               readOnly: true
             - name: downloads
               mountPath: /downloads

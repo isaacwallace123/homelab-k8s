@@ -18,6 +18,8 @@ data:
     PROWLARR_URL  = "http://localhost:9696"
     QB_URL        = "http://localhost:8080"
     SAB_URL       = "http://localhost:8090"
+    SEERR_URL     = "http://localhost:5055"
+    PLEX_HOST     = "192.168.0.230"
 
     def read_sabnzbd_key(path, max_wait=600):
         deadline = time.time() + max_wait
@@ -95,6 +97,19 @@ data:
             time.sleep(5)
         raise RuntimeError(f"API key not found in {path} after {max_wait}s")
 
+    def read_seerr_key(path, max_wait=600):
+        deadline = time.time() + max_wait
+        while time.time() < deadline:
+            try:
+                with open(path) as f:
+                    key = json.load(f).get("main", {}).get("apiKey")
+                if key:
+                    return key
+            except Exception:
+                pass
+            time.sleep(5)
+        raise RuntimeError(f"Seerr API key not found in {path} after {max_wait}s")
+
     def get(url, api_key):
         req = urllib.request.Request(url, headers={"X-Api-Key": api_key})
         with urllib.request.urlopen(req, timeout=10) as r:
@@ -113,6 +128,19 @@ data:
             print(f"POST {url} → HTTP {e.code}: {body[:500]}", flush=True)
             raise
 
+    def put(url, api_key, payload):
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data, method="PUT",
+            headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=90) as r:
+                content = r.read()
+                return json.loads(content) if content else {}
+        except urllib.error.HTTPError as e:
+            body = e.read().decode(errors="replace")
+            print(f"PUT {url} -> HTTP {e.code}: {body[:500]}", flush=True)
+            raise
+
     def wait_ready(base_url, api_key, name, ver="v3"):
         print(f"Waiting for {name}...", flush=True)
         for _ in range(120):
@@ -124,6 +152,18 @@ data:
                 pass
             time.sleep(5)
         raise RuntimeError(f"{name} not ready after 10 minutes")
+
+    def wait_ready_seerr(api_key):
+        print("Waiting for Seerr...", flush=True)
+        for _ in range(120):
+            try:
+                get(f"{SEERR_URL}/api/v1/status", api_key)
+                print("Seerr ready", flush=True)
+                return
+            except Exception:
+                pass
+            time.sleep(5)
+        raise RuntimeError("Seerr not ready after 10 minutes")
 
     def configure_sabnzbd_folders(api_key):
         # Flat layout (mirrors the torrent side): just incomplete + complete.
@@ -397,9 +437,6 @@ data:
             return
         notifications = get(f"{base_url}/api/v3/notification", api_key)
         existing = next((n for n in notifications if n.get("name") == "Plex Media Server"), None)
-        if existing:
-            print(f"{app}: Plex notification already configured", flush=True)
-            return
         is_radarr = "7878" in base_url
         payload = {
             "name": "Plex Media Server",
@@ -414,7 +451,7 @@ data:
             "configContract": "PlexServerSettings",
             "tags": [],
             "fields": [
-                {"name": "host",           "value": "192.168.0.230"},
+                {"name": "host",           "value": PLEX_HOST},
                 {"name": "port",           "value": 32400},
                 {"name": "useSsl",         "value": False},
                 {"name": "authToken",      "value": plex_token},
@@ -427,18 +464,63 @@ data:
         else:
             payload.update({"onSeriesDelete": False, "onEpisodeFileDelete": False, "onEpisodeFileDeleteForUpgrade": True})
         try:
-            data = json.dumps(payload).encode()
-            req = urllib.request.Request(
-                f"{base_url}/api/v3/notification", data=data, method="POST",
-                headers={"X-Api-Key": api_key, "Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=90) as r:
-                pass
-            print(f"{app}: Plex notification added", flush=True)
+            if existing:
+                fields = {field["name"]: field for field in existing.get("fields", [])}
+                for name, value in {
+                    "host": PLEX_HOST,
+                    "port": 32400,
+                    "useSsl": False,
+                    "authToken": plex_token,
+                    "updateLibrary": True,
+                }.items():
+                    if name in fields:
+                        fields[name]["value"] = value
+                    else:
+                        existing.setdefault("fields", []).append({"name": name, "value": value})
+                put(f"{base_url}/api/v3/notification/{existing['id']}", api_key, existing)
+                print(f"{app}: Plex notification repaired", flush=True)
+            else:
+                post(f"{base_url}/api/v3/notification", api_key, payload)
+                print(f"{app}: Plex notification added", flush=True)
         except urllib.error.HTTPError as e:
             body = e.read().decode(errors="replace")
             print(f"{app}: Plex notification skipped (HTTP {e.code}): {body[:200]}", flush=True)
         except Exception as e:
             print(f"{app}: Plex notification failed ({type(e).__name__}: {e}) — configure manually if needed", flush=True)
+
+    def configure_seerr(api_key):
+        # Keep Plex reachable across Plex pod restarts. Seerr tests connectivity
+        # before saving, so Gluetun must permit PLEX_HOST as an outbound subnet.
+        plex = get(f"{SEERR_URL}/api/v1/settings/plex", api_key)
+        post(f"{SEERR_URL}/api/v1/settings/plex", api_key, {
+            "ip": PLEX_HOST,
+            "port": 32400,
+            "useSsl": False,
+            "webAppUrl": plex.get("webAppUrl", ""),
+        })
+        print("Seerr: stable Plex endpoint configured", flush=True)
+
+        # Auto-request and auto-approve Plex watchlist additions for current and
+        # future non-admin users. Each Plex user still has to sign in once so
+        # Seerr receives that user's personal Plex token.
+        auto_request_permissions = 32 | 128 | 8388608
+        main = get(f"{SEERR_URL}/api/v1/settings/main", api_key)
+        main.pop("apiKey", None)
+        main["defaultPermissions"] = main.get("defaultPermissions", 0) | auto_request_permissions
+        post(f"{SEERR_URL}/api/v1/settings/main", api_key, main)
+
+        page = get(f"{SEERR_URL}/api/v1/user?take=100&skip=0&sort=created", api_key)
+        for user in page.get("results", []):
+            user_id = user["id"]
+            permissions = user.get("permissions", 0)
+            if not permissions & 2:  # ADMIN already grants every permission.
+                post(f"{SEERR_URL}/api/v1/user/{user_id}/settings/permissions", api_key, {
+                    "permissions": permissions | auto_request_permissions,
+                })
+            settings = get(f"{SEERR_URL}/api/v1/user/{user_id}/settings/main", api_key)
+            settings["watchlistSyncMovies"] = True
+            post(f"{SEERR_URL}/api/v1/user/{user_id}/settings/main", api_key, settings)
+        print(f"Seerr: Plex movie watchlist sync enabled for {len(page.get('results', []))} users", flush=True)
 
     def add_prowlarr_app(prowlarr_key, app_name, app_url, app_key):
         apps = get(f"{PROWLARR_URL}/api/v1/applications", prowlarr_key)
@@ -479,6 +561,8 @@ data:
     prowlarr_key = read_api_key("/config/prowlarr/config.xml")
     print("Reading SABnzbd API key...", flush=True)
     sabnzbd_key  = read_sabnzbd_key("/config/sabnzbd/sabnzbd.ini")
+    print("Reading Seerr API key...", flush=True)
+    seerr_key    = read_seerr_key("/config/overseerr/settings.json")
     qb_user   = os.environ.get("QB_USER", "admin")
     qb_pass   = os.environ.get("QB_PASS", "")
     plex_token = os.environ.get("PLEX_TOKEN", "")
@@ -487,6 +571,7 @@ data:
     wait_ready(SONARR_URL,   sonarr_key,   "Sonarr",   "v3")
     wait_ready(PROWLARR_URL, prowlarr_key, "Prowlarr", "v1")
     wait_ready_sabnzbd(sabnzbd_key)
+    wait_ready_seerr(seerr_key)
 
     # Allow access via sabnzbd.lan (SABnzbd 4.x hostname verification)
     try:
@@ -511,7 +596,12 @@ data:
     add_prowlarr_app(prowlarr_key, "Sonarr", SONARR_URL, sonarr_key)
     add_plex_notification(RADARR_URL, radarr_key, "Radarr", plex_token)
     add_plex_notification(SONARR_URL, sonarr_key, "Sonarr", plex_token)
+    configure_seerr(seerr_key)
 
     print("Bootstrap complete!", flush=True)
     while True:
-        time.sleep(86400)
+        time.sleep(3600)
+        try:
+            configure_seerr(seerr_key)
+        except Exception as e:
+            print(f"Seerr: hourly watchlist reconciliation failed: {e}", flush=True)
