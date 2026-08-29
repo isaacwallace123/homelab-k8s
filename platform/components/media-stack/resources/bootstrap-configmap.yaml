@@ -503,7 +503,7 @@ data:
         # Auto-request and auto-approve Plex watchlist additions for current and
         # future non-admin users. Each Plex user still has to sign in once so
         # Seerr receives that user's personal Plex token.
-        auto_request_permissions = 32 | 128 | 8388608
+        auto_request_permissions = 32 | 128 | 8388608 | 16777216
         main = get(f"{SEERR_URL}/api/v1/settings/main", api_key)
         main.pop("apiKey", None)
         main["defaultPermissions"] = main.get("defaultPermissions", 0) | auto_request_permissions
