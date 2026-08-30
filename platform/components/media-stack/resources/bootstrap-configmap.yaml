@@ -80,8 +80,10 @@ data:
             "tags": [],
         }
         if existing:
-            delete(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key)
-        post(f"{base_url}/api/v3/downloadclient", api_key, payload)
+            payload["id"] = existing["id"]
+            put(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key, payload)
+        else:
+            post(f"{base_url}/api/v3/downloadclient", api_key, payload)
         action = "updated" if existing else "added"
         print(f"{app}: SABnzbd download client {action}", flush=True)
 
@@ -172,7 +174,11 @@ data:
         for d in ["/downloads/usenet/incomplete", "/downloads/usenet/complete"]:
             os.makedirs(d, exist_ok=True)
         for kw, val in [("download_dir", "/downloads/usenet/incomplete"),
-                        ("complete_dir", "/downloads/usenet/complete")]:
+                        ("complete_dir", "/downloads/usenet/complete"),
+                        # Gluetun DNS needs a few seconds after pod startup.
+                        # Recover from that transient failure after one minute
+                        # instead of leaving every Usenet server idle for ten.
+                        ("no_penalties", "1")]:
             try:
                 url = (f"{SAB_URL}/api?mode=set_config&section=misc&keyword={kw}"
                        f"&value={urllib.parse.quote(val)}&apikey={api_key}&output=json")
@@ -352,12 +358,6 @@ data:
                 except urllib.error.HTTPError:
                     print(f"qBittorrent: category '{cat}' already set", flush=True)
 
-    def delete(url, api_key):
-        req = urllib.request.Request(url, method="DELETE",
-            headers={"X-Api-Key": api_key})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            pass
-
     def add_qbittorrent_client(base_url, api_key, app, qb_user, qb_pass):
         clients = get(f"{base_url}/api/v3/downloadclient", api_key)
         existing = next((c for c in clients if c.get("name") == "qBittorrent"), None)
@@ -392,8 +392,10 @@ data:
             "tags": [],
         }
         if existing:
-            delete(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key)
-        post(f"{base_url}/api/v3/downloadclient", api_key, payload)
+            payload["id"] = existing["id"]
+            put(f"{base_url}/api/v3/downloadclient/{existing['id']}", api_key, payload)
+        else:
+            post(f"{base_url}/api/v3/downloadclient", api_key, payload)
         action = "updated" if existing else "added"
         print(f"{app}: qBittorrent download client {action}", flush=True)
 
