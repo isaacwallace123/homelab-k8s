@@ -33,9 +33,27 @@
 # rather than once at startup, so a split WOULD have been safe here, unlike the wger
 # stack this replaces. Co-locating is simply one less moving part.)
 #
-# On the `apps` pool, not `cloud`: nothing here is storage-bound now that Postgres is gone,
-# and the cloud node's CPU belongs to Immich's machine learning. `apps` is untainted, so no
-# toleration is needed.
+# ── WHY THE cloud POOL AND NOT apps ───────────────────────────────────────────────────────
+# This started on `apps`, which is the obvious home for a light Node + nginx service and
+# needs no toleration. It does not work, and the reason is a property of the topology worth
+# knowing about:
+#
+#   cloud  (zone pve2)      curl https://github.com  ->  200
+#   media  (zone pve2)      curl https://github.com  ->  200
+#   apps   (zone cyberlab)  curl https://github.com  ->  TLS handshake failure
+#
+#     fatal: unable to access 'https://github.com/...': TLS connect error:
+#     error:0A000410:SSL routines::ssl/tls alert handshake failure
+#
+# k8s-work-01 and k8s-work-02 sit in the cyberlab zone, whose egress is filtered — which is
+# presumably the point of a security range. Not an image problem: the CA bundle is current
+# and plain curl fails identically from that pool.
+#
+# The init container clones an exercise dataset from GitHub at runtime, so it can only run
+# where GitHub is reachable. `cloud` it is. The cost is a toleration and sharing a node with
+# Immich; the containers here are small enough for that not to matter.
+#
+# Anything else that fetches from the internet at startup belongs on cloud or media too.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -125,7 +143,12 @@ spec:
       # Immich's IMMICH_PORT and wger's WGER_PORT before it. DNS covers everything here.
       enableServiceLinks: false
       nodeSelector:
-        homelab.isaacwallace.dev/pool: apps
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
       securityContext:
         # The API writes /data as a non-root user; fsGroup makes the kubelet set group
         # ownership on the volume so there is no chown step to forget.
