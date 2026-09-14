@@ -275,9 +275,22 @@ spec:
     requests:
       storage: 5Gi
 ---
-# Exercise images and GIFs. longhorn-single, not replicated: every byte is re-downloadable
-# from the upstream dataset by deleting this volume and restarting the pod, so paying for
-# three copies and a weekly Garage backup would buy nothing.
+# Exercise images and GIFs — ~140 MB, all of it re-downloadable from the upstream dataset.
+#
+# longhorn-REPLICATED despite being disposable, which looks like the wrong call and is not.
+# longhorn-single carries `dataLocality: strict-local`, which pins the consuming pod to
+# whichever node holds its one replica. Combined with `volumeBindingMode: Immediate` — the
+# volume is provisioned when the PVC is created, before any pod is scheduled — that is a
+# latent deadlock for any workload with a nodeSelector: the volume lands wherever Longhorn
+# chooses, and if that is not a node the selector allows, the pod never schedules:
+#
+#   0/7 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity,
+#   2 node(s) had untolerated taint(s), 4 node(s) didn't match Pod's node affinity/selector
+#
+# That is exactly what happened here when this moved to the cloud pool and the volume had
+# already been created on k8s-work-02. `best-effort` locality on the replicated class lets
+# the volume attach from any node instead. Three copies of a disposable 140 MB is a cheaper
+# price than a scheduling deadlock that only appears when something else changes.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -285,7 +298,7 @@ metadata:
   namespace: fitness
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: longhorn-single
+  storageClassName: longhorn-replicated
   resources:
     requests:
       storage: 2Gi
