@@ -34,6 +34,16 @@ spec:
     annotations:
       metallb.io/address-pool: {{ $gw.pool }}
       metallb.io/loadBalancerIPs: {{ $gw.address | quote }}
+    {{- if $gw.replicas }}
+    {{/* Envoy Gateway reads deployment shape from an EnvoyProxy resource, not from the
+         Gateway itself -- there is no replicas field here to set. The EnvoyProxy is
+         rendered below and referenced by name. */}}
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: {{ $gw.name }}-proxy
+      namespace: {{ $.Values.namespace }}
+    {{- end }}
   listeners:
     {{- range $l := $gw.listeners }}
     - name: {{ $l.name }}
@@ -64,4 +74,42 @@ spec:
           from: All
           {{- end }}
     {{- end }}
+{{- end }}
+
+{{/*
+Deployment shape for each Gateway's Envoy fleet.
+
+Only rendered for gateways declaring `replicas`. A Gateway carrying public traffic must not
+be a single pod: the whole point of moving every public hostname behind `edge` is that one
+origin serves them all, which also means one Envoy failure takes all of them down at once.
+Anti-affinity spreads the replicas across nodes so a single node reboot cannot do it.
+*/}}
+{{- range $gw := .Values.gateways }}
+{{- if $gw.replicas }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ $gw.name }}-proxy
+  namespace: {{ $.Values.namespace }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: {{ $gw.replicas }}
+        pod:
+          affinity:
+            podAntiAffinity:
+              # preferred, not required: with replicas > node count the required form would
+              # leave pods permanently Pending rather than merely co-located.
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    topologyKey: kubernetes.io/hostname
+                    labelSelector:
+                      matchLabels:
+                        gateway.envoyproxy.io/owning-gateway-name: {{ $gw.name }}
+                        gateway.envoyproxy.io/owning-gateway-namespace: {{ $.Values.namespace }}
+{{- end }}
 {{- end }}

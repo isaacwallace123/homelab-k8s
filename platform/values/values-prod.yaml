@@ -390,6 +390,19 @@ components:
     resources:
       enabled: true
 
+  # Public HTTPRoutes for the portfolio network, whose workloads are owned by the portfolio
+  # monorepo. Publication is a platform decision, so the routes live here even though the
+  # Deployments they point at do not. waveOffset 4 puts them after the portfolio app itself
+  # at offset 2 — a route attaching to a Service that does not exist yet reports
+  # ResolvedRefs=False until it does, which is recoverable but reads like a real failure.
+  - name: public-routes
+    tier: apps
+    waveOffset: 4
+    namespace: portfolio
+    project: portfolio
+    resources:
+      enabled: true
+
   - name: portfolio
     tier: apps
     waveOffset: 2

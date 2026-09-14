@@ -55,6 +55,10 @@ gateways:
   - name: edge
     pool: platform-pool
     address: 192.168.0.204
+    # Two, because every public hostname now resolves through this one Gateway. A single
+    # Envoy pod was acceptable while `edge` carried nothing; it is not once it is the only
+    # path to the portfolio, the labs and wger.
+    replicas: 2
     listeners:
       - name: http
         protocol: HTTP

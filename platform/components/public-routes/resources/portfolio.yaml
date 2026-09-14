@@ -1,0 +1,230 @@
+# Public HTTPRoutes for the portfolio network.
+#
+# ── WHY THESE LIVE HERE AND NOT IN portfolio-v3 ───────────────────────────────────────────
+#
+# portfolio-v3 owns what those services ARE — their Deployments, Services, Secrets and the
+# Postgres behind them. This repo owns whether they are REACHABLE FROM THE INTERNET. The
+# split is deliberate and it is what makes the exposure model mean something:
+#
+#   * The `edge` Gateway accepts routes only from namespaces labelled
+#     `exposure: public`. portfolio-v3 declares those namespaces, so it can set that label
+#     on itself — which on its own would let the application repository authorise its own
+#     publication.
+#   * It cannot, because a label publishes nothing. Traffic reaches a service only if an
+#     HTTPRoute names it, and every public HTTPRoute lives in THIS repository. Publishing
+#     something new is a commit here, reviewed against the platform — not a change in the
+#     app repo, and not a click in the Cloudflare dashboard.
+#
+# This component holds the routes for services whose manifests are owned ELSEWHERE, which
+# today means the portfolio monorepo. A service defined in this repo keeps its route in its
+# own component instead — wger's is in components/wger — because there is no ownership
+# split to resolve. `kubectl get httproute -A` is the full picture either way.
+#
+# So the label is necessary and the route is sufficient, and they are owned by different
+# repositories on purpose.
+#
+# ── THE CLOUDFLARE SIDE ───────────────────────────────────────────────────────────────────
+#
+# One tunnel route, not nine:
+#
+#   *.isaacwallace.dev  ->  HTTP  ->  192.168.0.204
+#
+# Everything below is hostname matching done by Envoy, from git. Adding a site is an
+# HTTPRoute in this file; removing one is deleting it. Neither touches Cloudflare, and
+# neither can be done by accident from a dashboard.
+#
+# A hostname with no HTTPRoute gets a 404 from Envoy rather than reaching anything — which
+# is what makes a wildcard safe to point here. Verified: a request to .204 carrying an
+# unmatched Host returns 404.
+#
+# NOTE ON THE APEX: `isaacwallace.dev` itself is not covered by `*.isaacwallace.dev` — a
+# wildcard matches one label, not zero. The apex needs its own tunnel route pointing at the
+# same origin. That is the one hostname that still needs a Cloudflare entry of its own.
+---
+# The main site. Apex and www both land on the same Service; they are separate hostnames to
+# Envoy, so both are listed rather than relying on a redirect.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: web
+  namespace: portfolio
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - isaacwallace.dev
+    - www.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: web
+          port: 80
+          weight: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api
+  namespace: portfolio
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - api.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: api
+          port: 80
+          weight: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: admin
+  namespace: portfolio
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - admin.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: admin
+          port: 80
+          weight: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: auth
+  namespace: portfolio
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - auth.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: auth-service
+          port: 80
+          weight: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: homelab
+  namespace: portfolio
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - homelab.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: homelab-web
+          port: 80
+          weight: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ailab
+  namespace: portfolio
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - ailab.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: ailab-web
+          port: 80
+          weight: 1
+---
+# cyberlab is the read-only public website only. The range itself — attacker, victim, SOC
+# and scenario VMs — lives on Proxmox and never runs in this cluster, so there is nothing
+# here that routing could reach even by mistake.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cyberlab
+  namespace: cyberlab
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - cyberlab.isaacwallace.dev
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: cyberlab-web
+          port: 80
+          weight: 1
