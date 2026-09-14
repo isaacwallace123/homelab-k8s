@@ -99,10 +99,10 @@ data:
         # from the LAN or the tailnet anyway, and going out to Cloudflare and back to reach
         # a service one hop away adds latency and a dependency on the WAN link for no gain.
         # The public hostname is what phones and the iOS app use.
-        - wger:
+        - openGym:
             href: http://192.168.0.246
-            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/wger.png
-            description: Workout & Nutrition Tracker · public at fitness.isaacwallace.dev
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/dumbbell.png
+            description: Workout Tracker · sign in at fitness.isaacwallace.dev (passkeys)
 
     - Networking:
         - Cudy Router:

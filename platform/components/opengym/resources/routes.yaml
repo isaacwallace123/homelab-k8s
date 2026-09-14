@@ -1,0 +1,50 @@
+# openGym, published at https://fitness.isaacwallace.dev.
+#
+# On `edge` (.204), which since the routing migration is the only way in from the Cloudflare
+# tunnel — one wildcard route (*.isaacwallace.dev) plus one for the apex, and Envoy does the
+# hostname matching from git. Adding or removing a public hostname is a commit here and
+# nothing else; see platform/components/public-routes for the rest of them.
+#
+# `fitness` carries `exposure: public`, which is what lets this attach. The label is
+# necessary and this route is sufficient — see docs/architecture/networking.md §3.
+#
+# ── NO CLOUDFLARE ACCESS IN FRONT OF THIS ─────────────────────────────────────────────────
+# Same conclusion as wger before it, for a different reason. openGym authenticates with
+# passkeys: a WebAuthn ceremony the browser performs against RP_ID directly. Access's login
+# interstitial breaks that, and its service-token header path is for machine callers, not a
+# browser doing WebAuthn.
+#
+# Unlike wger, that costs much less here. The login is still the whole boundary, but the
+# credential is now an unphishable device-bound keypair rather than a password, and signup is
+# invite-only with the guest door closed.
+#
+# Worth having on the Cloudflare side regardless: a WAF rate-limit on /api/ and Browser
+# Integrity Check.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: opengym
+  namespace: fitness
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - fitness.isaacwallace.dev
+  rules:
+    # One catch-all. /api and the media paths are split inside the pod by openGym's own
+    # nginx, which renders that config from BACKEND/PORT at startup — duplicating the split
+    # here would mean two places to keep in agreement for no gain.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: opengym
+          port: 80
+          weight: 1

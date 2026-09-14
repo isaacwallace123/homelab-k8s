@@ -1,0 +1,303 @@
+# openGym — self-hosted gym and body-weight tracker.
+#
+# Replaced wger, which ran here until the same day it was deployed. The trade was made
+# knowingly and is worth recording, because it is not a straight upgrade:
+#
+#   LOST    a native iOS app on the App Store, and live Apple Health / HealthKit sync.
+#           openGym has no iOS build at all — Apple does not permit installs outside the
+#           App Store — so on iPhone it is a PWA added to the home screen from Safari.
+#           Apple Health is IMPORT-ONLY: a one-time export file, body weight alone.
+#   LOST    PowerSync offline replication, and with it the CloudNativePG cluster, Redis,
+#           Celery and roughly three quarters of the moving parts.
+#   GAINED  passkeys instead of passwords — which matters more here than it would
+#           elsewhere, because this hostname is on the public internet with no Cloudflare
+#           Access in front of it (the app cannot authenticate through Access), so the
+#           login is the entire security boundary. A phishable shared secret was the
+#           weakest part of the old design and it is now gone.
+#   GAINED  the UI, which is why the switch happened.
+#
+# RISK, stated plainly: openGym was created 2026-07-18 and is a couple of months old. Its
+# own roadmap flags "database and search is rebuilt, the one compatibility break" as still
+# to come. Back /data up before upgrading across that.
+#
+# ── SHAPE ─────────────────────────────────────────────────────────────────────────────────
+# One pod, two containers behind an init container, mirroring upstream's compose:
+#
+#   media (init)  downloads ~140 MB of exercise images and GIFs, once
+#   api           Node, passkeys and per-user state, everything in /data
+#   web           nginx: serves the frontend and the media, proxies /api to the API
+#
+# Together rather than split because `web` reads the media volume the init container
+# writes, and because BACKEND can then be 127.0.0.1 — no cluster DNS in the request path
+# for /api at all. (openGym's nginx re-resolves BACKEND per request through RESOLVER
+# rather than once at startup, so a split WOULD have been safe here, unlike the wger
+# stack this replaces. Co-locating is simply one less moving part.)
+#
+# On the `apps` pool, not `cloud`: nothing here is storage-bound now that Postgres is gone,
+# and the cloud node's CPU belongs to Immich's machine learning. `apps` is untainted, so no
+# toleration is needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opengym-config
+  namespace: fitness
+data:
+  # ── Passkey binding ─────────────────────────────────────────────────────────────────
+  # A passkey is cryptographically bound to RP_ID. Change this hostname and every existing
+  # passkey stops working — there is no migration, everyone re-registers. It must be the
+  # exact public hostname, and ORIGIN must carry the scheme, because the browser compares
+  # both during the WebAuthn ceremony.
+  #
+  # https, even though Cloudflare terminates TLS and this pod only ever sees plain HTTP:
+  # ORIGIN describes what the BROWSER saw, not what reached the container.
+  RP_ID: "fitness.isaacwallace.dev"
+  ORIGIN: "https://fitness.isaacwallace.dev"
+  RP_NAME: "openGym"
+  SESSION_DAYS: "90"
+
+  # ── Who can get in ──────────────────────────────────────────────────────────────────
+  # Both of these default the other way, and both defaults are wrong for an instance on
+  # the public internet:
+  #
+  #   INVITE_ONLY unset -> anybody who finds the URL can create a profile
+  #   ALLOW_GUEST unset -> a "Continue without account" button on the front door
+  #
+  # This instance has two known users, so signup is invite-code only and the guest door is
+  # closed. Codes come from the admin dashboard. Guest data lives purely in the visitor's
+  # own browser and never touches this server, so closing it loses nothing.
+  INVITE_ONLY: "1"
+  ALLOW_GUEST: "0"
+
+  # ── Client addresses in the audit log ───────────────────────────────────────────────
+  # A Cloudflare Tunnel does NOT put the visitor into X-Forwarded-For, so without this the
+  # log would faithfully record the tunnel's own address on every event and look entirely
+  # plausible. Setting it lets the CF-Connecting-IP header through, which Cloudflare
+  # overwrites and a caller therefore cannot choose.
+  #
+  # Only correct because Cloudflare genuinely is in front of this. If the tunnel is ever
+  # removed, remove this with it, or anyone reaching the origin directly can state the
+  # address they would like logged.
+  CF_CONNECTING_IP: "$http_cf_connecting_ip"
+  # Network only (203.0.113.0/24), not the full address: enough to tell one failed sign-in
+  # from twenty, without recording where either of us physically is.
+  AUDIT_IP: "net"
+
+  # ── Wiring ──────────────────────────────────────────────────────────────────────────
+  # 127.0.0.1 because api and web share this pod's network namespace.
+  BACKEND: "127.0.0.1"
+  PORT: "3000"
+  NGINX_PORT: "80"
+  # Only consulted if BACKEND is a name rather than an address, which it is not. Set
+  # correctly anyway: upstream warns that a resolver pointing at nothing does not fail
+  # fast, it makes every /api request hang until it times out. 10.43.0.10 is this
+  # cluster's kube-dns, not the 10.96.0.10 their docs assume.
+  RESOLVER: "10.43.0.10"
+  DATA_DIR: "/data"
+
+  # ADMIN_UIDS is deliberately absent. It is a chicken-and-egg: the id only exists after a
+  # passkey profile has been registered, and it is found in /data/db.json. Register first,
+  # then add it here and let ArgoCD roll the pod. Until it is set there is no admin
+  # dashboard, and therefore no way to mint invite codes — see the component README.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opengym
+  namespace: fitness
+  labels:
+    app: opengym
+spec:
+  replicas: 1
+  strategy:
+    # Recreate: both volumes are ReadWriteOnce, so a second pod could not attach them while
+    # the first still holds them and a rolling update would deadlock waiting.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: opengym
+  template:
+    metadata:
+      labels:
+        app: opengym
+    spec:
+      # Kubernetes injects PORT=tcp://10.43.x.x:80 for a Service named `opengym`, which
+      # would collide with the PORT=3000 integer both containers read. Same class of bug as
+      # Immich's IMMICH_PORT and wger's WGER_PORT before it. DNS covers everything here.
+      enableServiceLinks: false
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: apps
+      securityContext:
+        # The API writes /data as a non-root user; fsGroup makes the kubelet set group
+        # ownership on the volume so there is no chown step to forget.
+        fsGroup: 1000
+
+      initContainers:
+        # Exercise images and GIFs, ~140 MB, fetched once and then cached on the volume.
+        #
+        # An emptyDir would re-download all of it on every pod start, turning a routine
+        # restart into a dependency on GitHub being up. The volume makes the second start
+        # free — the script skips the clone when the directory is already populated, which
+        # is upstream's own guard.
+        #
+        # LICENCE NOTE: the metadata and instruction text are MIT, but the images and
+        # animations are © Gym visual and used under the upstream dataset's terms. openGym
+        # does not redistribute them and neither does this repo — they are pulled from
+        # source at runtime. Reusing them elsewhere needs a licence from Gym visual.
+        - name: media
+          image: docker.io/alpine/git:v2.49.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              if [ -z "$(ls -A /out/img 2>/dev/null)" ]; then
+                echo "==> downloading exercise media (~140MB, one time)"
+                git clone --depth 1 https://github.com/hasaneyldrm/exercises-dataset /tmp/ds
+                cp /tmp/ds/images/*.jpg /out/img/
+                cp /tmp/ds/videos/*.gif /out/gif/
+                echo "==> ready: $(ls /out/img | wc -l) images"
+              else
+                echo "==> media already present, skipping ($(ls /out/img | wc -l) images)"
+              fi
+          volumeMounts:
+            - name: media
+              mountPath: /out
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+
+      containers:
+        # ── API: passkeys, profiles, every workout ──────────────────────────────────────
+        - name: api
+          image: ghcr.io/duartesantos8/opengym-api:1.3.7
+          envFrom:
+            - configMapRef:
+                name: opengym-config
+          ports:
+            - containerPort: 3000
+              name: api
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            # Profiles, passkeys, per-user state and the session secret. THE ONLY THING
+            # HERE WORTH BACKING UP — everything else is rebuildable from an image or a
+            # download.
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+
+        # ── web: frontend, exercise media, and the /api proxy ────────────────────────────
+        - name: web
+          image: ghcr.io/duartesantos8/opengym-web:1.3.7
+          envFrom:
+            - configMapRef:
+                name: opengym-config
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket: { port: 80 }
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: media
+              mountPath: /usr/share/nginx/html/img
+              subPath: img
+              readOnly: true
+            - name: media
+              mountPath: /usr/share/nginx/html/gif
+              subPath: gif
+              readOnly: true
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: opengym-data
+        - name: media
+          persistentVolumeClaim:
+            claimName: opengym-media
+---
+# Profiles, passkeys and every logged workout. Small — this is JSON, not a database — but
+# it is the irreplaceable half of this deployment, so it is replicated.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opengym-data
+  namespace: fitness
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Exercise images and GIFs. longhorn-single, not replicated: every byte is re-downloadable
+# from the upstream dataset by deleting this volume and restarting the pod, so paying for
+# three copies and a weekly Garage backup would buy nothing.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opengym-media
+  namespace: fitness
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 2Gi
+---
+# What the HTTPRoute points at — the path every public request takes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opengym
+  namespace: fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: opengym
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+---
+# LAN access on the address wger used to hold, matching how Immich (.244) and Stirling
+# (.247) are reached. A convenience, not the real entrypoint: it keeps working when the
+# tunnel or the WAN link is down, which makes it the address to test against when
+# diagnosing exactly that.
+#
+# NOTE: passkeys will NOT work over this address. They are bound to RP_ID, which is the
+# public hostname, and browsers refuse WebAuthn over plain HTTP anyway. This is for
+# checking the app is alive, not for signing in.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opengym-lb
+  namespace: fitness
+  annotations:
+    metallb.io/address-pool: services-pool
+    metallb.io/loadBalancerIPs: "192.168.0.246"
+spec:
+  type: LoadBalancer
+  selector:
+    app: opengym
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
