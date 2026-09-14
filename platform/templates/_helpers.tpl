@@ -153,6 +153,12 @@ ignoreDifferences:
   # metadata.labels is included because Crossplane stamps crossplane.io/composite onto
   # every composite it owns, and annotations because a composite applied by hand once
   # carries kubectl's last-applied-configuration forever.
+  #
+  # `.spec.managedRoles` is deliberately NOT in this list. Every entry here is also skipped
+  # during sync, because platform.syncPolicy sets RespectIgnoreDifferences=true -- so listing
+  # a field whose value is meant to CHANGE over time freezes it, and a role edit in git is
+  # silently never applied. It is safe to omit only because the XRD gives it no default and
+  # so it never materialises uninvited; see database-xrd.yaml.
   - group: platform.homelab.isaacwallace.dev
     kind: Database
     jqPathExpressions:
@@ -162,7 +168,6 @@ ignoreDifferences:
       - .spec.storageClass
       - .spec.sharedPreloadLibraries
       - .spec.extensions
-      - .spec.managedRoles
       - .metadata.labels
       - .metadata.annotations
   - group: platform.homelab.isaacwallace.dev

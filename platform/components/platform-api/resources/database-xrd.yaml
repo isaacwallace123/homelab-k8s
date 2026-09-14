@@ -136,7 +136,17 @@ spec:
                   items:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  default: []
+                  # Deliberately NO `default: []`, unlike the array fields above.
+                  #
+                  # A default materialises onto every claim, including ones that never
+                  # mention the field -- which then reads as drift against a manifest that
+                  # does not declare it, so it has to be silenced in ignoreDifferences. That
+                  # is fine for set-once fields like imageName, and wrong here: with
+                  # RespectIgnoreDifferences=true, a field listed there is skipped during
+                  # SYNC as well as during diff, so a role change committed to git would be
+                  # applied to the claim never. Leaving this undefaulted keeps it a normally
+                  # reconciled field. The Composition's `{{- with }}` already treats absent
+                  # and empty identically.
               required:
                 - namespace
                 - databaseName
