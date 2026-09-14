@@ -38,11 +38,15 @@ spec:
     {{/* Envoy Gateway reads deployment shape from an EnvoyProxy resource, not from the
          Gateway itself -- there is no replicas field here to set. The EnvoyProxy is
          rendered below and referenced by name. */}}
+    {{/* LocalParametersReference: group/kind/name only. It carries no namespace field --
+         the EnvoyProxy is resolved in the Gateway's own namespace, which is where the
+         resource below is created. Including `namespace` here is schema-invalid and
+         ArgoCD reports it as a ComparisonError rather than a sync failure, so the app
+         stays "Healthy" while silently never applying. */}}
     parametersRef:
       group: gateway.envoyproxy.io
       kind: EnvoyProxy
       name: {{ $gw.name }}-proxy
-      namespace: {{ $.Values.namespace }}
     {{- end }}
   listeners:
     {{- range $l := $gw.listeners }}
