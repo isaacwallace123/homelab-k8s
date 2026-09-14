@@ -78,6 +78,32 @@ spec:
       #   setup-powersync-storage    creates the powersync_storage ROLE and the `powersync`
       #                              SCHEMA that the PowerSync container stores its sync
       #                              buckets in
+      #   neutralise `admin`         closes a default credential -- see below
+      #
+      # ── THE admin ACCOUNT ────────────────────────────────────────────────────────────
+      # The `web` container's entrypoint runs `wger bootstrap`, which does this:
+      #
+      #   if not database_initialised():        # == User.objects.exists()
+      #       migrate_db(); load_fixtures(); create_or_reset_admin()
+      #
+      # and create_or_reset_admin() prints, verbatim:
+      #
+      #   *** Password for user admin was reset to 'adminadmin'
+      #
+      # So EVERY deployment against an empty database comes up with a working
+      # admin/adminadmin login that has is_staff set. On an instance published to the
+      # internet with no Cloudflare Access in front of it, that is an open door, and it
+      # reappears on every rebuild -- a disaster-recovery restore included.
+      #
+      # Disabling it after the fact would leave a window on each fresh deploy. Creating it
+      # here, disabled, closes the door before it opens: the guard is `User.objects.exists()`
+      # -- any user at all -- so once this account is present, bootstrap skips
+      # create_or_reset_admin entirely and the default password is never set. The username is
+      # also then taken. A post_save signal (`create_user_profile`) gives it the UserProfile
+      # wger expects, so a disabled account with no profile cannot break the admin views.
+      #
+      # Idempotent: on an existing database it re-disables the account if anything re-enabled
+      # it, and does nothing otherwise.
       #
       # The second one is why this is an initContainer rather than upstream's documented
       # manual step (`docker compose exec web ./manage.py setup-powersync-storage`). The
@@ -101,6 +127,23 @@ spec:
               python3 manage.py migrate --no-input
               echo "==> bootstrapping PowerSync storage role and schema"
               python3 manage.py setup-powersync-storage
+              echo "==> neutralising wger's default admin account"
+              python3 manage.py shell <<'PYEOF'
+              from django.contrib.auth.models import User
+              u, created = User.objects.get_or_create(
+                  username='admin',
+                  defaults={'is_active': False, 'is_staff': False, 'is_superuser': False},
+              )
+              if created or u.is_active or u.is_staff or u.is_superuser or u.has_usable_password():
+                  u.is_active = False
+                  u.is_staff = False
+                  u.is_superuser = False
+                  u.set_unusable_password()
+                  u.save()
+                  print('admin account neutralised (created)' if created else 'admin account neutralised')
+              else:
+                  print('admin account already neutralised')
+              PYEOF
           envFrom:
             - configMapRef:
                 name: wger-config
