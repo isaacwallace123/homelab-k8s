@@ -41,7 +41,18 @@ PS_STORAGE_PASSWORD=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 # encoding matters — a base64url-wrapped JWK with kid "powersync" — and `generate-jwt-keys`
 # is the command that defines it, so generating them any other way is guessing at a format
 # that upstream is free to change.
+#
+# Needs a running Docker daemon. Without one, the same command runs as a throwaway pod on
+# the cluster instead -- which is how the committed secret was actually produced. Note that
+# manage.py loads Django settings before doing anything, and those read DJANGO_DB_* with no
+# defaults, so the pod must be given the database environment even though generating a
+# keypair never touches the database. Take the two KEY= lines from `kubectl logs`, then
+# delete the pod.
 echo "==> generating JWT keys with the wger image (this pulls ~1GB once)" >&2
+docker info >/dev/null 2>&1 || {
+  echo "docker daemon not reachable -- see the in-cluster alternative noted above" >&2
+  exit 1
+}
 JWT_OUTPUT=$(docker run --rm docker.io/wger/server:2.7.0 \
   python3 manage.py generate-jwt-keys 2>/dev/null)
 
@@ -57,10 +68,19 @@ fi
 # Sealed against the controller's public cert rather than by reaching the service through
 # the API proxy — that path returns intermittent 502s on this cluster. Same approach as
 # components/tailscale.
+#
+# The controller ROTATES its sealing key (monthly here, so there are several) and labels
+# every one of them `active`, because it keeps the old ones in order to DECRYPT existing
+# SealedSecrets. Only the newest should be used to ENCRYPT a new one. components/tailscale
+# takes `.items[0]`, whose ordering the API server does not guarantee; sorting by
+# creationTimestamp and taking the last is what actually selects the current key.
 CERT=$(mktemp)
 trap 'rm -f "$CERT"' EXIT
-kubectl get secret -n secrets -l sealedsecrets.bitnami.com/sealed-secrets-key \
-  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d > "$CERT"
+KEYNAME=$(kubectl get secret -n secrets -l sealedsecrets.bitnami.com/sealed-secrets-key \
+  --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')
+[ -n "$KEYNAME" ] || { echo "no sealed-secrets key found in namespace 'secrets'" >&2; exit 1; }
+echo "==> sealing against $KEYNAME (newest key)" >&2
+kubectl get secret -n secrets "$KEYNAME" -o jsonpath='{.data.tls\.crt}' | base64 -d > "$CERT"
 
 kubectl create secret generic wger-secrets \
   --namespace fitness \
