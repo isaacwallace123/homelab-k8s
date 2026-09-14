@@ -61,3 +61,30 @@ metadata:
   name: cloud
   labels:
     homelab.isaacwallace.dev/exposure: internal
+---
+# fitness: wger, its Postgres, its Redis and the PowerSync service behind the mobile app.
+#
+# The ONLY namespace here labelled `exposure: public`, which is what lets its HTTPRoute
+# attach to the `edge` Gateway. That label is the whole reason this is not simply part of
+# `cloud`: wger is published at fitness.isaacwallace.dev because a second person uses it
+# from a phone, and the wger mobile app cannot authenticate through Cloudflare Access (it
+# cannot send the CF-Access-Client-* headers Access requires of non-browser clients). So
+# `/api/` and `/ps/` must be reachable without Access, and wger's own login is the real
+# security boundary.
+#
+# Immich and Garage sit in `cloud`, labelled `internal`, and MUST stay that way. Had wger
+# been put there, publishing it would have meant relabelling that namespace — which would
+# have made the photo library publishable in the same edit. Separate namespaces are what
+# make that impossible rather than merely inadvisable. See docs/architecture/networking.md §3.
+#
+# What guards this namespace, given there is no Access layer:
+#   · ALLOW_REGISTRATION=False — accounts are created by hand, so the login page is not
+#     also a sign-up form
+#   · django-axes lockout, 10 failures per IP per 30 minutes
+#   · a pinned server image, so "keep it updated" is a visible version bump in git
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fitness
+  labels:
+    homelab.isaacwallace.dev/exposure: public

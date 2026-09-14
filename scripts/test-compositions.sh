@@ -87,6 +87,36 @@ observed:
   resources: {}
 EOF
 
+# wger: the managedRoles branch. A role block has to survive `toYaml | nindent` with its
+# nested passwordSecret intact -- that nesting is exactly where an indent bug produces YAML
+# that still parses but attaches passwordSecret to the wrong level, silently handing the
+# role an empty password.
+cat > "$T/case-database-managed-roles.yaml" <<'EOF'
+observed:
+  composite:
+    resource:
+      metadata: {name: wger, namespace: fitness}
+      spec:
+        databaseName: wger
+        size: 5Gi
+        instances: 1
+        storageClass: longhorn-replicated
+        imageName: ghcr.io/cloudnative-pg/postgresql:17.2
+        sharedPreloadLibraries: []
+        extensions: []
+        managedRoles:
+          - name: wger
+            ensure: present
+            login: true
+            replication: true
+            superuser: false
+            createdb: false
+            comment: wger app owner; REPLICATION added for PowerSync
+            passwordSecret:
+              name: wger-pg-app
+  resources: {}
+EOF
+
 cat > "$T/case-bucket-quota.yaml" <<'EOF'
 observed:
   composite:
@@ -133,6 +163,7 @@ run() {
 echo "==> database composition"
 run database case-database-immich.yaml
 run database case-database-minimal.yaml
+run database case-database-managed-roles.yaml
 
 echo "==> bucket composition"
 run bucket case-bucket-quota.yaml

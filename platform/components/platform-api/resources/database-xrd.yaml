@@ -109,6 +109,34 @@ spec:
                   items:
                     type: string
                   default: []
+                managedRoles:
+                  type: array
+                  description: >-
+                    Roles CloudNativePG reconciles declaratively (spec.managed.roles).
+                    Empty for anything that only needs its own owner role, which CNPG
+                    already creates at bootstrap.
+
+                    wger is the reason this field exists. PowerSync replicates wger's
+                    tables via Postgres logical replication, and creating a replication
+                    slot requires the REPLICATION attribute -- which the bootstrap owner
+                    role does not have and which no amount of GRANTing can supply, since
+                    it is a role attribute rather than a privilege. Upstream's compose
+                    file sidesteps this by connecting as the container's POSTGRES_USER,
+                    i.e. a superuser; declaring REPLICATION on the existing owner role is
+                    strictly less privilege than that.
+
+                    Passed through verbatim, so the whole CNPG role schema is available
+                    (ensure, login, superuser, createdb, replication, connectionLimit,
+                    inRoles, comment, passwordSecret). `postgres` and `streaming_replica`
+                    are reserved by the operator and must not appear here.
+
+                    When managing a role CNPG itself created -- the bootstrap owner --
+                    point passwordSecret at CNPG's own `<databaseName>-pg-app` Secret, or
+                    the operator and this field will fight over the password.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  default: []
               required:
                 - namespace
                 - databaseName

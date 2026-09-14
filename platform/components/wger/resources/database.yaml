@@ -1,0 +1,54 @@
+# Postgres for wger.
+#
+# One CNPG cluster, one database. PowerSync does NOT get a database of its own: wger's
+# `setup-powersync-storage` command refuses outright if PS_STORAGE_PG_URI names a database
+# other than the one Django is connected to --
+#
+#   PS_STORAGE_PG_URI targets database 'powersync' but Django is connected to 'wger'.
+#   Bootstrap that database manually
+#
+# -- so PowerSync's bucket storage lives in the wger database under its own ROLE and its own
+# `powersync` SCHEMA, which is what upstream intends and what keeps its tables from mixing
+# with Django's in `public`. That role and schema are created by the initContainer in
+# wger.yaml, not here, because the command that creates them needs Django's settings.
+apiVersion: platform.homelab.isaacwallace.dev/v1alpha1
+kind: Database
+metadata:
+  name: wger
+spec:
+  # Cluster-scoped composite; the namespace is a field. See database-xrd.yaml.
+  namespace: fitness
+  databaseName: wger
+  # 5Gi. Two users logging sets is a trivial row count; what actually occupies space is the
+  # synced exercise and ingredient catalogue from wger.de, which is tens of MB of text. The
+  # exercise IMAGES are far larger and do not live here — they are files on the media PVC.
+  size: 5Gi
+
+  # ── The reason the XRD has a managedRoles field ──────────────────────────────────────
+  # PowerSync replicates wger's tables using Postgres logical replication, and opening a
+  # replication slot requires the REPLICATION role attribute. CNPG's bootstrap owner role
+  # does not have it, and it cannot be GRANTed — it is an attribute of the role, not a
+  # privilege on an object, so `GRANT ... TO wger` has no form that supplies it.
+  #
+  # Granting it to the existing owner rather than creating a dedicated replication role is
+  # the smaller change of the two: the owner already has SELECT on every table it created,
+  # so a separate role would need SELECT grants that only apply to tables Django has not
+  # created yet — an ALTER DEFAULT PRIVILEGES ordering problem that cannot be expressed in
+  # a bootstrap hook, because managed roles are reconciled *after* initdb has finished.
+  #
+  # For scale: upstream's compose file connects PowerSync as the Postgres container's
+  # POSTGRES_USER, which is a full superuser. This is strictly narrower.
+  #
+  # passwordSecret points at CNPG's OWN generated Secret. Managing a role the operator also
+  # created means both parties write its password; aiming them at the same Secret is what
+  # keeps them agreeing.
+  managedRoles:
+    - name: wger
+      ensure: present
+      login: true
+      replication: true
+      superuser: false
+      createdb: false
+      comment: wger app owner; REPLICATION added for PowerSync logical replication
+      passwordSecret:
+        name: wger-pg-app

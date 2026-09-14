@@ -1,0 +1,559 @@
+# wger — self-hosted workout, nutrition and body-measurement tracking.
+#
+# ── WHY THIS IS ONE POD WITH FIVE CONTAINERS ─────────────────────────────────────────────
+#
+# Not an accident, and not a translation of compose left half-finished. Two hard constraints
+# decide it:
+#
+#   1. STATIC FILES. The `web` image serves the application but not its own assets: Django
+#      writes them with collectstatic on startup and something else has to serve them.
+#      Upstream is explicit that the nginx service is NOT optional. So the writer (web) and
+#      the reader (nginx) must share a filesystem, and static is rebuilt on every boot —
+#      which makes it an emptyDir, which only exists inside one pod.
+#
+#   2. MEDIA. Exercise images, user uploads and progress photos are written by `web` AND by
+#      `celery-worker` (which is what downloads the exercise catalogue), and read by nginx.
+#      Three containers, one read-write volume. This cluster has no ReadWriteMany Longhorn
+#      class — `longhorn-replicated` and `longhorn-single` are both RWO — and the NFS route
+#      would mean a hand-created TrueNAS dataset as a prerequisite, which is the failure
+#      mode called out at the top of components/storage: an NFS PV binds happily against a
+#      path that does not exist and only fails later, inside the pod, as a ContainerCreating
+#      that never resolves. One pod sharing one RWO PVC needs no such prerequisite.
+#
+# PowerSync is here for a third, smaller reason: nginx resolves `upstream` hostnames once,
+# at startup, and exits if one does not resolve. With PowerSync in its own Deployment, any
+# ordering hiccup takes nginx down with it and the whole site 502s over a feature only the
+# mobile app uses. On localhost there is nothing to resolve.
+#
+# What this costs: a rolling update replaces all five at once, and the containers' resource
+# requests sum into one schedulable unit. Both are acceptable — the cloud pool is a single
+# node, so splitting these across Deployments would buy no availability, only the RWX
+# problem above. Redis IS a separate Deployment, because it touches none of these volumes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wger
+  namespace: fitness
+  labels:
+    app: wger
+spec:
+  replicas: 1
+  strategy:
+    # Recreate, not RollingUpdate. A second pod cannot start while the first holds the RWO
+    # media volume, so a rolling update would deadlock: the new pod waits for a volume the
+    # old pod will not release until the new one is ready.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wger
+  template:
+    metadata:
+      labels:
+        app: wger
+    spec:
+      # Kubernetes injects a WGER_PORT=tcp://10.43.x.x:80 env var for the Service named
+      # `wger`, which collides with the WGER_PORT=8000 integer this app actually reads. Same
+      # class of bug as Immich's IMMICH_PORT — see components/immich. Legacy discovery; DNS
+      # covers everything here.
+      enableServiceLinks: false
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      securityContext:
+        # The image runs as uid 1000 and upstream warns that the static and media
+        # directories must be owned by 1000 or the app fails with missing static files.
+        # fsGroup makes the kubelet do that on the PVC, so there is no chown step to forget.
+        fsGroup: 1000
+
+      # ── one-time database bootstrap, before anything serves ─────────────────────────
+      # Two commands that must both finish before the main containers start, and that must
+      # run exactly once rather than racing five containers against each other.
+      #
+      #   migrate                    creates the schema AND, via wger's migration 0027, the
+      #                              `powersync` publication that logical replication reads
+      #   setup-powersync-storage    creates the powersync_storage ROLE and the `powersync`
+      #                              SCHEMA that the PowerSync container stores its sync
+      #                              buckets in
+      #
+      # The second one is why this is an initContainer rather than upstream's documented
+      # manual step (`docker compose exec web ./manage.py setup-powersync-storage`). The
+      # PowerSync container cannot become ready until that role exists — so if it were left
+      # to a post-install command, or to an ArgoCD PostSync hook, the pod would never reach
+      # Ready, the Application would never report Healthy, and the hook that fixes it would
+      # never fire. Running it here breaks that circle: by the time any main container
+      # starts, the database is fully prepared.
+      #
+      # Both commands are idempotent and safe on every restart — upstream documents
+      # setup-powersync-storage as "safe to re-run on existing or fresh databases".
+      initContainers:
+        - name: db-bootstrap
+          image: docker.io/wger/server:2.7.0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              echo "==> applying database migrations"
+              python3 manage.py migrate --no-input
+              echo "==> bootstrapping PowerSync storage role and schema"
+              python3 manage.py setup-powersync-storage
+          envFrom:
+            - configMapRef:
+                name: wger-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: SECRET_KEY }
+            - name: DJANGO_DB_ENGINE
+              value: django.db.backends.postgresql
+            - name: DJANGO_DB_HOST
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: host }
+            - name: DJANGO_DB_PORT
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: port }
+            - name: DJANGO_DB_DATABASE
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: dbname }
+            - name: DJANGO_DB_USER
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: user }
+            - name: DJANGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: password }
+            # setup-powersync-storage reads the role name, password and database out of this
+            # URI and creates the role to match. It is therefore the definition of that
+            # credential, not merely a consumer of it — the PowerSync container below is
+            # handed the identical string.
+            - name: PS_STORAGE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: PS_STORAGE_PASSWORD }
+            - name: PS_STORAGE_PG_URI
+              value: postgresql://powersync_storage:$(PS_STORAGE_PASSWORD)@wger-pg-rw:5432/wger
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 1Gi }
+
+      containers:
+        # ── the application ─────────────────────────────────────────────────────────────
+        - name: web
+          image: docker.io/wger/server:2.7.0
+          envFrom:
+            - configMapRef:
+                name: wger-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: SECRET_KEY }
+            # Signs the tokens the mobile app presents to PowerSync. Left at the value
+            # shipped in upstream's prod.env, ANY wger instance could mint tokens this
+            # server accepts — the file says as much: "This default NEEDS to be changed."
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: JWT_PUBLIC_KEY }
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: JWT_PRIVATE_KEY }
+            # wger reads discrete DJANGO_DB_* settings, so the CNPG Secret's fields map
+            # across one for one and no connection string is assembled anywhere.
+            - name: DJANGO_DB_ENGINE
+              value: django.db.backends.postgresql
+            - name: DJANGO_DB_HOST
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: host }
+            - name: DJANGO_DB_PORT
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: port }
+            - name: DJANGO_DB_DATABASE
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: dbname }
+            - name: DJANGO_DB_USER
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: user }
+            - name: DJANGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: password }
+          ports:
+            - containerPort: 8000
+              name: http
+          startupProbe:
+            # /api/v2/version/ rather than /: it is the cheapest endpoint that proves Django
+            # booted, and upstream's own healthcheck uses it.
+            httpGet: { path: /api/v2/version/, port: 8000 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            # Generous on purpose. First boot runs every Django migration against an empty
+            # database AND collectstatic over the whole React bundle. Upstream allows a
+            # 300s start_period; 60 x 10s gives ten minutes before Kubernetes gives up,
+            # because a restart partway through migrations is far worse than waiting.
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /api/v2/version/, port: 8000 }
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /api/v2/version/, port: 8000 }
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: static
+              mountPath: /home/wger/static
+            - name: media
+              mountPath: /home/wger/media
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+
+        # ── static + media, and the reverse proxy in front of the app ───────────────────
+        - name: nginx
+          image: docker.io/nginx:1.29-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            # Proxies to `web`, so a 200 here means the whole chain is serving. Any status
+            # is accepted as "nginx is up" for liveness; readiness wants the real path.
+            httpGet: { path: /api/v2/version/, port: 80 }
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket: { port: 80 }
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+            - name: static
+              mountPath: /wger/static
+              readOnly: true
+            - name: media
+              mountPath: /wger/media
+              readOnly: true
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+
+        # ── background jobs ─────────────────────────────────────────────────────────────
+        # Exercise/ingredient catalogue sync and the exercise-API cache warmup. Writes to
+        # media, which is the other half of why this is not its own Deployment.
+        - name: celery-worker
+          image: docker.io/wger/server:2.7.0
+          command: ["/start-worker"]
+          envFrom:
+            - configMapRef:
+                name: wger-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: SECRET_KEY }
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: JWT_PUBLIC_KEY }
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: JWT_PRIVATE_KEY }
+            - name: DJANGO_DB_ENGINE
+              value: django.db.backends.postgresql
+            - name: DJANGO_DB_HOST
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: host }
+            - name: DJANGO_DB_PORT
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: port }
+            - name: DJANGO_DB_DATABASE
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: dbname }
+            - name: DJANGO_DB_USER
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: user }
+            - name: DJANGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: password }
+          readinessProbe:
+            exec: { command: ["celery", "-A", "wger", "inspect", "ping"] }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: media
+              mountPath: /home/wger/media
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              # Bounded tightly. The ingredient bulk sync streams a compressed dump from
+              # wger.de and is the one job here that can grow without limit; it shares a node
+              # with Immich's CPU-bound ML, which is the thing that must not be starved.
+              cpu: "1"
+              memory: 1Gi
+
+        # The scheduler. Emits due jobs onto the Redis queue; does no work itself and needs
+        # no media access.
+        - name: celery-beat
+          image: docker.io/wger/server:2.7.0
+          command: ["/start-beat"]
+          envFrom:
+            - configMapRef:
+                name: wger-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: SECRET_KEY }
+            - name: DJANGO_DB_ENGINE
+              value: django.db.backends.postgresql
+            - name: DJANGO_DB_HOST
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: host }
+            - name: DJANGO_DB_PORT
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: port }
+            - name: DJANGO_DB_DATABASE
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: dbname }
+            - name: DJANGO_DB_USER
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: user }
+            - name: DJANGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: password }
+          volumeMounts:
+            - name: celery-beat
+              mountPath: /home/wger/beat
+          resources:
+            requests: { cpu: 25m, memory: 128Mi }
+            limits: { cpu: 250m, memory: 512Mi }
+
+        # ── PowerSync — offline sync for the mobile app ──────────────────────────────────
+        # Replicates wger's tables out of Postgres over a logical replication slot and serves
+        # them to the app as sync buckets. This is what lets you log sets in a basement gym
+        # with no signal and have them appear later.
+        #
+        # Requires (all satisfied, but worth knowing what breaks it):
+        #   · wal_level = logical      — CNPG's default, unlike stock Postgres
+        #   · REPLICATION on the role  — granted via managedRoles, see database.yaml
+        #   · a `powersync` publication — created by wger's own migration 0027
+        - name: powersync
+          image: docker.io/journeyapps/powersync-service:1.26.0
+          args: ["start", "-r", "unified"]
+          envFrom:
+            - configMapRef:
+                name: wger-config
+          env:
+            - name: POWERSYNC_CONFIG_PATH
+              value: /config/powersync.yaml
+            # Read first, then interpolated into both URIs below. Kubernetes expands $(VAR)
+            # in an env value against env vars declared EARLIER in this same list, which is
+            # what keeps the password out of the ConfigMap without an initContainer or a
+            # shell wrapper around the image's entrypoint.
+            #
+            # Assumes the password is URI-safe. CNPG generates alphanumeric passwords, so it
+            # is; if you ever set one by hand containing @ : / or %, percent-encode it.
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-pg-app, key: password }
+            # The replication SOURCE — wger's own database.
+            - name: PS_DATABASE_URI
+              value: postgresql://wger:$(PG_PASSWORD)@wger-pg-rw:5432/wger
+            # PowerSync's OWN bucket storage: same database, different role, and its own
+            # `powersync` schema — created by the init container from this exact URI. It must
+            # name the wger database; setup-powersync-storage refuses any other.
+            - name: PS_STORAGE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: wger-secrets, key: PS_STORAGE_PASSWORD }
+            - name: PS_STORAGE_PG_URI
+              value: postgresql://powersync_storage:$(PS_STORAGE_PASSWORD)@wger-pg-rw:5432/wger
+          ports:
+            - containerPort: 8080
+              name: ps-api
+          startupProbe:
+            # Comes up only after it has connected to Postgres and applied its own
+            # migrations, so this is slower than it looks like it should be.
+            httpGet: { path: /probes/startup, port: 8080 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /probes/liveness, port: 8080 }
+            periodSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: powersync-config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { cpu: "1", memory: 1Gi }
+
+      volumes:
+        # Rebuilt by collectstatic on every start, so there is nothing here worth persisting
+        # — and persisting it would actively hurt: a stale static tree served against a newer
+        # React bundle is the "out of sync" failure upstream's env file warns about.
+        - name: static
+          emptyDir: { sizeLimit: 2Gi }
+        - name: media
+          persistentVolumeClaim:
+            claimName: wger-media
+        - name: nginx-config
+          configMap:
+            name: wger-nginx
+        # Celery Beat's schedule file records when each periodic job last ran. Losing it
+        # makes the weekly syncs run once on the next start — harmless, and cheaper than a
+        # volume. Deliberately not persisted for the same reason Immich's Redis is not.
+        - name: celery-beat
+          emptyDir: { sizeLimit: 64Mi }
+        - name: powersync-config
+          configMap:
+            name: wger-powersync
+---
+# Exercise images, ingredient images and user uploads.
+#
+# longhorn-replicated, not longhorn-single: most of this is re-downloadable from wger.de,
+# but progress photos and custom exercise images are not, and there is no way to replicate
+# only the irreplaceable half. Expandable — the class has allowVolumeExpansion, so growing
+# this is editing the number here, not a migration.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wger-media
+  namespace: fitness
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 20Gi
+---
+# Redis, as its own Deployment: it shares none of the volumes that bind the pod above
+# together, and it is the one piece here whose restart should not take the site down.
+#
+# Valkey rather than Redis proper, matching Immich — same protocol, and it is the build
+# already pulled onto these nodes.
+#
+# The maxmemory policy is load-bearing. This single instance holds BOTH the Django cache
+# (db 1) and the Celery broker (db 2). `volatile-lru` only evicts keys that carry a TTL,
+# which cache entries do and queued Celery tasks do not — so memory pressure drops cached
+# pages rather than silently discarding a queued job. `allkeys-lru` here would lose work.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wger-redis
+  namespace: fitness
+  labels:
+    app: wger-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wger-redis
+  template:
+    metadata:
+      labels:
+        app: wger-redis
+    spec:
+      enableServiceLinks: false
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: cloud
+      tolerations:
+        - key: homelab.isaacwallace.dev/pool
+          operator: Equal
+          value: cloud
+          effect: NoSchedule
+      containers:
+        - name: redis
+          image: docker.io/valkey/valkey:8.1-alpine
+          args:
+            - --maxmemory
+            - 512mb
+            - --maxmemory-policy
+            - volatile-lru
+            # No RDB/AOF. Everything in here is either a cache or a queue of jobs that are
+            # re-emitted weekly by Celery Beat, so persistence would buy a Longhorn volume
+            # and a weekly Garage backup of data with no recovery value. Upstream ships a
+            # 100 KB redis.conf to set five options; these flags are those five options.
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+          ports:
+            - containerPort: 6379
+              name: redis
+          readinessProbe:
+            exec: { command: ["valkey-cli", "ping"] }
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits:
+              # 512mb maxmemory plus headroom for Valkey's own overhead and copy-on-write.
+              cpu: 500m
+              memory: 768Mi
+      volumes:
+        - name: data
+          emptyDir: { sizeLimit: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wger-redis
+  namespace: fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: wger-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+# ClusterIP. This is what the HTTPRoute in routes.yaml points at, so it is the path every
+# public request takes: Cloudflare → tunnel → edge Gateway → here → nginx.
+apiVersion: v1
+kind: Service
+metadata:
+  name: wger
+  namespace: fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: wger
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+---
+# LAN access on a pinned MetalLB address, matching how Immich (.244) and Stirling (.247) are
+# reached. Strictly a convenience: fitness.isaacwallace.dev is the real entrypoint and the
+# only one the iOS app uses. This one keeps working when the tunnel, Cloudflare or the WAN
+# link is down, which makes it the address to test against when diagnosing exactly that.
+#
+# .246 from the free list in components/metallb/values/resources-prod.yaml, and from inside
+# 192.168.0.240/29 — one of the four ranges the Tailscale subnet router advertises, so it is
+# also reachable from your own devices remotely. Addresses outside those ranges (.248-.250)
+# work on the LAN and are silently invisible over the tailnet.
+apiVersion: v1
+kind: Service
+metadata:
+  name: wger-lb
+  namespace: fitness
+  annotations:
+    metallb.io/address-pool: services-pool
+    metallb.io/loadBalancerIPs: "192.168.0.246"
+spec:
+  type: LoadBalancer
+  selector:
+    app: wger
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http

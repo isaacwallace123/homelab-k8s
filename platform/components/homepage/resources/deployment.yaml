@@ -94,6 +94,16 @@ data:
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/garage.png
             description: S3 API at 192.168.0.245 · Longhorn backup target · no web UI
 
+    - Fitness:
+        # The LAN address, not fitness.isaacwallace.dev — this dashboard is only reachable
+        # from the LAN or the tailnet anyway, and going out to Cloudflare and back to reach
+        # a service one hop away adds latency and a dependency on the WAN link for no gain.
+        # The public hostname is what phones and the iOS app use.
+        - wger:
+            href: http://192.168.0.246
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/wger.png
+            description: Workout & Nutrition Tracker · public at fitness.isaacwallace.dev
+
     - Networking:
         - Cudy Router:
             href: http://192.168.0.1

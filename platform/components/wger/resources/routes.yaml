@@ -1,0 +1,68 @@
+# wger, published at https://fitness.isaacwallace.dev.
+#
+# On `edge` (.204), not `envoy-gateway` (.201). The edge Gateway's only listener is plain
+# HTTP :80 — Cloudflare terminates TLS and the tunnel carries the request the rest of the
+# way — and it accepts routes only from namespaces labelled
+# `homelab.isaacwallace.dev/exposure: public`. The `fitness` namespace carries that label;
+# `cloud`, `media` and the rest do not, which is what stops a mistake here from publishing
+# the photo library. See docs/architecture/networking.md §3.
+#
+# No ReferenceGrant is needed to attach across namespaces: a Gateway's own `allowedRoutes`
+# governs which namespaces may attach to it, and this one permits `fitness` by label. A
+# ReferenceGrant would only be required to point `backendRefs` at a Service in a DIFFERENT
+# namespace, and this route's backend is local.
+#
+# ── THE CLOUDFLARE SIDE IS NOT IN THIS REPO ───────────────────────────────────────────────
+# cloudflared here runs with a token, so the tunnel's ingress rules live in the Cloudflare
+# Zero Trust dashboard, not in git. This route does nothing until a public hostname exists
+# there:
+#
+#   Networks → Tunnels → (your tunnel) → Public Hostnames → Add
+#     Subdomain : fitness
+#     Domain    : isaacwallace.dev
+#     Service   : HTTP  →  192.168.0.204
+#
+# Do NOT add a Cloudflare Access policy in front of it. The wger iOS app authenticates with
+# its own JWT and cannot send the CF-Access-Client-Id / CF-Access-Client-Secret headers that
+# Access requires of non-browser clients, so an Access policy returns its HTML login page
+# where the app expects JSON — and breaks PowerSync's streaming connection the same way.
+# An Access policy with /api/* and /ps/* bypassed would leave every data path unprotected
+# while looking protected, which is worse than not having it.
+#
+# Two settings worth turning on in Cloudflare for this hostname, since Access is out:
+#   · a WAF rate-limiting rule on /django-admin/ and the login POST
+#   · "Browser Integrity Check" — free, and filters the bulk of automated login attempts
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wger
+  namespace: fitness
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - fitness.isaacwallace.dev
+  rules:
+    # One catch-all rule. /static/, /media/ and /ps/ are NOT split out here on purpose —
+    # nginx inside the pod already routes them, and duplicating that split at the Gateway
+    # would mean two places to keep in agreement for no gain.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: wger
+          port: 80
+          weight: 1
+      timeouts:
+        # PowerSync sync streams are long-lived streaming POSTs. Envoy's default route
+        # timeout is 15s, which would sever every sync connection on a fifteen-second cycle
+        # and present as the iOS app mysteriously never finishing its initial sync.
+        request: "0s"
+        backendRequest: "0s"

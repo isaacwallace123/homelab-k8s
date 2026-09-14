@@ -59,6 +59,15 @@ spec:
                         - {{ . }}
                         {{- end }}
                     {{- end }}
+                    {{- with $spec.managedRoles }}
+                    # Declarative role management. CNPG reconciles these continuously, so
+                    # a role attribute like REPLICATION is applied without an initdb hook
+                    # -- which matters because postInitApplicationSQL runs only once, at
+                    # bootstrap, and cannot be used to fix an existing cluster.
+                    managed:
+                      roles:
+                        {{- toYaml . | nindent 12 }}
+                    {{- end }}
                     bootstrap:
                       initdb:
                         database: {{ $name }}

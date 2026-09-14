@@ -92,6 +92,25 @@ projects:
       - group: platform.homelab.isaacwallace.dev
         kind: Database
 
+  fitness:
+    description: >-
+      wger — workout, nutrition and body-measurement tracking, shared with one other person.
+      The only project here that is published to the public internet without an auth proxy
+      in front of it, because the wger mobile app cannot authenticate through Cloudflare
+      Access. Confined to the `fitness` namespace, and deliberately NOT part of `cloud`:
+      keeping it separate is what lets it carry `exposure: public` while the photo library
+      stays internal.
+    destinations: [fitness]
+    clusterResourceWhitelist:
+      # Namespace, because platform.syncPolicy sets CreateNamespace=true and an AppProject
+      # denies cluster-scoped kinds unless listed — same reason as `applications`.
+      - group: ""
+        kind: Namespace
+      # Database is the cluster-scoped Crossplane composite behind wger's Postgres. Same
+      # entry, and the same reason, as the `cloud` project above.
+      - group: platform.homelab.isaacwallace.dev
+        kind: Database
+
   monitoring:
     description: Observability hub — homelab metrics plus read-only cross-lab visibility.
     destinations: [monitoring, networking]
@@ -327,6 +346,21 @@ components:
     waveOffset: 4
     namespace: cloud
     project: cloud
+    resources:
+      enabled: true
+
+  # ── fitness ─────────────────────────────────────────────────────────────────
+  # wger. Its own namespace and project rather than joining the cloud tier — it is the one
+  # service here published at a public hostname, and that decision has to be scoped to it
+  # alone. See the component README.
+  #
+  # waveOffset 4 matches Immich's: the Database claim has to resolve into a running CNPG
+  # cluster before the pod's first migration, and the cloud tier ahead of it sets that pace.
+  - name: wger
+    tier: apps
+    waveOffset: 4
+    namespace: fitness
+    project: fitness
     resources:
       enabled: true
 

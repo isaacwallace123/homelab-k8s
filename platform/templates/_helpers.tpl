@@ -162,6 +162,7 @@ ignoreDifferences:
       - .spec.storageClass
       - .spec.sharedPreloadLibraries
       - .spec.extensions
+      - .spec.managedRoles
       - .metadata.labels
       - .metadata.annotations
   - group: platform.homelab.isaacwallace.dev
