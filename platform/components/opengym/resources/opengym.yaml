@@ -85,6 +85,7 @@ data:
   # own browser and never touches this server, so closing it loses nothing.
   INVITE_ONLY: "1"
   ALLOW_GUEST: "0"
+  ADMIN_UIDS: "rO8l5t0bDLVb0ric"
 
   # ── Client addresses in the audit log ───────────────────────────────────────────────
   # A Cloudflare Tunnel does NOT put the visitor into X-Forwarded-For, so without this the

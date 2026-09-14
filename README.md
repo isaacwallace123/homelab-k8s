@@ -17,6 +17,16 @@ Postgres databases and S3 buckets.
 
 **Start here:** [docs/architecture/](docs/architecture/README.md)
 
+Quick documentation map:
+
+- [docs/README.md](docs/README.md) — how to read the docs and what each section is for
+- [docs/architecture/README.md](docs/architecture/README.md) — architecture decisions and current topology
+- [docs/architecture/networking.md](docs/architecture/networking.md) — address plan, MetalLB, Envoy, DNS
+- [docs/architecture/storage.md](docs/architecture/storage.md) — storage classes, NFS, Longhorn, backup topology
+- [docs/server/inventory.md](docs/server/inventory.md) — physical, VM, Kubernetes, network, and storage inventory
+- [docs/reference/shared-server-context.md](docs/reference/shared-server-context.md) — shared-server boundary and future server layout
+- [docs/operations/recovery-and-operations-drills.md](docs/operations/recovery-and-operations-drills.md) — operational drills and evidence to capture
+
 ---
 
 ## Architecture
@@ -26,12 +36,12 @@ owns the k3s/GitOps platform and personal services; the cyberlab and AI lab keep
 repositories and operational boundaries. Homelab k8s VMs run on both Proxmox hosts — that is
 compute placement, not a change of ownership, and those VMs are never attached to a cyberlab
 range bridge. See
-[Shared server context](docs/shared-server-context.md) and
-[Lab organization and Kubernetes strategy](docs/lab-organization-and-kubernetes-strategy.md).
+[Shared server context](docs/reference/shared-server-context.md) and
+[Lab organization and Kubernetes strategy](docs/reference/lab-organization-and-kubernetes-strategy.md).
 
 The public `homelab.isaacwallace.dev` frontend lives in the portfolio repository. This repository
 will provide its isolated scenario runtime and sanitized event feed; see
-[Public operations arena](docs/public-operations-arena.md).
+[Public operations arena](docs/services/public-operations-arena.md).
 
 ### Infrastructure Layer
 
@@ -279,7 +289,7 @@ All alerts route to ntfy at `ntfy.lan/homelab-alerts`.
 
 ## Storage
 
-Current remediation guidance: [Storage pressure recovery plan (2026-07-18)](docs/storage-pressure-recovery-plan-2026-07-18.md).
+Current remediation guidance: [Storage pressure recovery plan (2026-07-18)](docs/operations/storage-pressure-recovery-plan-2026-07-18.md).
 
 | Class | Backend | Used by |
 | :--- | :--- | :--- |
@@ -317,7 +327,7 @@ kubectl create secret generic my-secret --from-literal=key=value \
 | `platform/components/platform-api/` | `LabRun`, `Database`, and `Bucket` XRDs + Compositions |
 | `provisioning/terraform/` | VMs on both Proxmox hosts; generates the Ansible inventory |
 | `provisioning/ansible/` | k3s HA install, node labels/taints, kubelet tuning |
-| `docs/architecture/` | How and why the platform is shaped this way |
+| `docs/` | Architecture, server inventory, operations, services, reference, incidents, and diagrams |
 | `scripts/` | Validation, composition tests, and one-time migration helpers |
 
 **Scripts:**

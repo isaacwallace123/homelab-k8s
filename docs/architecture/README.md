@@ -11,6 +11,21 @@ Companion documents:
 - [Cross-lab integration](cross-lab.md)
 - [Migration plan](migration.md)
 
+## Reading guide
+
+This is the authoritative architecture document for the platform. It records the present topology,
+why the current design exists, and which layer owns each decision. When there is ambiguity, the
+rules in this document win over older references in `categories/`, `argocd-apps/`, or older
+notes in the repo.
+
+If you are making a change, start here, then jump to the specific topic:
+
+- networking, ingress, and DNS: [networking.md](networking.md)
+- storage classes, backups, and anti-affinity: [storage.md](storage.md)
+- cross-lab ownership boundaries: [cross-lab.md](cross-lab.md)
+- migrating the cluster topology or renaming nodes: [migration.md](migration.md) and
+  [topology-migration.md](topology-migration.md)
+
 ---
 
 ## 1. The problem this replaces

@@ -27,13 +27,13 @@ If the AI lab later gets its own k3s cluster, either run a separate AI-owned Arg
 > **Updated.** Crossplane now serves three APIs, not one — `LabRun`, `Database` and `Bucket`. The principle
 > below is unchanged and is what bounds the second one: Crossplane composes only in-cluster
 > Kubernetes objects, never Proxmox, VMs, DNS, or guest lifecycle. Each API gets its own identity
-> and its own RBAC. See [architecture/README.md](architecture/README.md) §6.
+> and its own RBAC. See [architecture/README.md](../architecture/README.md) §6.
 
 Crossplane was first adopted for exactly one thing: the HomeOps platform API behind the public
 Operations Arena (`homelab.isaacwallace.dev`). This is the "one low-risk claim" the earlier posture reserved for
 a first test — the `LabRun` composite (Crossplane v2, scope: Cluster) composes only in-cluster Kubernetes objects (a disposable
 namespace, quota, limit range, and default-deny NetworkPolicy), never Proxmox, VMs, DNS, or secrets.
-See [Public operations arena](public-operations-arena.md) and the
+See [Public operations arena](../services/public-operations-arena.md) and the
 `platform/components/platform-api` and `platform/components/crossplane` layers.
 
 Crossplane is NOT the main lab control plane. Broader self-service APIs such as `AINode`,

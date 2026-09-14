@@ -15,10 +15,13 @@ below is static or MetalLB-owned.
 | `.220 – .250` | MetalLB `services-pool` | Pinned | Dashboards, media, monitoring, spare |
 
 Currently allocated in `platform-pool`: `.201` internal gateway, `.202` AdGuard, `.203` ArgoCD,
-`.204` edge gateway (new).
+`.204` edge gateway. The `services-pool` is intentionally left for workload Services that need a
+stable, pinned address but no route ownership ambiguity.
 
 `.210–.219` was previously excluded with a comment reserving it for "the other Proxmox k8s/agones
-cluster". No such cluster exists — the k8s nodes live at `.10–.13`. The range is reclaimed for the
+cluster". No such cluster exists — the k8s nodes live at `.10–.13`. This range is reclaimed for
+future internal services and should be treated as available unless a specific reservation is added
+here.
 
 ## 2. MetalLB: three pools, not one
 
@@ -39,16 +42,18 @@ Services select a pool with `metallb.io/address-pool`, and still pin an address 
 Each pool gets its own `L2Advertisement` with a `nodeSelector`. This is what makes the two-host
 layout work properly:
 
-```
-```
+- `platform-pool` is advertised from the gateway nodes and control-plane host(s) that can serve
+  the traffic locally.
+- `services-pool` is advertised only from the storage/infra node set so a workload on a different
+  host does not become a hidden multipath hop.
 
-Per-pool `nodeSelectors` matter on a two-host cluster: without one, MetalLB can elect a
-speaker on the host the workload is not running on, adding a LAN hop.
-packet of a latency-sensitive UDP stream. With the selector, the ARP owner is always a node that
-can actually serve the traffic locally.
+Per-pool `nodeSelectors` matter on a two-host cluster: without one, MetalLB can elect a speaker on
+the host the workload is not running on, which adds a LAN hop for every packet of a
+latency-sensitive UDP stream. With the selector, the ARP owner is always a node that can actually
+serve the traffic locally.
 
-Combined with `externalTrafficPolicy: Local`, the client IP is preserved and no extra hop
-is introduced.
+Combined with `externalTrafficPolicy: Local`, the client IP is preserved and no extra hop is
+introduced.
 
 ## 3. Envoy Gateway: one class, three gateways
 
@@ -60,8 +65,9 @@ One `GatewayClass` (`envoy`), three `Gateway` objects with distinct addresses an
 | `edge` | `.204` | HTTP :80 | Public traffic arriving through the Cloudflare Tunnel, which terminates TLS |
 
 The internal gateway keeps its existing name and address. Renaming it would recreate the Service,
-move the IP, and break every AdGuard override and the tunnel origin at once — `edge` and
-is purely additive, and public routes move onto `edge` one at a time.
+move the IP, and break every AdGuard override and the tunnel origin at once. The new `edge`
+Gateway is additive: public routes move onto it one at a time, and the internal gateway keeps the
+LAN trust boundary unchanged.
 
 `.202` and `.203` are **not free**: `.202` is AdGuard, which is also the nameserver every node is
 configured with, and `.203` is the ArgoCD LoadBalancer.
@@ -75,7 +81,9 @@ The ArgoCD TLS-passthrough listener is preserved as-is — it exists because pas
 gRPC streams working for the ArgoCD CLI, and `argocd.lan` being more specific than `*.lan` is what
 makes the listener win for that hostname.
 
-destroys client source IPs).
+The public gateway is intentionally minimal: it does not terminate `.lan` TLS, and the Cloudflare
+Tunnel does not expose the internal trust model. The results are both cleaner routing and a smaller
+blast radius if a public route is misconfigured.
 
 ## 4. DNS
 

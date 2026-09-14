@@ -1,0 +1,45 @@
+%%{ init: { "theme": "dark" } }%%
+flowchart TB
+    subgraph Git["GitHub — homelab-k8s"]
+        Root["bootstrap/root-app.yaml\n(apply once)"]
+        PlatformValues["platform/values/values-prod.yaml\ncomponents + tiers + projects"]
+        PlatformTemplates["platform/templates/\nApplications + AppProjects + sync policy"]
+
+        subgraph Platform["platform/components/"]
+            Infrastructure["network · storage · security · ingress"]
+            PlatformAPI["platform · platform-api"]
+            Applications["observability · apps"]
+        end
+    end
+
+    subgraph Cluster["k3s Cluster — ArgoCD"]
+        direction TB
+        Bootstrap["Wave 0\nbootstrap"]
+        Network["Wave 20\nnetwork"]
+        Storage["Wave 40\nstorage"]
+        Security["Wave 60\nsecurity"]
+        Ingress["Wave 80\ningress"]
+        PlatformWave["Wave 100–120\nplatform + platform-api"]
+        Observability["Wave 140\nobservability"]
+        Apps["Wave 160\napps"]
+    end
+
+    Root -->|"points at"| PlatformValues
+    PlatformValues -->|"renders"| PlatformTemplates
+    PlatformTemplates -->|"selects"| Platform
+    Infrastructure -->|"sync"| Bootstrap
+    Infrastructure -->|"sync"| Network
+    Infrastructure -->|"sync"| Storage
+    Infrastructure -->|"sync"| Security
+    Infrastructure -->|"sync"| Ingress
+    PlatformAPI -->|"sync"| PlatformWave
+    Applications -->|"sync"| Observability
+    Applications -->|"sync"| Apps
+
+    Bootstrap -->|"ready"| Network
+    Network -->|"ready"| Storage
+    Storage -->|"ready"| Security
+    Security -->|"ready"| Ingress
+    Ingress -->|"ready"| PlatformWave
+    PlatformWave -->|"ready"| Observability
+    Observability -->|"ready"| Apps

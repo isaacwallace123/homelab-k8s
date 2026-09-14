@@ -71,14 +71,14 @@ The run lifecycle is `queued -> provisioning -> running -> collecting -> complet
 
 ## Runtime Layer (Crossplane)
 
-The disposable-namespace runtime is a scoped Crossplane platform layer, deployed through the normal
-App-of-Apps descriptors:
+The disposable-namespace runtime is a scoped Crossplane platform layer, deployed through the
+platform umbrella chart:
 
-| Layer | Path | Sync wave | Contents |
-| :--- | :--- | :--- | :--- |
-| Core | `argocd-apps/infrastructure/crossplane/` | -4 | Crossplane Helm chart |
-| Config | `manifests/infra/crossplane-config/` | -3 | provider-kubernetes, patch-and-transform function, scoped RBAC, in-cluster `ProviderConfig` |
-| Platform API | `manifests/infra/homeops-platform/` | -2 | `LabRun` XRD (Crossplane v2, scope: Cluster), the `labrun-isolated-namespace` Composition, and the run-broker RBAC |
+| Layer | Current path | Tier | Contents |
+| :--- | :--- | ---: | :--- |
+| Core | `platform/components/crossplane/` | `platform` | Crossplane chart, providers, functions, scoped RBAC, and ProviderConfigs |
+| Platform API | `platform/components/platform-api/` | `platform-api` | `LabRun`, `Database`, and `Bucket` XRDs and Compositions |
+| GitOps wiring | `platform/templates/` | derived | Generated Applications, projects, sync policy, and ownership boundaries |
 
 A `LabRun` carries only an allowlisted `scenarioId`, the broker-issued `runId`, a `resourceClass`, a
 `ttlSeconds`, and bounded decision fields (`apiReplicas`, `cacheReplicas`, `releaseTrack`,
@@ -104,3 +104,9 @@ initial values and decision patches; callers cannot choose the underlying fields
 4. One controller-owned disposable namespace with no public decisions.
 5. Scaling and cache decisions, evidence collection, teardown, and published reports.
 6. Additional drills use the same contract only after their failure and recovery are measurable.
+
+## Operational ownership
+
+The portfolio repository owns the public frontend and presentation. This repository owns the
+cluster-side runtime and its isolation policy. A public API change is incomplete until both
+repositories agree on the versioned contract and the runtime has a rollback path.

@@ -1,71 +1,61 @@
-# docs
+# Homelab documentation
 
-Extended documentation for the homelab-k8s platform.
+This documentation is organized by the question an operator is trying to answer:
 
-## Contents
+| Question | Start here |
+| --- | --- |
+| What exists and where? | [Server inventory](server/inventory.md) |
+| Why is it designed this way? | [Architecture](architecture/README.md) |
+| How do I change or recover it safely? | [Operations](operations/README.md) |
+| What do the services do? | [Services](services/README.md) |
+| Who owns each boundary? | [Reference](reference/README.md) |
+| What went wrong before? | [Incidents](incidents/README.md) |
+| Where are the diagrams? | [Diagrams](diagrams/README.md) |
 
-### `architecture/` — start here
+## Documentation rules
 
-The current design: what runs where, which layer owns which decision, and why.
+1. Terraform, Ansible, Helm values, Kubernetes manifests, and secrets remain the technical source
+   of truth for their respective systems.
+2. Docs explain intent, dependencies, operating procedures, and failure modes; they do not replace
+   declarative configuration.
+3. Every live-state claim includes a review date or a capture source.
+4. Historical incident records are not rewritten; corrections are appended.
+5. Never commit credentials, tokens, private keys, kubeconfigs, or raw secret values.
+6. A change is not documented until verification and rollback are documented too.
 
-| File | Contents |
-| :--- | :--- |
-| [architecture/README.md](architecture/README.md) | Topology across both Proxmox hosts, node pools, repo layout, Crossplane's position, the memory budget |
-| [architecture/networking.md](architecture/networking.md) | Address plan, MetalLB pools and per-pool speakers, the three Gateways, DNS |
-| [architecture/storage.md](architecture/storage.md) | The storage classes, the NFS exports, and the Longhorn backup target |
-| [architecture/cross-lab.md](architecture/cross-lab.md) | How homelab, cyberlab, and ailab connect without merging ownership |
-| [architecture/migration.md](architecture/migration.md) | Six-phase rollout, the rename hazard, and the rollback for each phase |
-| [architecture/topology-migration.md](architecture/topology-migration.md) | Getting from the old topology to two planes — the steps Terraform cannot do on its own |
+## Directory map
 
-### Shared context
-
-| File | Contents |
-| :--- | :--- |
-| [shared-server-context.md](shared-server-context.md) | Physical server inventory, lab boundaries, and the migration path from two shared servers to one server per lab |
-| [lab-organization-and-kubernetes-strategy.md](lab-organization-and-kubernetes-strategy.md) | Federated lab control-plane model, Kubernetes boundaries, Crossplane posture, and future server layout |
-| [recovery-and-operations-drills.md](recovery-and-operations-drills.md) | Recovery drills, backup checks, alerts, and shared operations evidence to add |
-
-### `backstage/catalog/`
-
-Backstage software catalog entity definitions. Import these into a Backstage instance via a `catalog-info.yaml` or a static location.
-
-| File | Contents |
-| :--- | :--- |
-| [org.yaml](backstage/catalog/org.yaml) | User (isaac) and Group (homelab-ops) |
-| [systems.yaml](backstage/catalog/systems.yaml) | Platform, media, monitoring, portfolio, cyberlab, AI lab, and shared observability systems |
-| [components.yaml](backstage/catalog/components.yaml) | Deployed homelab services plus externally owned cyberlab and AI lab status components |
-| [apis.yaml](backstage/catalog/apis.yaml) | Prometheus HTTP API and infra-agent REST API |
-| [resources.yaml](backstage/catalog/resources.yaml) | k3s cluster, Longhorn, TrueNAS NFS, MetalLB pool, Proxmox, and planned external lab resources |
-
-### `code/`
-
-Architecture diagrams in Mermaid format. Render with any Mermaid-compatible tool (GitHub markdown preview, `mmdc` CLI, mermaid.live).
-
-| File | Diagram |
-| :--- | :--- |
-| [homelab-architecture.mermaid](code/homelab-architecture.mermaid) | Physical → VM → cluster → external layers |
-| [cluster.mermaid](code/cluster.mermaid) | Full namespace-level cluster topology with traffic flows |
-| [argo-architecture.mermaid](code/argo-architecture.mermaid) | ArgoCD GitOps sync chain — **stale**, still shows the ApplicationSet layout replaced by the platform chart |
-| [observability.mermaid](code/observability.mermaid) | Metrics/logs pipeline — scrape sources → Prometheus/Loki → alert rules → Alertmanager → ntfy |
-
-### `images/`
-
-Rendered diagram images (SVG/PNG). Generate from `code/` using:
-
-```bash
-# requires @mermaid-js/mermaid-cli
-npx mmdc -i docs/code/cluster.mermaid         -o docs/images/cluster.svg
-npx mmdc -i docs/code/homelab-architecture.mermaid -o docs/images/homelab-architecture.svg
-npx mmdc -i docs/code/argo-architecture.mermaid    -o docs/images/argo-architecture.svg
-npx mmdc -i docs/code/observability.mermaid        -o docs/images/observability.svg
+```text
+docs/
+├── architecture/   current topology, networking, storage, migrations, cross-lab design
+├── server/         physical, VM, Kubernetes, network, and storage inventory
+├── operations/     recovery procedures, drills, and operational evidence standards
+├── services/       service contracts and user-facing platform behavior
+├── reference/      ownership, policy, and cross-lab boundaries
+├── incidents/      immutable post-mortems
+├── diagrams/       Mermaid source
+├── backstage/      Backstage catalog entities
+└── images/         rendered diagram output, when generated
 ```
 
-## Post-mortems
+The server section intentionally has two layers: [inventory](server/inventory.md) describes the
+declared design, while [live inventory capture](server/live-inventory-capture.md) describes how to
+verify the running systems without putting sensitive output into Git.
 
-Incidents worth not repeating. Each one records what broke, why it was hard to see, and
-what changed as a result.
+## Source map
 
-| Date | Incident |
-| :--- | :--- |
-| 2026-08-03 | [Three services down from one label](post-mortems/2026-08-03-label-taxonomy-triple-outage.md) — two competing label taxonomies, and a selector in another repo |
-| 2026-08-03 | [A Longhorn eviction that could never finish](post-mortems/2026-08-03-longhorn-eviction-deadlock.md) — replicas stuck `WO`, deadlock presenting as slowness |
+| Area | Source |
+| --- | --- |
+| VM topology | `provisioning/terraform/` |
+| Node installation and labels | `provisioning/ansible/` |
+| GitOps component registry | `platform/values/values-prod.yaml` |
+| Generated Applications and AppProjects | `platform/templates/` |
+| One-time bootstrap | `bootstrap/root-app.yaml` |
+| Validation and migration helpers | `scripts/` |
+
+## Diagrams and catalog
+
+Mermaid sources are in [diagrams/](diagrams/); rendering instructions are in
+[diagrams/README.md](diagrams/README.md). The machine-readable Backstage catalog is in
+[backstage/catalog/](backstage/catalog/). The catalog is a discovery surface, not a replacement
+for Terraform, Kubernetes, or operational documentation.
