@@ -63,8 +63,17 @@ kubectl exec -n fitness deploy/opengym -c api -- \
   sh -c 'cat /data/db.json' | python -m json.tool | grep -A3 '"users"'
 ```
 
-Take the `id` and add it to `ADMIN_UIDS` in `resources/opengym.yaml`, then commit. ArgoCD
-rolls the pod and an **Admin dashboard** link appears in Settings.
+Take the `id` and add it to `ADMIN_UIDS` in `resources/opengym.yaml`, then commit and
+wait for ArgoCD to sync the ConfigMap. Restart the deployment so it reads the updated
+environment; syncing a ConfigMap alone does not restart its consumers:
+
+```bash
+kubectl rollout restart deployment/opengym -n fitness
+kubectl rollout status deployment/opengym -n fitness
+```
+
+Refresh the app or sign in again. An **Admin dashboard** link appears in Settings.
+The configured admin is the `isaac` profile (`rO8l5t0bDLVb0ric`).
 
 This is deliberately a git change rather than a UI toggle: admin is the one privilege that
 should not be grantable from inside a publicly reachable app.
@@ -108,6 +117,61 @@ Everything irreplaceable is `/data` — profiles, passkeys, workouts, the sessio
 ```bash
 kubectl exec -n fitness deploy/opengym -c api -- tar czf - -C / data > opengym-$(date +%F).tar.gz
 ```
+
+## AI Coach: AI lab backend
+
+Enabled through openGym's admin API on 2026-09-14. It uses the same inference backend
+as Open WebUI; Open WebUI itself is not the model API.
+
+| Setting | Value |
+| :--- | :--- |
+| Provider | OpenAI-compatible endpoint (`compatible`) |
+| Endpoint | `http://192.168.0.221:4000` (no `/v1`: openGym adds it) |
+| Model | `local-auto` |
+| Runtime | LiteLLM on `ai-core-01`; Qwen3 8B Q4_K_M via llama.cpp Vulkan on each GPU worker |
+| Routing | B580 on `ai-node-02`, with existing B50 / `local-primary` fallback |
+| Credential | Dedicated `opengym` virtual key, restricted to `local-auto` and `local-primary` |
+| Daily Coach limits | 10 jobs per profile, 20 for the instance |
+
+Settings and the encrypted gateway key persist in `/data/coach.json`, covered by
+the data PVC backup. They are application settings, not ConfigMap environment
+variables. Manage them at **Settings > Admin dashboard > AI Coach**. The key is
+not stored in this repository. Keep `/data/secret` with backups so the stored key
+can be decrypted after a restore.
+
+Each person opens **Plan > Coach**, completes the data-use consent and training
+intake, and reviews proposals before applying them. Enabling the provider does
+not import a plan or accept proposals for either person.
+
+Verified on 2026-09-14: the built-in Coach test passed; a full synthetic three-day
+plan generation passed openGym's response validator in 69 seconds; both Isaac and
+Noah's authenticated Coach status requests returned 200. Unauthenticated Coach and
+gateway requests returned 401. The synthetic plan was not saved to either profile.
+
+### Network and recovery
+
+The AI core's UFW rule permits TCP 4000 from `192.168.0.15/32`, the LAN source of
+`k8s-cloud-01`. Requests still require the dedicated key. The GPU workers retain
+their existing gateway-only firewall rules. No model endpoint is publicly exposed.
+
+The firewall allowance and scoped key policy are declared in the **ailab** repo:
+`ansible/inventory/production/group_vars/ai_core.yml`; the controller key specification
+is in `ansible/playbooks/litellm.yml`. The live rule and key were applied through the
+Proxmox guest-agent API using the existing Terraform API credential because this
+workstation did not have the AI lab's SSH/controller credentials. Only OpenGym's
+new controller key was restored locally; restore the rest of the existing AI lab
+controller secrets before running the full gateway playbook.
+
+The scoped key has a root-only recovery copy at
+`ai-core-01:/etc/ailab/clients/opengym.key` and a mode-0600 controller copy at
+`/home/isaac/.config/ailab/litellm-keys/opengym` in WSL. If the application moves to
+another Kubernetes node, update the specific source allowance in ailab before
+moving it. Do not open the gateway to the whole LAN to work around a timeout.
+
+Rollback: disable AI Coach in its admin card. To remove the integration entirely,
+disconnect the compatible provider, revoke the `opengym` key in LiteLLM, remove its
+key policy/controller specification, and remove the TCP 4000 allowance for `.15`
+from both UFW and the ailab inventory. Existing Open WebUI routes remain independent.
 
 ## Licence note on the exercise media
 

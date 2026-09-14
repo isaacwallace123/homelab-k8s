@@ -85,7 +85,7 @@ data:
   # own browser and never touches this server, so closing it loses nothing.
   INVITE_ONLY: "1"
   ALLOW_GUEST: "0"
-  ADMIN_UIDS: "rO8l5t0bDLVb0ric"
+  ADMIN_UIDS: "rO8l5t0bDLVb0ric" # isaac
 
   # ── Client addresses in the audit log ───────────────────────────────────────────────
   # A Cloudflare Tunnel does NOT put the visitor into X-Forwarded-For, so without this the
@@ -113,10 +113,9 @@ data:
   RESOLVER: "10.43.0.10"
   DATA_DIR: "/data"
 
-  # ADMIN_UIDS is deliberately absent. It is a chicken-and-egg: the id only exists after a
-  # passkey profile has been registered, and it is found in /data/db.json. Register first,
-  # then add it here and let ArgoCD roll the pod. Until it is set there is no admin
-  # dashboard, and therefore no way to mint invite codes — see the component README.
+  # ADMIN_UIDS names the registered Isaac profile above. After changing this ConfigMap,
+  # sync it and restart the deployment: envFrom values are read only when containers
+  # start, so a ConfigMap sync alone does not activate an admin change.
 ---
 apiVersion: apps/v1
 kind: Deployment

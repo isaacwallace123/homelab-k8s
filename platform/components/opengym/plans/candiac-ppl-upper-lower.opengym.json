@@ -1,0 +1,309 @@
+{
+  "opengym_plan": 1,
+  "exported": "2026-09-14",
+  "name": "Candiac - Push Pull Legs / Upper Lower - 21:45",
+  "week": {
+    "1": [
+      "candiac-push"
+    ],
+    "2": [
+      "candiac-pull"
+    ],
+    "3": [
+      "candiac-legs"
+    ],
+    "5": [
+      "candiac-upper"
+    ],
+    "6": [
+      "candiac-lower"
+    ]
+  },
+  "routines": [
+    {
+      "id": "candiac-push",
+      "name": "Monday - Push - 21:45",
+      "emoji": "arm",
+      "prog": "double",
+      "ex": [
+        {
+          "id": "0289",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. 21:45 local time at Anytime Fitness Candiac. First do 5 minutes of easy walking or cycling. Weeks 1-2: do only 2 work sets wherever 3 are listed. Flat dumbbell bench press. Use the two warm-up rows for easy ramp-up sets; enter your own loads. Keep feet planted and lower under control. Log the weight of ONE dumbbell. Swap: machine chest press.",
+          "warmupSets": 2
+        },
+        {
+          "id": "0314",
+          "sets": 2,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 120,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. Incline dumbbell bench press; use a low incline, about 15-30 degrees. Log ONE dumbbell. Swap: incline chest-press machine."
+        },
+        {
+          "id": "0405",
+          "sets": 2,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 120,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. Seated dumbbell shoulder press with back support; avoid arching your lower back. Log ONE dumbbell. Swap: shoulder-press machine."
+        },
+        {
+          "id": "0334",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 12,
+          "restSec": 75,
+          "note": "12-15 reps. Finish with 2-3 good reps left; do not train to failure. Dumbbell lateral raise; light weight, soft elbows, no swinging. Log ONE dumbbell. Swap: cable lateral raise."
+        },
+        {
+          "id": "0188",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 75,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Cable chest fly at mid-chest height; keep a soft elbow bend and a comfortable stretch. Log ONE cable stack. Swap: pec-deck fly."
+        },
+        {
+          "id": "0200",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 75,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Rope triceps pushdown; keep upper arms by your sides. Swap: straight-bar cable pushdown."
+        }
+      ]
+    },
+    {
+      "id": "candiac-pull",
+      "name": "Tuesday - Pull - 21:45",
+      "emoji": "pullup",
+      "prog": "double",
+      "ex": [
+        {
+          "id": "0198",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. 21:45 local time at Anytime Fitness Candiac. First do 5 minutes of easy walking or cycling. Weeks 1-2: do only 2 work sets wherever 3 are listed. Lat pulldown to your upper chest, never behind your neck; avoid leaning back to swing. Swap: neutral-grip pulldown or assisted pull-up.",
+          "warmupSets": 2
+        },
+        {
+          "id": "0861",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 120,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. Seated cable row; keep your torso steady and pull toward your lower ribs. Swap: chest-supported row machine.",
+          "warmupSets": 1
+        },
+        {
+          "id": "0602",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 12,
+          "restSec": 75,
+          "note": "12-15 reps. Finish with 2-3 good reps left; do not train to failure. Reverse pec-deck fly for rear shoulders; keep chest against the pad. Swap: chest-supported dumbbell reverse fly."
+        },
+        {
+          "id": "0294",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 75,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Standing dumbbell biceps curl; curl both arms together without rocking. Log ONE dumbbell; one simultaneous curl is one rep. Swap: cable curl."
+        },
+        {
+          "id": "0313",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 75,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Dumbbell hammer curl with palms facing each other; curl both arms together. Log ONE dumbbell. Swap: rope cable hammer curl."
+        }
+      ]
+    },
+    {
+      "id": "candiac-legs",
+      "name": "Wednesday - Legs - 21:45",
+      "emoji": "legs",
+      "prog": "double",
+      "ex": [
+        {
+          "id": "1760",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. 21:45 local time at Anytime Fitness Candiac. First do 5 minutes of easy walking or cycling. Weeks 1-2: do only 2 work sets wherever 3 are listed. Goblet squat with one dumbbell at your chest; use a comfortable depth and keep your whole foot planted. Log the single dumbbell. Swap: leg press.",
+          "warmupSets": 2
+        },
+        {
+          "id": "1459",
+          "sets": 2,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. Dumbbell Romanian deadlift: soft knees, hips back, weights close; stop before your back rounds. Log ONE dumbbell. Learn the hinge with light weights. Swap: cable pull-through.",
+          "warmupSets": 1
+        },
+        {
+          "id": "0599",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 90,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Seated leg curl; align knees with the machine pivot and lower slowly. Swap: lying leg curl."
+        },
+        {
+          "id": "0585",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 90,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Leg extension; align knees with the machine pivot and use a comfortable range. Swap: supported bodyweight squat, with no added load initially."
+        },
+        {
+          "id": "0417",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 12,
+          "restSec": 75,
+          "note": "12-15 reps. Finish with 2-3 good reps left; do not train to failure. Standing dumbbell calf raise; both legs together, controlled stretch and a pause at the top. Log ONE dumbbell. Swap: standing or seated calf machine."
+        },
+        {
+          "id": "0274",
+          "sets": 2,
+          "reps": 15,
+          "prog": "off",
+          "repsMin": 10,
+          "restSec": 60,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Floor crunch; curl your ribs toward your pelvis without pulling on your neck. Bodyweight only. Swap: dead bug, 8-10 slow reps per side."
+        }
+      ]
+    },
+    {
+      "id": "candiac-upper",
+      "name": "Friday - Upper - 21:45",
+      "emoji": "dumbbell",
+      "prog": "double",
+      "ex": [
+        {
+          "id": "0314",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. 21:45 local time at Anytime Fitness Candiac. First do 5 minutes of easy walking or cycling. Weeks 1-2: do only 2 work sets wherever 3 are listed. Incline dumbbell bench press at about 15-30 degrees. Log ONE dumbbell. Swap: incline chest-press machine.",
+          "warmupSets": 2
+        },
+        {
+          "id": "0861",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 120,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. Seated cable row; steady torso and controlled lowering. Swap: chest-supported row machine.",
+          "warmupSets": 1
+        },
+        {
+          "id": "0198",
+          "sets": 2,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 120,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. Lat pulldown to upper chest; no swinging. Swap: neutral-grip pulldown or assisted pull-up."
+        },
+        {
+          "id": "0334",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 12,
+          "restSec": 75,
+          "note": "12-15 reps. Finish with 2-3 good reps left; do not train to failure. Dumbbell lateral raise; use a light load without swinging. Log ONE dumbbell. Swap: cable lateral raise."
+        },
+        {
+          "id": "0294",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 75,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Dumbbell biceps curl, both arms together. Log ONE dumbbell. Swap: cable curl."
+        },
+        {
+          "id": "0200",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 75,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Rope triceps pushdown; keep elbows by your sides. Swap: straight-bar cable pushdown."
+        }
+      ]
+    },
+    {
+      "id": "candiac-lower",
+      "name": "Saturday - Lower - 21:45",
+      "emoji": "legs",
+      "prog": "double",
+      "ex": [
+        {
+          "id": "1459",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. 21:45 local time at Anytime Fitness Candiac. First do 5 minutes of easy walking or cycling. Weeks 1-2: do only 2 work sets wherever 3 are listed. Dumbbell Romanian deadlift; hips back, soft knees, weights close, controlled range. Log ONE dumbbell. Swap: cable pull-through.",
+          "warmupSets": 2
+        },
+        {
+          "id": "0739",
+          "sets": 3,
+          "reps": 12,
+          "repsMin": 8,
+          "restSec": 150,
+          "warmupRestSec": 60,
+          "note": "8-12 reps. Finish with 2-3 good reps left; do not train to failure. 45-degree leg press; keep hips and lower back against the pad and do not slam knees straight. Learn the safety catches before loading. Log added plates consistently; note the sled if known. Swap: goblet squat.",
+          "warmupSets": 1
+        },
+        {
+          "id": "0599",
+          "sets": 2,
+          "reps": 15,
+          "repsMin": 10,
+          "restSec": 90,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Seated leg curl; controlled lowering. Swap: lying leg curl."
+        },
+        {
+          "id": "0417",
+          "sets": 3,
+          "reps": 15,
+          "repsMin": 12,
+          "restSec": 75,
+          "note": "12-15 reps. Finish with 2-3 good reps left; do not train to failure. Standing dumbbell calf raise, both legs together; pause at top and lower slowly. Log ONE dumbbell. Swap: standing or seated calf machine."
+        },
+        {
+          "id": "0274",
+          "sets": 2,
+          "reps": 15,
+          "prog": "off",
+          "repsMin": 10,
+          "restSec": 60,
+          "note": "10-15 reps. Finish with 2-3 good reps left; do not train to failure. Floor crunch; controlled movement and relaxed neck. Bodyweight only. Swap: dead bug, 8-10 slow reps per side."
+        }
+      ]
+    }
+  ],
+  "customEx": []
+}
