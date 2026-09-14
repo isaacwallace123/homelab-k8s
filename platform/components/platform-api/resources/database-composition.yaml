@@ -52,12 +52,20 @@ spec:
                     storage:
                       size: {{ $spec.size | default "10Gi" }}
                       storageClass: {{ $spec.storageClass | default "longhorn-replicated" }}
-                    {{- with $spec.sharedPreloadLibraries }}
+                    {{- if or $spec.sharedPreloadLibraries $spec.parameters }}
                     postgresql:
+                      {{- with $spec.sharedPreloadLibraries }}
                       shared_preload_libraries:
                         {{- range . }}
                         - {{ . }}
                         {{- end }}
+                      {{- end }}
+                      {{- with $spec.parameters }}
+                      parameters:
+                        {{- range $k, $v := . }}
+                        {{ $k }}: {{ $v | quote }}
+                        {{- end }}
+                      {{- end }}
                     {{- end }}
                     {{- with $spec.managedRoles }}
                     # Declarative role management. CNPG reconciles these continuously, so

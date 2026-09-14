@@ -104,11 +104,14 @@ observed:
         imageName: ghcr.io/cloudnative-pg/postgresql:17.2
         sharedPreloadLibraries: []
         extensions: []
+        parameters:
+          createrole_self_grant: "set, inherit"
         managedRoles:
           - name: wger
             ensure: present
             login: true
             replication: true
+            createrole: true
             superuser: false
             createdb: false
             comment: wger app owner; REPLICATION added for PowerSync

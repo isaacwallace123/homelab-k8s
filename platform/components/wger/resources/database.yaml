@@ -24,6 +24,19 @@ spec:
   # exercise IMAGES are far larger and do not live here — they are files on the media PVC.
   size: 5Gi
 
+  # PostgreSQL 16+ changed what CREATEROLE grants you over the roles you create: ADMIN
+  # OPTION, but no longer SET. `setup-powersync-storage` needs both, because it follows its
+  # CREATE ROLE immediately with
+  #
+  #   CREATE SCHEMA powersync AUTHORIZATION powersync_storage
+  #
+  # and that is refused with "must be able to SET ROLE" unless the creator can assume the
+  # role. Since the whole thing runs in one DO block, the CREATE ROLE rolls back too and the
+  # step never gets further. Restoring the pre-16 behaviour for self-created roles is what
+  # this setting does, and it only affects roles that this role itself creates.
+  parameters:
+    createrole_self_grant: "set, inherit"
+
   # ── The reason the XRD has a managedRoles field ──────────────────────────────────────
   # PowerSync replicates wger's tables using Postgres logical replication, and opening a
   # replication slot requires the REPLICATION role attribute. CNPG's bootstrap owner role

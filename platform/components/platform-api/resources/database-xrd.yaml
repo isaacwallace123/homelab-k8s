@@ -101,6 +101,38 @@ spec:
                   items:
                     type: string
                   default: []
+                parameters:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >-
+                    Server settings written into postgresql.conf, passed through to CNPG's
+                    spec.postgresql.parameters. Values must be strings.
+
+                    wger is the reason this exists, and the reason is not obvious.
+                    PowerSync's storage bootstrap runs, as the app role,
+
+                      CREATE ROLE powersync_storage ...
+                      CREATE SCHEMA powersync AUTHORIZATION powersync_storage
+
+                    On PostgreSQL 16+ the second statement fails even though the first
+                    succeeds:
+
+                      ERROR: must be able to SET ROLE "powersync_storage"
+
+                    because CREATEROLE now grants only ADMIN OPTION on roles it creates, not
+                    SET. `createrole_self_grant: "set, inherit"` restores the membership the
+                    statement needs. Setting it per-role would be tighter, but neither CNPG's
+                    managed roles nor this XRD can express a per-role GUC, and the only role
+                    here holding CREATEROLE is the one that needs it.
+
+                    Do not use this to set anything CNPG controls itself (wal_level,
+                    archive_command, listen_addresses, port, ssl...): the operator owns those
+                    and will reject or silently override them.
+                  # No default, for the same reason managedRoles has none: a default
+                  # materialises onto claims that never mention the field, which then has to
+                  # be silenced in ignoreDifferences -- and anything silenced there is also
+                  # skipped when ArgoCD APPLIES, because RespectIgnoreDifferences=true.
                 extensions:
                   type: array
                   description: >-
