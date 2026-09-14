@@ -149,6 +149,11 @@ spec:
           args:
             - |
               set -eu
+              # Upstream's compose bind-mounts ./media/img and ./media/gif separately, so
+              # Docker creates both for it. Here a single volume is mounted at /out and
+              # those subdirectories do not exist on a fresh PVC -- the cp below would fail
+              # and take the init container with it on the very first boot.
+              mkdir -p /out/img /out/gif
               if [ -z "$(ls -A /out/img 2>/dev/null)" ]; then
                 echo "==> downloading exercise media (~140MB, one time)"
                 git clone --depth 1 https://github.com/hasaneyldrm/exercises-dataset /tmp/ds
