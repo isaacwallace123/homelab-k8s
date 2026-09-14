@@ -39,6 +39,23 @@ spec:
   # For scale: upstream's compose file connects PowerSync as the Postgres container's
   # POSTGRES_USER, which is a full superuser. This is strictly narrower.
   #
+  # createrole is the second attribute, and it is needed for a different reason:
+  # `setup-powersync-storage` (run by the pod's init container) issues CREATE ROLE for the
+  # powersync_storage account, and without it that fails with
+  #
+  #   psycopg.errors.InsufficientPrivilege: permission denied to create role
+  #
+  # The alternative was declaring powersync_storage as a second managed role here, but the
+  # command ALTERs the role's password to match PS_STORAGE_PG_URI on every run -- so the
+  # password would have to be kept identical in two places (CNPG's Secret and the sealed
+  # Secret) forever, and any drift would surface as an authentication failure inside
+  # PowerSync rather than anywhere obvious.
+  #
+  # CREATEROLE is narrower than it sounds on Postgres 16+: a CREATEROLE role may only
+  # administer roles it created itself, and cannot grant attributes it does not hold, so it
+  # cannot escalate to SUPERUSER. Combined with superuser: false, this role still cannot
+  # read another database or touch the filesystem.
+  #
   # passwordSecret points at CNPG's OWN generated Secret. Managing a role the operator also
   # created means both parties write its password; aiming them at the same Secret is what
   # keeps them agreeing.
@@ -46,9 +63,10 @@ spec:
     - name: wger
       ensure: present
       login: true
-      replication: true
+      replication: true     # logical replication slot for PowerSync
+      createrole: true      # CREATE ROLE powersync_storage, via setup-powersync-storage
       superuser: false
       createdb: false
-      comment: wger app owner; REPLICATION added for PowerSync logical replication
+      comment: wger app owner; REPLICATION for PowerSync, CREATEROLE for its storage role
       passwordSecret:
         name: wger-pg-app
