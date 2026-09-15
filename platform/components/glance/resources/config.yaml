@@ -59,7 +59,7 @@ data:
       primary-color: 216 28 84
       positive-color: 152 44 54
       negative-color: 358 62 60
-      contrast-multiplier: 1.1
+      contrast-multiplier: 1.3
       text-saturation-multiplier: 0.8
       custom-css-file: /assets/homelab.css
       presets:
@@ -71,7 +71,7 @@ data:
           primary-color: 220 22 26
           positive-color: 152 48 30
           negative-color: 358 58 45
-          contrast-multiplier: 1.05
+          contrast-multiplier: 1.2
           text-saturation-multiplier: 0.8
 
     branding:
@@ -195,7 +195,7 @@ data:
                       <span class="hl-dot {{ if eq (.String "labels.severity") "critical" }}hl-bad{{ else }}hl-warn{{ end }}"></span>
                       <div class="min-width-0">
                         <div class="color-highlight text-truncate">{{ .String "labels.alertname" }}</div>
-                        <div class="size-h6 text-truncate-2-lines">{{ if .Exists "annotations.summary" }}{{ .String "annotations.summary" }}{{ else }}{{ .String "labels.namespace" }}{{ end }}</div>
+                        <div class="size-h6 color-paragraph text-truncate-2-lines">{{ if .Exists "annotations.summary" }}{{ .String "annotations.summary" }}{{ else }}{{ .String "labels.namespace" }}{{ end }}</div>
                         <div class="size-h6 color-subdue" {{ parseRelativeTime "rfc3339" (.String "startsAt") }}></div>
                       </div>
                     </li>
@@ -341,7 +341,7 @@ data:
                         <div class="color-highlight text-truncate">{{ if eq (.String "type") "episode" }}{{ .String "grandparentTitle" }}{{ else }}{{ .String "title" }}{{ end }}</div>
                         <div class="size-h6 shrink-0 {{ if eq (.String "Player.state") "playing" }}color-positive{{ else }}color-subdue{{ end }}">{{ .String "Player.state" }}</div>
                       </div>
-                      <div class="size-h6 text-truncate">
+                      <div class="size-h6 color-paragraph text-truncate">
                         {{ if eq (.String "type") "episode" }}S{{ .Int "parentIndex" }} · E{{ .Int "index" }} · {{ .String "title" }} · {{ end }}{{ .String "User.title" }} on {{ .String "Player.title" }}
                       </div>
                       {{ if gt $duration 0 }}
@@ -468,7 +468,7 @@ data:
                     <div class="flex justify-between gap-10 items-center">
                       <div class="min-width-0">
                         <div class="color-highlight text-truncate">{{ if .Exists "series.title" }}{{ .String "series.title" }} <span class="color-subdue">S{{ .Int "episode.seasonNumber" }}E{{ .Int "episode.episodeNumber" }}</span>{{ else if .Exists "movie.title" }}{{ .String "movie.title" }} <span class="color-subdue">{{ .Int "movie.year" }}</span>{{ else }}{{ .String "title" }}{{ end }}</div>
-                        <div class="size-h6 text-truncate">{{ .String "status" }}{{ if .Exists "timeleft" }} · {{ .String "timeleft" }} left{{ end }}{{ if ne (.String "trackedDownloadState") "downloading" }} · {{ .String "trackedDownloadState" }}{{ end }}</div>
+                        <div class="size-h6 color-paragraph text-truncate">{{ .String "status" }}{{ if .Exists "timeleft" }} · {{ .String "timeleft" }} left{{ end }}{{ if ne (.String "trackedDownloadState") "downloading" }} · {{ .String "trackedDownloadState" }}{{ end }}</div>
                       </div>
                       {{ if gt $size 0.0 }}<div class="size-h6 shrink-0">{{ printf "%.0f" (mul (div (sub $size (.Float "sizeleft")) $size) 100.0) }}%</div>{{ end }}
                     </div>
@@ -515,7 +515,7 @@ data:
                         <li class="flex justify-between gap-10">
                           <div class="min-width-0">
                             <div class="color-highlight text-truncate">{{ .String "series.title" }}</div>
-                            <div class="size-h6 text-truncate">S{{ .Int "seasonNumber" }}E{{ .Int "episodeNumber" }} · {{ .String "title" }}</div>
+                            <div class="size-h6 color-paragraph text-truncate">S{{ .Int "seasonNumber" }}E{{ .Int "episodeNumber" }} · {{ .String "title" }}</div>
                           </div>
                           <div class="size-h6 shrink-0 text-right {{ if .Bool "hasFile" }}color-positive{{ end }}">{{ formatTime "Mon 3PM" (parseTime "rfc3339" (.String "airDateUtc")) }}</div>
                         </li>
@@ -545,7 +545,7 @@ data:
                         <li class="flex justify-between gap-10">
                           <div class="min-width-0">
                             <div class="color-highlight text-truncate">{{ .String "title" }}</div>
-                            <div class="size-h6">{{ if .Exists "digitalRelease" }}Digital{{ else if .Exists "physicalRelease" }}Physical{{ else }}Cinemas{{ end }}</div>
+                            <div class="size-h6 color-paragraph">{{ if .Exists "digitalRelease" }}Digital{{ else if .Exists "physicalRelease" }}Physical{{ else }}Cinemas{{ end }}</div>
                           </div>
                           <div class="size-h6 shrink-0 text-right {{ if .Bool "hasFile" }}color-positive{{ end }}">{{ formatTime "Jan 2" (parseTime "rfc3339" $when) }}</div>
                         </li>
@@ -615,9 +615,9 @@ data:
                   <div class="hl-allclear"><span class="hl-dot"></span>Radarr, Sonarr and Prowlarr are healthy</div>
                 {{ else }}
                   <ul class="list list-gap-14">
-                  {{ range $r }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Radarr</div><div class="size-h6">{{ .String "message" }}</div></div></li>{{ end }}
-                  {{ range $s }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Sonarr</div><div class="size-h6">{{ .String "message" }}</div></div></li>{{ end }}
-                  {{ range $p }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Prowlarr</div><div class="size-h6">{{ .String "message" }}</div></div></li>{{ end }}
+                  {{ range $r }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Radarr</div><div class="size-h6 color-paragraph">{{ .String "message" }}</div></div></li>{{ end }}
+                  {{ range $s }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Sonarr</div><div class="size-h6 color-paragraph">{{ .String "message" }}</div></div></li>{{ end }}
+                  {{ range $p }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Prowlarr</div><div class="size-h6 color-paragraph">{{ .String "message" }}</div></div></li>{{ end }}
                   </ul>
                 {{ end }}
 ---
