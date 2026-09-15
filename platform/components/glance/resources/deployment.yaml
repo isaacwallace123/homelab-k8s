@@ -1,0 +1,96 @@
+# Dashboard — http://192.168.0.220 (direct LAN, no DNS needed). Config: glance-config.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glance
+  namespace: networking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glance
+  template:
+    metadata:
+      labels:
+        app: glance
+    spec:
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: apps
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: glance
+          image: glanceapp/glance:v0.8.6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # Server-side dates (the Sonarr/Radarr calendar windows and their labels).
+            - name: TZ
+              value: America/Toronto
+          # Every key of the Secret becomes a variable the config reads as ${KEY}.
+          envFrom:
+            - secretRef:
+                name: glance-secrets
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 3
+          volumeMounts:
+            # Whole directories, not subPath: a subPath mount never sees ConfigMap updates,
+            # and Glance reloads its config on change.
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: assets
+              mountPath: /app/assets
+              readOnly: true
+          # Go, and widget responses are cached in memory — a fraction of what Homepage's
+          # Next.js server needed. No CPU limit: throttling a dashboard buys nothing.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: glance-config
+        - name: assets
+          configMap:
+            name: glance-assets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glance
+  namespace: networking
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.0.220"
+spec:
+  type: LoadBalancer
+  selector:
+    app: glance
+  ports:
+    - port: 80
+      targetPort: http
+      name: http

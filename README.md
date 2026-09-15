@@ -211,7 +211,7 @@ TLS is terminated at the gateway using a cert-manager-issued wildcard certificat
 
 | Hostname | Service | Namespace |
 | :--- | :--- | :--- |
-| `home.lan` | Homepage dashboard | `networking` |
+| `home.lan` | Glance dashboard | `networking` |
 | `ntfy.lan` | ntfy notifications | `networking` |
 | `argocd.lan` | ArgoCD UI (TLS passthrough) | `argocd` |
 | `plex.lan` | Plex Web | `media` |
@@ -252,7 +252,7 @@ The entire \*arr stack runs as a single pod (`media-stack`) in the `media` names
 | App | Purpose |
 | :--- | :--- |
 | AdGuard Home | DNS filtering + `.lan` rewrites |
-| Homepage | Cluster dashboard with live widget data |
+| Glance | Cluster dashboard — service status, cluster stats, streams, downloads |
 | ntfy | Self-hosted push notifications (Alertmanager webhooks) |
 | cloudflared | Cloudflare Tunnel — external access without open ports |
 

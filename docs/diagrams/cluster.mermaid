@@ -42,7 +42,7 @@ flowchart TB
             subgraph ns_networking["namespace: networking"]
                 EnvoyGW["Envoy Gateway\n192.168.0.201"]
                 AdGuard["AdGuard Home\nDNS 192.168.0.202"]
-                Homepage["Homepage"]
+                Glance["Glance dashboard"]
                 Cloudflared["cloudflared"]
                 ntfy["ntfy"]
             end
@@ -88,7 +88,7 @@ flowchart TB
     CF -->|"isaacwallace.dev"| Cloudflared
     Cloudflared --> EnvoyGW
 
-    EnvoyGW --> Homepage
+    EnvoyGW --> Glance
     EnvoyGW --> ntfy
     EnvoyGW --> ArgoCD
     EnvoyGW --> Grafana

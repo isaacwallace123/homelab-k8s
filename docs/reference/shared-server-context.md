@@ -35,7 +35,7 @@ The homelab owns:
 
 - k3s cluster lifecycle on `pve2`
 - ArgoCD bootstrap and reconciliation
-- personal services such as Plex, media automation, AdGuard Home, Homepage, and ntfy
+- personal services such as Plex, media automation, AdGuard Home, Glance, and ntfy
 - shared observability patterns with Prometheus, Grafana, Loki, Alertmanager, and node exporters
 - Longhorn and NFS-backed storage used by homelab services
 - Cloudflare Tunnel and `.lan` access patterns for homelab services

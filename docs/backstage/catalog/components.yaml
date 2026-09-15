@@ -110,13 +110,13 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: homepage
-  description: Cluster dashboard with live widget data for all deployed services
+  name: glance
+  description: Glance dashboard — service status, cluster stats and media activity, iPad-first
   tags:
     - dashboard
   links:
     - url: https://home.lan
-      title: Homepage
+      title: Glance dashboard
 spec:
   type: website
   lifecycle: production

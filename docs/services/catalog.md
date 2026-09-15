@@ -40,7 +40,7 @@ environment variables, resources, and manifests remain in `platform/components/`
 | --- | --- | --- | --- |
 | Plex | `media` | Media streaming and Intel GPU transcoding | LAN |
 | Media stack | `media` | Download, indexing, and request automation | LAN, VPN-routed egress |
-| Homepage | `networking` | Internal service dashboard | LAN |
+| Glance | `networking` | Internal service dashboard | LAN |
 | ntfy | `networking` | Alert and operator notification delivery | LAN |
 | Minecraft Valhelsia | `games` | Modded game server | LAN / pinned service |
 | Portfolio | `portfolio` | Public portfolio Kubernetes workloads | Cloudflare edge |

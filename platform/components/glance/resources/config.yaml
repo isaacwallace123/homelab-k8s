@@ -1,0 +1,912 @@
+# The homelab dashboard — Glance (https://github.com/glanceapp/glance).
+#
+# Replaced gethomepage/homepage, which is gone from the cluster and from this repo. Glance
+# owns 192.168.0.220 outright now — component, Deployment, Service, ConfigMaps and Secret all
+# carry the `glance` name.
+#
+# Layout lives in three files so each page reads on its own:
+#   glance.yml   server, theme, branding, and the page list
+#   home.yml     cluster at a glance — status, services, streams, downloads
+#   media.yml    the *arr side — queue, upcoming releases, requests, health
+#
+# Every widget fetches server-side from cluster DNS and is cached for its `cache` window, so
+# a page load is served from memory instead of fanning out to a dozen APIs per visitor.
+#
+# ${VARS} are read from the environment, which is the whole of the glance-secrets Secret
+# (envFrom) — its keys are used as-is: PLEX_TOKEN, RADARR_KEY, SONARR_KEY, PROWLARR_KEY,
+# OVERSEERR_KEY, SAB_KEY, QB_PASS, GRAFANA_PASS.
+#
+# Glance watches its config and reloads on change, but a ConfigMap update takes up to a
+# minute to reach the volume. If a change does not show after that:
+#   kubectl -n networking rollout restart deploy/glance
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glance-config
+  namespace: networking
+data:
+  glance.yml: |
+    server:
+      port: 8080
+      assets-path: /app/assets
+
+    document:
+      # Glance renders once per page load and has no live refresh. On the iPad, as a
+      # home-screen app, there is no pull-to-refresh either — so reload when the app is
+      # brought back after a minute away, and every two minutes while it sits open. Never
+      # while the search box has focus.
+      head: |
+        <script>
+          (() => {
+            let loadedAt = Date.now();
+            const typing = () => document.activeElement && document.activeElement.matches("input, textarea");
+            const stale = (ms) => Date.now() - loadedAt > ms;
+            const refresh = () => { if (!typing()) location.reload(); };
+            document.addEventListener("visibilitychange", () => {
+              if (document.visibilityState === "visible" && stale(60000)) refresh();
+            });
+            setInterval(() => {
+              if (document.visibilityState === "visible" && stale(120000)) refresh();
+            }, 15000);
+          })();
+        </script>
+
+    theme:
+      # Monochrome. Cool near-black, near-white for anything that leads, and colour reserved
+      # for state — green means up, red means broken. Nothing is tinted for decoration, which
+      # is what keeps a wall of twenty service tiles readable at a glance.
+      background-color: 222 12 7
+      primary-color: 216 28 84
+      positive-color: 152 44 54
+      negative-color: 358 62 60
+      contrast-multiplier: 1.1
+      text-saturation-multiplier: 0.8
+      custom-css-file: /assets/homelab.css
+      presets:
+        # Same design in light. The picker is top-right; the choice sticks per device, so the
+        # iPad can sit on light while everything else stays dark.
+        daylight:
+          light: true
+          background-color: 220 16 97
+          primary-color: 220 22 26
+          positive-color: 152 48 30
+          negative-color: 358 58 45
+          contrast-multiplier: 1.05
+          text-saturation-multiplier: 0.8
+
+    branding:
+      # Added to the iPad home screen, this is what the app is called and what its icon is.
+      app-name: Homelab
+      app-icon-url: /assets/icon.png
+      favicon-url: /assets/icon.png
+      app-background-color: "#0f1113"
+      logo-text: H
+      hide-footer: true
+
+    pages:
+      - $include: home.yml
+      - $include: media.yml
+
+  home.yml: |
+    - name: Home
+      slug: home
+      columns:
+        # ── left: the cluster itself ──────────────────────────────────────────────────────
+        - size: small
+          widgets:
+            - type: clock
+              hour-format: 12h
+              hide-header: true
+
+            - type: custom-api
+              title: Cluster
+              title-url: http://192.168.0.240
+              cache: 30s
+              subrequests:
+                cpu:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: '100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100'
+                mem:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: '(1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)) * 100'
+                disk:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'max(1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100'
+                nodes:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'count(up{job="node-exporter"} == 1) or vector(0)'
+                nodesTotal:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'count(up{job="node-exporter"}) or vector(0)'
+                rx:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'sum(rate(node_network_receive_bytes_total{device!~"lo|cni.*|veth.*|tun.*|flannel.*"}[5m]))'
+                tx:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'sum(rate(node_network_transmit_bytes_total{device!~"lo|cni.*|veth.*|tun.*|flannel.*"}[5m]))'
+              template: |
+                {{ define "rate" }}{{ if ge . 1048576.0 }}{{ printf "%.1f" (div . 1048576.0) }}<small>MB/s</small>{{ else }}{{ printf "%.0f" (div . 1024.0) }}<small>KB/s</small>{{ end }}{{ end }}
+                {{ $cpu := (.Subrequest "cpu").JSON.Float "data.result.0.value.1" }}
+                {{ $mem := (.Subrequest "mem").JSON.Float "data.result.0.value.1" }}
+                {{ $disk := (.Subrequest "disk").JSON.Float "data.result.0.value.1" }}
+                {{ $up := (.Subrequest "nodes").JSON.Int "data.result.0.value.1" }}
+                {{ $total := (.Subrequest "nodesTotal").JSON.Int "data.result.0.value.1" }}
+                {{ if ne (.Subrequest "cpu").Response.StatusCode 200 }}
+                <div class="hl-fail">Prometheus answered {{ (.Subrequest "cpu").Response.Status }}</div>
+                {{ else }}
+                <div class="hl-stats">
+                  <div>
+                    <div class="hl-label">CPU</div>
+                    <div class="hl-value">{{ printf "%.0f" $cpu }}<small>%</small></div>
+                    <div class="hl-bar{{ if ge $cpu 85.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" $cpu }}"></span></div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Memory</div>
+                    <div class="hl-value">{{ printf "%.0f" $mem }}<small>%</small></div>
+                    <div class="hl-bar{{ if ge $mem 85.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" $mem }}"></span></div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Root disk</div>
+                    <div class="hl-value">{{ printf "%.0f" $disk }}<small>%</small></div>
+                    <div class="hl-bar{{ if ge $disk 85.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" $disk }}"></span></div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Nodes</div>
+                    <div class="hl-value{{ if lt $up $total }} color-negative{{ end }}">{{ $up }}<small>/ {{ $total }}</small></div>
+                    <div class="hl-sub">{{ if lt $up $total }}{{ sub $total $up }} down{{ else }}all ready{{ end }}</div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Net in</div>
+                    <div class="hl-value">{{ template "rate" ((.Subrequest "rx").JSON.Float "data.result.0.value.1") }}</div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Net out</div>
+                    <div class="hl-value">{{ template "rate" ((.Subrequest "tx").JSON.Float "data.result.0.value.1") }}</div>
+                  </div>
+                </div>
+                {{ end }}
+
+            - type: custom-api
+              title: Alerts
+              title-url: http://192.168.0.242
+              cache: 1m
+              url: http://alertmanager.monitoring.svc.cluster.local:9093/api/v2/alerts
+              parameters:
+                active: "true"
+                silenced: "false"
+                inhibited: "false"
+              template: |
+                {{ $alerts := .JSON.Array "" }}
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Alertmanager answered {{ .Response.Status }}</div>
+                {{ else if eq (len $alerts) 0 }}
+                  <div class="hl-allclear"><span class="hl-dot"></span>All clear</div>
+                {{ else }}
+                  <ul class="list list-gap-14">
+                  {{ range $alerts }}
+                    <li class="flex gap-10 items-start">
+                      <span class="hl-dot {{ if eq (.String "labels.severity") "critical" }}hl-bad{{ else }}hl-warn{{ end }}"></span>
+                      <div class="min-width-0">
+                        <div class="color-highlight text-truncate">{{ .String "labels.alertname" }}</div>
+                        <div class="size-h6 text-truncate-2-lines">{{ if .Exists "annotations.summary" }}{{ .String "annotations.summary" }}{{ else }}{{ .String "labels.namespace" }}{{ end }}</div>
+                        <div class="size-h6 color-subdue" {{ parseRelativeTime "rfc3339" (.String "startsAt") }}></div>
+                      </div>
+                    </li>
+                  {{ end }}
+                  </ul>
+                {{ end }}
+
+        # ── centre: every service, with a live up/down check ─────────────────────────────
+        - size: full
+          widgets:
+            - type: search
+              search-engine: google
+              new-tab: true
+              hide-header: true
+              placeholder: Search the web…
+
+            # `url` is the LAN address the tile opens. `check-url` only where the page a person
+            # opens is not a meaningful health signal.
+            - type: monitor
+              title: Media
+              cache: 1m
+              sites:
+                - title: Plex
+                  url: http://192.168.0.230:32400/web
+                  check-url: http://plex.media.svc.cluster.local:32400/identity
+                  icon: di:plex
+                - title: Overseerr
+                  url: http://192.168.0.236
+                  icon: di:overseerr
+                - title: Radarr
+                  url: http://192.168.0.231
+                  icon: di:radarr
+                - title: Sonarr
+                  url: http://192.168.0.232
+                  icon: di:sonarr
+                - title: Prowlarr
+                  url: http://192.168.0.233
+                  icon: di:prowlarr
+                - title: qBittorrent
+                  url: http://192.168.0.234
+                  icon: di:qbittorrent
+                # SABnzbd's host_whitelist only admits sabnzbd.lan, so a request by IP is
+                # answered 403 by a healthy server. The API with a key is the real check.
+                - title: SABnzbd
+                  url: http://192.168.0.235
+                  check-url: http://sabnzbd.media.svc.cluster.local:8090/api?mode=version&output=json
+                  icon: di:sabnzbd
+
+            - type: monitor
+              title: Cloud & Fitness
+              cache: 1m
+              sites:
+                - title: Immich
+                  url: http://192.168.0.244
+                  check-url: http://immich.cloud.svc.cluster.local/api/server/ping
+                  icon: di:immich
+                - title: Stirling PDF
+                  url: http://192.168.0.247
+                  icon: di:stirling-pdf
+                - title: openGym
+                  url: http://192.168.0.246
+                  icon: mdi:dumbbell
+                # Garage has no web UI — .245 is the raw S3 API, which refuses anonymous requests,
+                # so opening the tile shows AccessDenied from a healthy server. The status comes
+                # from the admin API's /health, which is the signal that actually means something.
+                - title: Garage S3
+                  url: http://192.168.0.245
+                  check-url: http://garage.cloud.svc.cluster.local:3903/health
+                  icon: di:garage
+
+            - type: split-column
+              max-columns: 2
+              widgets:
+                - type: monitor
+                  title: Observability
+                  cache: 1m
+                  style: compact
+                  sites:
+                    - title: Grafana
+                      url: http://192.168.0.240
+                      check-url: http://grafana.monitoring.svc.cluster.local:3000/api/health
+                      icon: di:grafana
+                    - title: Prometheus
+                      url: http://192.168.0.241
+                      check-url: http://prometheus.monitoring.svc.cluster.local:9090/-/ready
+                      icon: di:prometheus
+                    - title: Alertmanager
+                      url: http://192.168.0.242
+                      check-url: http://alertmanager.monitoring.svc.cluster.local:9093/-/ready
+                      icon: di:alertmanager
+                    - title: ntfy
+                      url: http://192.168.0.222
+                      check-url: http://ntfy.networking.svc.cluster.local/v1/health
+                      icon: di:ntfy
+
+                - type: monitor
+                  title: Infrastructure
+                  cache: 1m
+                  style: compact
+                  sites:
+                    - title: ArgoCD
+                      url: https://192.168.0.203
+                      icon: di:argo-cd
+                      allow-insecure: true
+                    - title: Proxmox
+                      url: https://192.168.0.254:8006
+                      icon: di:proxmox
+                      allow-insecure: true
+                    - title: TrueNAS
+                      url: http://192.168.0.252
+                      icon: di:truenas
+                    - title: Envoy Gateway
+                      url: http://192.168.0.201
+                      icon: mdi:router-network
+                      alt-status-codes: [404]
+                    - title: Router
+                      url: http://192.168.0.1
+                      icon: mdi:router-wireless
+
+        # ── right: what the house is doing right now ─────────────────────────────────────
+        - size: small
+          widgets:
+            - type: custom-api
+              title: Now streaming
+              title-url: http://192.168.0.230:32400/web
+              cache: 30s
+              url: http://plex.media.svc.cluster.local:32400/status/sessions
+              headers:
+                Accept: application/json
+                X-Plex-Token: ${PLEX_TOKEN}
+              template: |
+                {{ $sessions := .JSON.Array "MediaContainer.Metadata" }}
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Plex answered {{ .Response.Status }}</div>
+                {{ else if eq (len $sessions) 0 }}
+                  <div class="hl-empty">Nothing playing</div>
+                {{ else }}
+                  <ul class="list list-gap-20">
+                  {{ range $sessions }}
+                    {{ $duration := .Int "duration" }}
+                    <li>
+                      <div class="flex justify-between gap-10 items-center">
+                        <div class="color-highlight text-truncate">{{ if eq (.String "type") "episode" }}{{ .String "grandparentTitle" }}{{ else }}{{ .String "title" }}{{ end }}</div>
+                        <div class="size-h6 shrink-0 {{ if eq (.String "Player.state") "playing" }}color-positive{{ else }}color-subdue{{ end }}">{{ .String "Player.state" }}</div>
+                      </div>
+                      <div class="size-h6 text-truncate">
+                        {{ if eq (.String "type") "episode" }}S{{ .Int "parentIndex" }} · E{{ .Int "index" }} · {{ .String "title" }} · {{ end }}{{ .String "User.title" }} on {{ .String "Player.title" }}
+                      </div>
+                      {{ if gt $duration 0 }}
+                      <div class="hl-bar hl-thin"><span style="--p: {{ div (mul (.Int "viewOffset") 100) $duration }}"></span></div>
+                      {{ end }}
+                    </li>
+                  {{ end }}
+                  </ul>
+                {{ end }}
+
+            # qBittorrent authenticates with a session cookie, so the widget's own request IS
+            # the login and the template carries the cookie into the real calls. The cookie is
+            # `SID` before qBittorrent 5 and `QBT_SID_<port>` after; the match takes either.
+            # Keep QB_PASS free of `&` — it goes into a form body as-is.
+            - type: custom-api
+              title: Downloads
+              title-url: http://192.168.0.234
+              cache: 15s
+              url: http://qbittorrent.media.svc.cluster.local:8080/api/v2/auth/login
+              method: POST
+              body-type: string
+              body: username=admin&password=${QB_PASS}
+              headers:
+                Content-Type: application/x-www-form-urlencoded
+              skip-json-validation: true
+              subrequests:
+                sab:
+                  url: http://sabnzbd.media.svc.cluster.local:8090/api
+                  parameters:
+                    mode: queue
+                    output: json
+                    limit: "3"
+                    apikey: ${SAB_KEY}
+              template: |
+                {{ define "rate" }}{{ if ge . 1048576.0 }}{{ printf "%.1f" (div . 1048576.0) }} MB/s{{ else if ge . 1024.0 }}{{ printf "%.0f" (div . 1024.0) }} KB/s{{ else }}idle{{ end }}{{ end }}
+                {{ $cookie := findMatch "[A-Za-z_]*SID[A-Za-z0-9_]*=[^;]+" (.Response.Header.Get "Set-Cookie") }}
+                {{ $transfer := newRequest "http://qbittorrent.media.svc.cluster.local:8080/api/v2/transfer/info" | withHeader "Cookie" $cookie | getResponse }}
+                {{ $active := newRequest "http://qbittorrent.media.svc.cluster.local:8080/api/v2/torrents/info" | withParameter "filter" "downloading" | withParameter "sort" "progress" | withParameter "reverse" "true" | withParameter "limit" "3" | withHeader "Cookie" $cookie | getResponse }}
+                {{ $sab := (.Subrequest "sab").JSON }}
+                {{/* SABnzbd answers a bad key with 200 and {"status": false, "error": …} */}}
+                {{ $qbOK := eq $transfer.Response.StatusCode 200 }}
+                {{ $sabOK := and (eq (.Subrequest "sab").Response.StatusCode 200) ($sab.Exists "queue") }}
+
+                <div class="hl-stats">
+                  <div>
+                    <div class="hl-label">Torrents ↓</div>
+                    <div class="hl-value hl-value-sm">{{ if $qbOK }}{{ template "rate" ($transfer.JSON.Float "dl_info_speed") }}{{ else }}<span class="color-negative">login failed</span>{{ end }}</div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Usenet ↓</div>
+                    <div class="hl-value hl-value-sm">{{ if $sabOK }}{{ template "rate" (mul ($sab.Float "queue.kbpersec") 1024.0) }}{{ else }}<span class="color-negative">{{ or ($sab.String "error") "unreachable" }}</span>{{ end }}</div>
+                  </div>
+                </div>
+
+                {{ $torrents := $active.JSON.Array "" }}
+                {{ $slots := $sab.Array "queue.slots" }}
+                {{ if and (eq (len $torrents) 0) (eq (len $slots) 0) }}
+                  {{ if and $qbOK $sabOK }}<div class="hl-empty margin-top-10">Queues are empty</div>{{ end }}
+                {{ else }}
+                  <ul class="list list-gap-14 margin-top-20">
+                  {{ range $torrents }}
+                    <li>
+                      <div class="flex justify-between gap-10">
+                        <div class="text-truncate">{{ .String "name" }}</div>
+                        <div class="size-h6 shrink-0">{{ printf "%.0f" (mul (.Float "progress") 100.0) }}%</div>
+                      </div>
+                      <div class="hl-bar hl-thin"><span style="--p: {{ printf "%.0f" (mul (.Float "progress") 100.0) }}"></span></div>
+                    </li>
+                  {{ end }}
+                  {{ range $slots }}
+                    <li>
+                      <div class="flex justify-between gap-10">
+                        <div class="text-truncate">{{ .String "filename" }}</div>
+                        <div class="size-h6 shrink-0">{{ .String "percentage" }}%</div>
+                      </div>
+                      <div class="hl-bar hl-thin"><span style="--p: {{ .Int "percentage" }}"></span></div>
+                    </li>
+                  {{ end }}
+                  </ul>
+                {{ end }}
+
+            - type: bookmarks
+              title: Elsewhere
+              groups:
+                - links:
+                    - title: Tailscale admin
+                      url: https://login.tailscale.com/admin/machines
+                      icon: di:tailscale
+                    - title: openGym (public)
+                      url: https://fitness.isaacwallace.dev
+                      icon: mdi:dumbbell
+                    - title: homelab-k8s
+                      url: https://github.com/isaacwallace123/homelab-k8s
+                      icon: si:github
+
+  media.yml: |
+    - name: Media
+      columns:
+        - size: full
+          widgets:
+            - type: custom-api
+              title: In the queue
+              cache: 1m
+              subrequests:
+                radarr:
+                  url: http://radarr.media.svc.cluster.local:7878/api/v3/queue
+                  headers:
+                    X-Api-Key: ${RADARR_KEY}
+                  parameters:
+                    pageSize: "10"
+                    includeMovie: "true"
+                sonarr:
+                  url: http://sonarr.media.svc.cluster.local:8989/api/v3/queue
+                  headers:
+                    X-Api-Key: ${SONARR_KEY}
+                  parameters:
+                    pageSize: "10"
+                    includeSeries: "true"
+                    includeEpisode: "true"
+              template: |
+                {{ define "row" }}
+                  {{ $size := .Float "size" }}
+                  <li>
+                    <div class="flex justify-between gap-10 items-center">
+                      <div class="min-width-0">
+                        <div class="color-highlight text-truncate">{{ if .Exists "series.title" }}{{ .String "series.title" }} <span class="color-subdue">S{{ .Int "episode.seasonNumber" }}E{{ .Int "episode.episodeNumber" }}</span>{{ else if .Exists "movie.title" }}{{ .String "movie.title" }} <span class="color-subdue">{{ .Int "movie.year" }}</span>{{ else }}{{ .String "title" }}{{ end }}</div>
+                        <div class="size-h6 text-truncate">{{ .String "status" }}{{ if .Exists "timeleft" }} · {{ .String "timeleft" }} left{{ end }}{{ if ne (.String "trackedDownloadState") "downloading" }} · {{ .String "trackedDownloadState" }}{{ end }}</div>
+                      </div>
+                      {{ if gt $size 0.0 }}<div class="size-h6 shrink-0">{{ printf "%.0f" (mul (div (sub $size (.Float "sizeleft")) $size) 100.0) }}%</div>{{ end }}
+                    </div>
+                    {{ if gt $size 0.0 }}<div class="hl-bar hl-thin"><span style="--p: {{ printf "%.0f" (mul (div (sub $size (.Float "sizeleft")) $size) 100.0) }}"></span></div>{{ end }}
+                  </li>
+                {{ end }}
+                {{ $movies := (.Subrequest "radarr").JSON.Array "records" }}
+                {{ $shows := (.Subrequest "sonarr").JSON.Array "records" }}
+                {{ if ne (.Subrequest "radarr").Response.StatusCode 200 }}<div class="hl-fail">Radarr answered {{ (.Subrequest "radarr").Response.Status }}</div>{{ end }}
+                {{ if ne (.Subrequest "sonarr").Response.StatusCode 200 }}<div class="hl-fail">Sonarr answered {{ (.Subrequest "sonarr").Response.Status }}</div>{{ end }}
+                {{ if and (eq (len $movies) 0) (eq (len $shows) 0) }}
+                  {{ if and (eq (.Subrequest "radarr").Response.StatusCode 200) (eq (.Subrequest "sonarr").Response.StatusCode 200) }}<div class="hl-empty">Nothing downloading</div>{{ end }}
+                {{ else }}
+                  <ul class="list list-gap-14">
+                    {{ range $movies }}{{ template "row" . }}{{ end }}
+                    {{ range $shows }}{{ template "row" . }}{{ end }}
+                  </ul>
+                {{ end }}
+
+            - type: split-column
+              max-columns: 2
+              widgets:
+                # The calendar window has to move with the clock, so these requests are built in
+                # the template rather than declared — `parameters` cannot hold a moving date.
+                - type: custom-api
+                  title: Airing this week
+                  title-url: http://192.168.0.232/calendar
+                  cache: 30m
+                  template: |
+                    {{ $episodes := newRequest "http://sonarr.media.svc.cluster.local:8989/api/v3/calendar"
+                      | withHeader "X-Api-Key" "${SONARR_KEY}"
+                      | withParameter "start" (formatTime "rfc3339" (startOfDay now))
+                      | withParameter "end" (formatTime "rfc3339" (offsetNow "168h"))
+                      | withParameter "includeSeries" "true"
+                      | getResponse }}
+                    {{ $list := $episodes.JSON.Array "" }}
+                    {{ if ne $episodes.Response.StatusCode 200 }}
+                      <div class="hl-fail">Sonarr answered {{ $episodes.Response.Status }}</div>
+                    {{ else if eq (len $list) 0 }}
+                      <div class="hl-empty">Nothing scheduled</div>
+                    {{ else }}
+                      <ul class="list list-gap-14">
+                      {{ range $list }}
+                        <li class="flex justify-between gap-10">
+                          <div class="min-width-0">
+                            <div class="color-highlight text-truncate">{{ .String "series.title" }}</div>
+                            <div class="size-h6 text-truncate">S{{ .Int "seasonNumber" }}E{{ .Int "episodeNumber" }} · {{ .String "title" }}</div>
+                          </div>
+                          <div class="size-h6 shrink-0 text-right {{ if .Bool "hasFile" }}color-positive{{ end }}">{{ formatTime "Mon 3PM" (parseTime "rfc3339" (.String "airDateUtc")) }}</div>
+                        </li>
+                      {{ end }}
+                      </ul>
+                    {{ end }}
+
+                - type: custom-api
+                  title: Movies this month
+                  title-url: http://192.168.0.231/calendar
+                  cache: 30m
+                  template: |
+                    {{ $movies := newRequest "http://radarr.media.svc.cluster.local:7878/api/v3/calendar"
+                      | withHeader "X-Api-Key" "${RADARR_KEY}"
+                      | withParameter "start" (formatTime "rfc3339" (startOfDay now))
+                      | withParameter "end" (formatTime "rfc3339" (offsetNow "720h"))
+                      | getResponse }}
+                    {{ $list := $movies.JSON.Array "" }}
+                    {{ if ne $movies.Response.StatusCode 200 }}
+                      <div class="hl-fail">Radarr answered {{ $movies.Response.Status }}</div>
+                    {{ else if eq (len $list) 0 }}
+                      <div class="hl-empty">Nothing releasing</div>
+                    {{ else }}
+                      <ul class="list list-gap-14">
+                      {{ range $list }}
+                        {{ $when := or (.String "digitalRelease") (.String "physicalRelease") (.String "inCinemas") }}
+                        <li class="flex justify-between gap-10">
+                          <div class="min-width-0">
+                            <div class="color-highlight text-truncate">{{ .String "title" }}</div>
+                            <div class="size-h6">{{ if .Exists "digitalRelease" }}Digital{{ else if .Exists "physicalRelease" }}Physical{{ else }}Cinemas{{ end }}</div>
+                          </div>
+                          <div class="size-h6 shrink-0 text-right {{ if .Bool "hasFile" }}color-positive{{ end }}">{{ formatTime "Jan 2" (parseTime "rfc3339" $when) }}</div>
+                        </li>
+                      {{ end }}
+                      </ul>
+                    {{ end }}
+
+        - size: small
+          widgets:
+            - type: custom-api
+              title: Requests
+              title-url: http://192.168.0.236
+              cache: 5m
+              url: http://overseerr.media.svc.cluster.local:5055/api/v1/request/count
+              headers:
+                X-Api-Key: ${OVERSEERR_KEY}
+              template: |
+                {{ if ne .Response.StatusCode 200 }}
+                <div class="hl-fail">Overseerr answered {{ .Response.Status }}</div>
+                {{ else }}
+                <div class="hl-stats">
+                  <div>
+                    <div class="hl-label">Pending</div>
+                    <div class="hl-value{{ if gt (.JSON.Int "pending") 0 }} color-primary{{ end }}">{{ .JSON.Int "pending" }}</div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Processing</div>
+                    <div class="hl-value">{{ .JSON.Int "processing" }}</div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Available</div>
+                    <div class="hl-value">{{ .JSON.Int "available" }}</div>
+                  </div>
+                  <div>
+                    <div class="hl-label">Total</div>
+                    <div class="hl-value">{{ .JSON.Int "total" }}</div>
+                  </div>
+                </div>
+                {{ end }}
+
+            # Only what needs a human: an empty list is the good state.
+            - type: custom-api
+              title: Health
+              cache: 5m
+              subrequests:
+                Radarr:
+                  url: http://radarr.media.svc.cluster.local:7878/api/v3/health
+                  headers:
+                    X-Api-Key: ${RADARR_KEY}
+                Sonarr:
+                  url: http://sonarr.media.svc.cluster.local:8989/api/v3/health
+                  headers:
+                    X-Api-Key: ${SONARR_KEY}
+                Prowlarr:
+                  url: http://prowlarr.media.svc.cluster.local:9696/api/v1/health
+                  headers:
+                    X-Api-Key: ${PROWLARR_KEY}
+              template: |
+                {{ $r := (.Subrequest "Radarr").JSON.Array "" }}
+                {{ $s := (.Subrequest "Sonarr").JSON.Array "" }}
+                {{ $p := (.Subrequest "Prowlarr").JSON.Array "" }}
+                {{ $reachable := and (eq (.Subrequest "Radarr").Response.StatusCode 200) (eq (.Subrequest "Sonarr").Response.StatusCode 200) (eq (.Subrequest "Prowlarr").Response.StatusCode 200) }}
+                {{ if ne (.Subrequest "Radarr").Response.StatusCode 200 }}<div class="hl-fail">Radarr answered {{ (.Subrequest "Radarr").Response.Status }}</div>{{ end }}
+                {{ if ne (.Subrequest "Sonarr").Response.StatusCode 200 }}<div class="hl-fail">Sonarr answered {{ (.Subrequest "Sonarr").Response.Status }}</div>{{ end }}
+                {{ if ne (.Subrequest "Prowlarr").Response.StatusCode 200 }}<div class="hl-fail">Prowlarr answered {{ (.Subrequest "Prowlarr").Response.Status }}</div>{{ end }}
+                {{ if and $reachable (eq (len $r) 0) (eq (len $s) 0) (eq (len $p) 0) }}
+                  <div class="hl-allclear"><span class="hl-dot"></span>Radarr, Sonarr and Prowlarr are healthy</div>
+                {{ else }}
+                  <ul class="list list-gap-14">
+                  {{ range $r }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Radarr</div><div class="size-h6">{{ .String "message" }}</div></div></li>{{ end }}
+                  {{ range $s }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Sonarr</div><div class="size-h6">{{ .String "message" }}</div></div></li>{{ end }}
+                  {{ range $p }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Prowlarr</div><div class="size-h6">{{ .String "message" }}</div></div></li>{{ end }}
+                  </ul>
+                {{ end }}
+---
+# Served at /assets/homelab.css. Theme colours are in glance.yml; this is only shape and the
+# few classes the custom-api templates use.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glance-assets
+  namespace: networking
+binaryData:
+  # The iPad home-screen icon (512x512 PNG, what apple-touch-icon points at). Kept in git as
+  # base64 because it is 5 KB and needs no build step, no registry and no volume.
+  icon.png: |
+    iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAQAElEQVR4nOzdCZCedX3A8X/ODbvJ3rtJNmETsgkJIJALUA5F
+    wiVUlGKCWDxmajvTeuARsdMZ26lTZ2wdORSt1hlrRTtWxYBU1JqgcoQjF4fE3FzZANldcmw2p4l9LDMMg0Yw5H33eZ7f5xMm
+    IZmwz294Z57v8/yfY4c3NLUkAOIZmgAISQAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAA
+    ghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAI
+    SgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAo
+    AQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAE
+    ACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIA
+    gKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAA
+    ghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAI
+    SgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghIAgKAEACAoAQAISgAAghqeIIaG+vp5558/ffqM9ra21va2se3t
+    kyZN3j0w0NPb89zWrb1be7b29Kxdu2bJ4sU7du5MEMCQhqaWBOU1oaPjggsvPG/evLlz5g4bNuwV//7BgweXL1+2ZMmSxT/7
+    WfeWLQnKSwAora6pXZ9Y+Ik3v/m8dKR+/vM7P3/d59evW5+gjASAEuroGH/NNR+57LK3DR36Wq9yHTp06Ic/vO0LX/hCd3d3
+    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
+    WPPrx5pbWpoq8IDYpo3rb7/1lr3WhQdPdj3g3nvu7pgwYXxHRzraVq5YfsPn/yU7A0iUl7uAQjhuStfc098wbvz4dDQ89+wz
+    yx98YJPvB5IbM2fNeevb3j6l6+jc/rtp48Yf/fDWlSu97q38BCCQCROOnXv66zsnT05H6uknn1j24P3dm59O5M/0GSe89bK3
+    n3TyKelIPfarR//ntlvXrMnRi+eoKAEIJ1synjJ1Wna02DFh4qt5MvbQoUNbtmx+fMOGjRvW9/fn9AkpXtTS0jp77mmz5sw5
+    /vgZw4YNe8W/f/DgwfXr1q5auXzFsmV9LucEIwBx1dTUTOma1tLWVldbVzt69Oi67NfR6Xd3ke7aNTCwO/tp90BfT0+21FPl
+    u845KrKPc9acuRM7OxsbGhuaGrMfDY1N6Xd3kW7btn3bjm3bt+/Yvvmpp1atWJ590ImQBAAgKE8CAwQlAABBCQBAUAIAEJQA
+    AAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIA
+    EJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBA
+    UAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABB
+    CQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQl
+    AABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQA
+    AAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIA
+    EJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBA
+    UAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABBCQBAUAIAEJQAAAQlAABB
+    CQBAUAIAEJQAAAQlAABB/R8AAAD//4v17v0AAAAGSURBVAMAXS97Q58KDdsAAAAASUVORK5CYII=
+data:
+  homelab.css: |
+    /* Glance ships a monospace face. A system stack reads as the device's own UI — SF Pro on
+       the iPad and on macOS, Segoe on Windows — which is most of what makes this feel modern
+       rather than terminal-ish. Numbers stay tabular so live figures do not jitter. */
+    body,
+    input,
+    button,
+    textarea,
+    select {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI",
+        Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-feature-settings: "tnum" 1, "cv01" 1;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    :root {
+      --border-radius: 14px;
+    }
+
+    .widget-content {
+      border-radius: var(--border-radius);
+    }
+
+    /* Sans-serif carries uppercase labels worse than mono does — open them up slightly. */
+    .widget-header,
+    .hl-label {
+      letter-spacing: 0.06em;
+    }
+
+    .monitor-site-title,
+    .size-h3 {
+      letter-spacing: -0.01em;
+    }
+
+    /* ── stat tiles ─────────────────────────────────────────────────────────── */
+    .hl-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.6rem 1.8rem;
+    }
+
+    .hl-label {
+      font-size: var(--font-size-h6);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-subdue);
+    }
+
+    .hl-value {
+      font-size: var(--font-size-h2);
+      line-height: 1.25;
+      color: var(--color-text-highlight);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .hl-value small {
+      font-size: var(--font-size-h6);
+      color: var(--color-text-base);
+      margin-left: 0.25em;
+    }
+
+    .hl-value-sm {
+      font-size: var(--font-size-h4);
+    }
+
+    .hl-sub {
+      font-size: var(--font-size-h6);
+      color: var(--color-text-subdue);
+      margin-top: 0.3rem;
+    }
+
+    .hl-bar {
+      height: 0.5rem;
+      margin-top: 0.7rem;
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--color-widget-background-highlight);
+    }
+
+    .hl-bar.hl-thin {
+      height: 0.35rem;
+      margin-top: 0.5rem;
+    }
+
+    .hl-bar > span {
+      display: block;
+      height: 100%;
+      width: calc(var(--p, 0) * 1%);
+      max-width: 100%;
+      border-radius: inherit;
+      background: var(--color-primary);
+      transition: width 0.6s ease;
+    }
+
+    .hl-bar.hl-hot > span {
+      background: var(--color-negative);
+    }
+
+    /* ── status ─────────────────────────────────────────────────────────────── */
+    .hl-dot {
+      flex-shrink: 0;
+      display: inline-block;
+      width: 0.8rem;
+      height: 0.8rem;
+      margin-top: 0.45rem;
+      border-radius: 50%;
+      background: var(--color-positive);
+      box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--color-positive) 18%, transparent);
+    }
+
+    .hl-dot.hl-warn {
+      background: var(--color-primary);
+      box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--color-primary) 18%, transparent);
+    }
+
+    .hl-dot.hl-bad {
+      background: var(--color-negative);
+      box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--color-negative) 18%, transparent);
+    }
+
+    .hl-allclear {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      color: var(--color-text-highlight);
+    }
+
+    .hl-allclear .hl-dot {
+      margin-top: 0;
+    }
+
+    /* A source that could not be read. Never rendered as an empty-but-fine state. */
+    .hl-fail {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      color: var(--color-negative);
+      font-size: var(--font-size-h6);
+      padding-block: 0.3rem;
+    }
+
+    .hl-fail::before {
+      content: "";
+      flex-shrink: 0;
+      width: 0.8rem;
+      height: 0.8rem;
+      border-radius: 50%;
+      background: var(--color-negative);
+    }
+
+    .hl-empty {
+      text-align: center;
+      padding-block: 0.8rem;
+      color: var(--color-text-subdue);
+    }
+
+    /* ── touch ──────────────────────────────────────────────────────────────── */
+    /* Bigger, calmer hit targets; no hover-only affordances that a finger never triggers. */
+    @media (hover: none) {
+      .monitor-site {
+        padding-block: 0.4rem;
+      }
+
+      .monitor-site-icon {
+        filter: none;
+        opacity: 1;
+      }
+    }
+
+    /* ── tablet ─────────────────────────────────────────────────────────────── */
+    /* Below 1190px Glance shows ONE column at a time behind swipe pills — that is iPad
+       portrait and most iPads in landscape. Wide enough for everything at once, so lay the
+       columns out as a grid instead: services across the top, the two side columns
+       beneath them side by side. Phones keep Glance's own single-column layout. */
+    @media (min-width: 700px) and (max-width: 1190px) {
+      .page-columns {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      .page-columns > .page-column {
+        display: block !important;
+        width: auto !important;
+        min-width: 0;
+      }
+
+      .page-columns > .page-column-full {
+        grid-column: 1 / -1;
+        order: -1;
+      }
+
+      /* A page with a single small column gives it the whole row. */
+      .page-columns:not(:has(> .page-column-small ~ .page-column-small)) > .page-column-small {
+        grid-column: 1 / -1;
+      }
+
+      /* The column pills have nothing left to switch; the page menu stays. */
+      .mobile-navigation-label {
+        display: none !important;
+      }
+    }

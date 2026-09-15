@@ -9,7 +9,7 @@
 #
 # ALLOCATED (check this before pinning a new address — the pool is pinned, so a duplicate
 # request silently stays <pending> forever with no event explaining why):
-#   .220 homepage      .222 ntfy        .226 minecraft-valhelsia
+#   .220 glance      .222 ntfy        .226 minecraft-valhelsia
 #   .230 plex          .231 radarr      .232 sonarr     .233 prowlarr
 #   .234 qbittorrent   .235 sabnzbd     .236 overseerr
 #   .240 grafana       .241 prometheus  .242 alertmanager

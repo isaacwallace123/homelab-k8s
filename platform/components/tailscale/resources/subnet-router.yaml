@@ -4,7 +4,7 @@
 # over WireGuard. Not a per-service tunnel: it advertises 192.168.0.0/24 into the tailnet,
 # so every address you already use keeps working unchanged —
 #
-#   Homepage .220 · Plex .230 · the *arr stack .231-.236 · Grafana .240
+#   Glance .220 · Plex .230 · the *arr stack .231-.236 · Grafana .240
 #   Immich .244 · Garage .245 · Stirling .247
 #   ArgoCD .203 · Proxmox .254 · TrueNAS .252 · the router .1
 #
@@ -108,7 +108,7 @@ spec:
             # These four ranges cover the MetalLB service pools and nothing else:
             #
             #   .200/29  → .200-.207   Envoy gateways, ArgoCD
-            #   .216/29  → .216-.223   Homepage, ntfy
+            #   .216/29  → .216-.223   Glance, ntfy
             #   .224/28  → .224-.239   Plex and the *arr stack
             #   .240/29  → .240-.247   Grafana, Prometheus, Alertmanager,
             #                          Immich, Garage, Stirling-PDF
