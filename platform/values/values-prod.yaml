@@ -131,6 +131,15 @@ components:
     resources:
       enabled: true
 
+  # NXDOMAINs search-list expansions under the *.isaacwallace.dev wildcard, which otherwise
+  # send in-cluster and upstream lookups to Cloudflare. See the ConfigMap for the full story.
+  - name: coredns-custom
+    tier: bootstrap
+    waveOffset: 1
+    namespace: kube-system
+    resources:
+      enabled: true
+
   - name: argocd
     tier: bootstrap
     namespace: argocd

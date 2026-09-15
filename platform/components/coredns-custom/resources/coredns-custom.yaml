@@ -1,0 +1,53 @@
+# Guards cluster DNS against the *.isaacwallace.dev wildcard.
+#
+# ── WHAT WAS BREAKING ─────────────────────────────────────────────────────────────────────
+# The nodes carry `search isaacwallace.dev` (Proxmox cloud-init inherits the host's search
+# domain when `initialization.dns.domain` is unset), kubelet copies it into every pod's
+# resolv.conf, and pods resolve with ndots:5. So a lookup of
+#
+#   radarr.media.svc.cluster.local      (4 dots < 5 → search list is tried first)
+#   xpkg.upbound.io
+#
+# also asks for `radarr.media.svc.cluster.local.isaacwallace.dev` and
+# `xpkg.upbound.io.isaacwallace.dev`. Since public routing moved to one wildcard record, those
+# names EXIST — every one answers with Cloudflare's anycast address. Whichever answer a
+# resolver takes first wins, and the Cloudflare one is a dead end:
+#
+#   - Homepage widgets dialled Cloudflare on :7878/:9090/… → ETIMEDOUT, most refreshes
+#   - Crossplane fetched packages from Cloudflare         → "tls: handshake failure", every
+#     Provider and Function stuck at INSTALLED=False
+#   - openGym on the apps pool "could not reach GitHub"
+#
+# ── THE GUARD ─────────────────────────────────────────────────────────────────────────────
+# Every real public hostname is exactly ONE label under the zone (fitness.isaacwallace.dev).
+# Anything two or more labels deep can only be a search-list expansion, so this answers it
+# NXDOMAIN and the resolver moves on to the name that was actually meant. Single-label names
+# fall through and forward upstream as before.
+#
+# If a multi-label public hostname is ever added (foo.bar.isaacwallace.dev), in-cluster
+# lookups of it will fail here first — that is the one thing this rule costs.
+#
+# The real fix is upstream of the cluster: set `domain` in provisioning/terraform/nodes.tf
+# (e.g. "lan") so the nodes stop searching the public zone. This stays as defence in depth.
+#
+# k3s's CoreDNS imports /etc/coredns/custom/*.server as extra server blocks. The ConfigMap
+# volume is optional, so on first creation CoreDNS may need a nudge to load it:
+#   kubectl -n kube-system rollout restart deploy/coredns
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  search-domain-guard.server: |
+    isaacwallace.dev:53 {
+        errors
+        cache 30
+        template ANY ANY isaacwallace.dev {
+            match "^[^.]+\.[^.]+(\.[^.]+)*\.isaacwallace\.dev\.$"
+            rcode NXDOMAIN
+            authority "isaacwallace.dev. 60 IN SOA ns.isaacwallace.dev. hostmaster.isaacwallace.dev. 1 60 60 60 60"
+            fallthrough
+        }
+        forward . /etc/resolv.conf
+    }
