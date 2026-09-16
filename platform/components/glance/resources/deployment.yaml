@@ -14,6 +14,9 @@ spec:
       labels:
         app: glance
     spec:
+      # Read-only API access for the GitOps and Pods widgets — see components/glance-access.
+      serviceAccountName: glance
+      automountServiceAccountToken: false
       nodeSelector:
         homelab.isaacwallace.dev/pool: apps
       securityContext:
@@ -34,6 +37,13 @@ spec:
             # Server-side dates (the Sonarr/Radarr calendar windows and their labels).
             - name: TZ
               value: America/Toronto
+            # The bearer token the two Kubernetes widgets send. Named uppercase because Glance
+            # only substitutes ${VARS} matching ^[A-Z0-9_]+$ — a lowercase `token` is ignored.
+            - name: K8S_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: glance-api-token
+                  key: token
           # Every key of the Secret becomes a variable the config reads as ${KEY}.
           envFrom:
             - secretRef:

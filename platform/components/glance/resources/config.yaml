@@ -108,6 +108,10 @@ data:
               hour-format: 12h
               hide-header: true
 
+            - type: calendar
+              first-day-of-week: sunday
+              hide-header: true
+
             - type: custom-api
               title: Cluster
               title-url: http://192.168.0.240
@@ -601,6 +605,53 @@ data:
                 {{ end }}
 
             - type: custom-api
+              title: Library space
+              cache: 30m
+              subrequests:
+                radarr:
+                  url: http://radarr.media.svc.cluster.local:7878/api/v3/diskspace
+                  headers:
+                    X-Api-Key: ${RADARR_KEY}
+                sonarr:
+                  url: http://sonarr.media.svc.cluster.local:8989/api/v3/diskspace
+                  headers:
+                    X-Api-Key: ${SONARR_KEY}
+              template: |
+                {{ define "disk" }}
+                  {{ $free := .Float "freeSpace" }}
+                  {{ $total := .Float "totalSpace" }}
+                  {{ if gt $total 0.0 }}
+                    {{ $used := mul (div (sub $total $free) $total) 100.0 }}
+                    <li>
+                      <div class="flex justify-between gap-10 items-center">
+                        <div class="text-truncate">{{ .String "path" }}</div>
+                        <div class="color-highlight shrink-0">{{ printf "%.0f" (div $free 1099511627776.0) }}<small> TiB free</small></div>
+                      </div>
+                      <div class="hl-bar hl-thin{{ if ge $used 90.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" $used }}"></span></div>
+                    </li>
+                  {{ end }}
+                {{ end }}
+                {{ $radarr := (.Subrequest "radarr") }}
+                {{ $sonarr := (.Subrequest "sonarr") }}
+                {{ if and (ne $radarr.Response.StatusCode 200) (ne $sonarr.Response.StatusCode 200) }}
+                  <div class="hl-fail">Radarr answered {{ $radarr.Response.Status }} · Sonarr answered {{ $sonarr.Response.Status }}</div>
+                {{ else }}
+                  <ul class="list list-gap-14">
+                  {{ range $radarr.JSON.Array "" }}
+                    {{ template "disk" . }}
+                  {{ end }}
+                  {{/* Both apps mount the same media share, so a path Radarr already
+                       reported is skipped rather than drawn twice. */}}
+                  {{ range $sonarr.JSON.Array "" }}
+                    {{ $path := .String "path" }}
+                    {{ $duplicate := false }}
+                    {{ range $radarr.JSON.Array "" }}{{ if eq (.String "path") $path }}{{ $duplicate = true }}{{ end }}{{ end }}
+                    {{ if not $duplicate }}{{ template "disk" . }}{{ end }}
+                  {{ end }}
+                  </ul>
+                {{ end }}
+
+            - type: custom-api
               title: Requests
               title-url: http://192.168.0.236
               cache: 5m
@@ -787,6 +838,169 @@ data:
 
         - size: small
           widgets:
+            # ── Kubernetes API, read-only ──────────────────────────────────────────────────
+            # allow-insecure because the API server presents the cluster CA, which Glance has
+            # no way to trust — the connection never leaves the node's own network namespace.
+            - type: custom-api
+              title: GitOps
+              title-url: https://192.168.0.203
+              cache: 1m
+              url: https://kubernetes.default.svc/apis/argoproj.io/v1alpha1/applications
+              allow-insecure: true
+              headers:
+                Authorization: Bearer ${K8S_TOKEN}
+              template: |
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Kubernetes API answered {{ .Response.Status }}</div>
+                {{ else }}
+                  {{ $apps := .JSON.Array "items" }}
+                  {{ $bad := 0 }}
+                  {{ range $apps }}
+                    {{ if or (ne (.String "status.sync.status") "Synced") (ne (.String "status.health.status") "Healthy") }}{{ $bad = add $bad 1 }}{{ end }}
+                  {{ end }}
+                  <div class="hl-stats">
+                    <div>
+                      <div class="hl-label">Applications</div>
+                      <div class="hl-value">{{ len $apps }}</div>
+                    </div>
+                    <div>
+                      <div class="hl-label">Need attention</div>
+                      <div class="hl-value{{ if gt $bad 0 }} color-negative{{ end }}">{{ $bad }}</div>
+                    </div>
+                  </div>
+                  <div class="margin-top-15">
+                  {{ if eq $bad 0 }}
+                    <div class="hl-allclear"><span class="hl-dot"></span>Everything synced and healthy</div>
+                  {{ else }}
+                    <ul class="list list-gap-10">
+                    {{ range $apps }}
+                      {{ $synced := eq (.String "status.sync.status") "Synced" }}
+                      {{ $healthy := eq (.String "status.health.status") "Healthy" }}
+                      {{ if not (and $synced $healthy) }}
+                      <li class="flex gap-10 items-start">
+                        <span class="hl-dot {{ if eq (.String "status.health.status") "Degraded" }}hl-bad{{ else }}hl-warn{{ end }}"></span>
+                        <div class="min-width-0">
+                          <div class="color-highlight text-truncate">{{ .String "metadata.name" }}</div>
+                          <div class="size-h6 color-paragraph">{{ .String "status.sync.status" }} · {{ .String "status.health.status" }}</div>
+                        </div>
+                      </li>
+                      {{ end }}
+                    {{ end }}
+                    </ul>
+                  {{ end }}
+                  </div>
+                {{ end }}
+
+            # There is no kube-state-metrics here, so pod health comes from the API directly.
+            # Anything not Running-and-ready is listed, plus whatever is stacking up restarts:
+            # a pod that restarted twenty times an hour ago still reads as Running.
+            - type: custom-api
+              title: Pods
+              cache: 1m
+              url: https://kubernetes.default.svc/api/v1/pods
+              allow-insecure: true
+              headers:
+                Authorization: Bearer ${K8S_TOKEN}
+              parameters:
+                limit: "500"
+              template: |
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Kubernetes API answered {{ .Response.Status }}</div>
+                {{ else }}
+                  {{ $pods := .JSON.Array "items" }}
+                  {{ $running := 0 }}
+                  {{ $restarts := 0 }}
+                  {{ range $pods }}
+                    {{ if eq (.String "status.phase") "Running" }}{{ $running = add $running 1 }}{{ end }}
+                    {{ range .Array "status.containerStatuses" }}{{ $restarts = add $restarts (.Int "restartCount") }}{{ end }}
+                  {{ end }}
+                  <div class="hl-stats">
+                    <div>
+                      <div class="hl-label">Running</div>
+                      <div class="hl-value">{{ $running }}<small>/ {{ len $pods }}</small></div>
+                    </div>
+                    <div>
+                      <div class="hl-label">Restarts</div>
+                      <div class="hl-value">{{ $restarts }}</div>
+                    </div>
+                  </div>
+                  <div class="margin-top-15">
+                  <ul class="list list-gap-10">
+                  {{ $listed := 0 }}
+                  {{ range $pods }}
+                    {{ $phase := .String "status.phase" }}
+                    {{ $waiting := "" }}
+                    {{ $worst := 0 }}
+                    {{ range .Array "status.containerStatuses" }}
+                      {{ if gt (.Int "restartCount") $worst }}{{ $worst = .Int "restartCount" }}{{ end }}
+                      {{ if .Exists "state.waiting.reason" }}{{ $waiting = .String "state.waiting.reason" }}{{ end }}
+                    {{ end }}
+                    {{ if or (and (ne $phase "Running") (ne $phase "Succeeded")) (ne $waiting "") (ge $worst 10) }}
+                      {{ $listed = add $listed 1 }}
+                      <li class="flex gap-10 items-start">
+                        <span class="hl-dot {{ if or (eq $phase "Failed") (eq $waiting "CrashLoopBackOff") }}hl-bad{{ else }}hl-warn{{ end }}"></span>
+                        <div class="min-width-0">
+                          <div class="color-highlight text-truncate">{{ .String "metadata.name" }}</div>
+                          <div class="size-h6 color-paragraph text-truncate">{{ .String "metadata.namespace" }} · {{ if ne $waiting "" }}{{ $waiting }}{{ else }}{{ $phase }}{{ end }}{{ if ge $worst 10 }} · {{ $worst }} restarts{{ end }}</div>
+                        </div>
+                      </li>
+                    {{ end }}
+                  {{ end }}
+                  </ul>
+                  {{ if eq $listed 0 }}
+                    <div class="hl-allclear"><span class="hl-dot"></span>Every pod is running</div>
+                  {{ end }}
+                  </div>
+                {{ end }}
+
+            # Envoy counts requests per listener. `admin`, `eg-stats-http` and `eg-ready-http`
+            # are Envoy talking to itself (metrics scrapes and health checks), so they are
+            # filtered out — leaving the LAN gateway and the public edge.
+            - type: custom-api
+              title: Gateway
+              cache: 2m
+              subrequests:
+                rate:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'sum(rate(envoy_http_downstream_rq_completed{envoy_http_conn_manager_prefix!~"admin|eg-.*"}[10m])) * 60'
+                active:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'sum(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix!~"admin|eg-.*"})'
+                classes:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'sum by (envoy_response_code_class) (increase(envoy_http_downstream_rq_xx{envoy_http_conn_manager_prefix!~"admin|eg-.*"}[24h]))'
+              template: |
+                {{ if ne (.Subrequest "rate").Response.StatusCode 200 }}
+                  <div class="hl-fail">Prometheus answered {{ (.Subrequest "rate").Response.Status }}</div>
+                {{ else }}
+                  <div class="hl-stats">
+                    <div>
+                      <div class="hl-label">Requests</div>
+                      <div class="hl-value">{{ printf "%.1f" ((.Subrequest "rate").JSON.Float "data.result.0.value.1") }}<small>/min</small></div>
+                    </div>
+                    <div>
+                      <div class="hl-label">Open connections</div>
+                      <div class="hl-value">{{ printf "%.0f" ((.Subrequest "active").JSON.Float "data.result.0.value.1") }}</div>
+                    </div>
+                  </div>
+                  <div class="hl-label margin-top-15">Last 24 hours</div>
+                  <ul class="list list-gap-4 margin-top-5">
+                  {{ range (.Subrequest "classes").JSON.Array "data.result" }}
+                    {{ $class := .String "metric.envoy_response_code_class" }}
+                    {{ $count := .Float "value.1" }}
+                    {{ if gt $count 0.0 }}
+                      <li class="flex justify-between gap-10">
+                        <div class="{{ if eq $class "5" }}color-negative{{ else if eq $class "4" }}color-primary{{ end }}">{{ $class }}xx</div>
+                        <div class="color-highlight">{{ formatNumber (toInt $count) }}</div>
+                      </li>
+                    {{ end }}
+                  {{ end }}
+                  </ul>
+                {{ end }}
+
             # Longhorn's own API, which needs no credentials from inside the cluster. Volume
             # health is the thing worth watching: two entries in docs/incidents started here.
             - type: custom-api

@@ -385,6 +385,16 @@ components:
     resources:
       enabled: true
 
+  # Read-only Kubernetes API access for the dashboard. It belongs to `infrastructure` and not
+  # to `applications` because it mints a ClusterRole — a kind that project must not be able to
+  # create. At the security tier so the token Secret exists well before the pod that reads it.
+  - name: glance-access
+    tier: security
+    waveOffset: 4
+    namespace: networking
+    resources:
+      enabled: true
+
   # The dashboard at 192.168.0.220. Renamed from `homepage` when gethomepage was replaced
   # by Glance — ArgoCD reads that as a delete plus a create, so the old Application takes its
   # Deployment, Service, ConfigMap and SealedSecret with it on the way out.

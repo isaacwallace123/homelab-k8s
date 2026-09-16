@@ -1,0 +1,67 @@
+# Read-only Kubernetes API access for the Glance dashboard.
+#
+# WHY THIS IS ITS OWN COMPONENT
+# The dashboard itself lives in the `applications` project, whose AppProject deliberately
+# permits no cluster-scoped kinds beyond Namespace. A ClusterRole and its binding are exactly
+# the sort of thing that project should not be able to mint — granting it would hand every
+# workload in `applications` (the media stack included) a privilege-escalation path.
+#
+# So the grant lives here, in `infrastructure`, and is owned by the platform rather than by
+# the app that consumes it. Same split as components/public-routes, which owns routes for
+# workloads defined in another repo.
+#
+# WHAT IT BUYS
+# Two widgets that no metric can provide, because there is no kube-state-metrics in this
+# cluster and ArgoCD exports no Prometheus metrics here:
+#   - every ArgoCD Application with its sync and health state
+#   - pods that are not Running, and containers stuck restarting
+#
+# The token is a Secret read into the pod as one environment variable; Glance sends it as a
+# bearer token. It can read pods, nodes, namespaces, events and ArgoCD Applications, cluster
+# wide, and nothing else — no secrets, no ConfigMaps, no write verbs anywhere.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: glance
+  namespace: networking
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: glance-readonly
+rules:
+  # `list` is what the widgets actually call; `get` is here so that a future widget can ask
+  # about one object without needing this file changed again.
+  - apiGroups: [""]
+    resources: [pods, nodes, namespaces, events]
+    verbs: [get, list]
+  - apiGroups: [argoproj.io]
+    resources: [applications, appprojects]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: glance-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: glance-readonly
+subjects:
+  - kind: ServiceAccount
+    name: glance
+    namespace: networking
+---
+# A non-expiring token, because Glance reads it once at startup as an environment variable and
+# has no way to reload a projected volume. The token controller fills in `token`, `ca.crt` and
+# `namespace`; only `token` is mapped into the pod.
+#
+# The empty data field is the point: it is populated in-cluster and never lives in git.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: glance-api-token
+  namespace: networking
+  annotations:
+    kubernetes.io/service-account.name: glance
+type: kubernetes.io/service-account-token
