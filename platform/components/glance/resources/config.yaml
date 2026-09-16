@@ -483,6 +483,15 @@ data:
                       <div class="min-width-0">
                         <div class="color-highlight text-truncate">{{ if .Exists "series.title" }}{{ .String "series.title" }} <span class="color-subdue">S{{ .Int "episode.seasonNumber" }}E{{ .Int "episode.episodeNumber" }}</span>{{ else if .Exists "movie.title" }}{{ .String "movie.title" }} <span class="color-subdue">{{ .Int "movie.year" }}</span>{{ else }}{{ .String "title" }}{{ end }}</div>
                         <div class="size-h6 color-paragraph text-truncate">{{ .String "status" }}{{ if .Exists "timeleft" }} · {{ .String "timeleft" }} left{{ end }}{{ if ne (.String "trackedDownloadState") "downloading" }} · {{ .String "trackedDownloadState" }}{{ end }}</div>
+                      {{/* An item can sit at 100% for days on an import warning — the reason
+                           is in statusMessages and nowhere else. */}}
+                      {{ if ne (.String "trackedDownloadStatus") "ok" }}
+                        {{ range .Array "statusMessages" }}
+                          {{ range .Array "messages" }}
+                            <div class="size-h6 color-negative text-truncate-2-lines">{{ .String "" }}</div>
+                          {{ end }}
+                        {{ end }}
+                      {{ end }}
                       </div>
                       {{ if gt $size 0.0 }}<div class="size-h6 shrink-0">{{ printf "%.0f" (mul (div (sub $size (.Float "sizeleft")) $size) 100.0) }}%</div>{{ end }}
                     </div>
@@ -604,52 +613,56 @@ data:
                   {{ end }}
                 {{ end }}
 
+            # Sonarr's /api/v3/diskspace omits its NFS mounts entirely — it reported only
+            # /, /config and /dev/termination-log while /tv sat there with 4.5 TiB free. The
+            # root-folder API does know, so that is the source for the libraries; diskspace is
+            # still the only thing that reports a total, so it supplies the download cache row.
             - type: custom-api
               title: Library space
               cache: 30m
               subrequests:
-                radarr:
+                radarrRoot:
+                  url: http://radarr.media.svc.cluster.local:7878/api/v3/rootfolder
+                  headers:
+                    X-Api-Key: ${RADARR_KEY}
+                sonarrRoot:
+                  url: http://sonarr.media.svc.cluster.local:8989/api/v3/rootfolder
+                  headers:
+                    X-Api-Key: ${SONARR_KEY}
+                radarrDisk:
                   url: http://radarr.media.svc.cluster.local:7878/api/v3/diskspace
                   headers:
                     X-Api-Key: ${RADARR_KEY}
-                sonarr:
-                  url: http://sonarr.media.svc.cluster.local:8989/api/v3/diskspace
-                  headers:
-                    X-Api-Key: ${SONARR_KEY}
               template: |
-                {{/* The *arr diskspace endpoint reports every mount in the container —
-                     /config, /dev/termination-log and the node's own root among them. Only
-                     the media shares are worth a row, and they are the only ones this big. */}}
-                {{ define "disk" }}
-                  {{ $free := .Float "freeSpace" }}
-                  {{ $total := .Float "totalSpace" }}
-                  {{ if gt $total 214748364800.0 }}
-                    {{ $used := mul (div (sub $total $free) $total) 100.0 }}
-                    <li>
-                      <div class="flex justify-between gap-10 items-center">
-                        <div class="text-truncate">{{ .String "path" }}</div>
-                        <div class="color-highlight shrink-0">{{ if ge $free 1099511627776.0 }}{{ printf "%.1f" (div $free 1099511627776.0) }}<small> TiB free</small>{{ else }}{{ printf "%.0f" (div $free 1073741824.0) }}<small> GiB free</small>{{ end }}</div>
-                      </div>
-                      <div class="hl-bar hl-thin{{ if ge $used 90.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" $used }}"></span></div>
-                    </li>
-                  {{ end }}
+                {{ define "free" }}{{ if ge . 1099511627776.0 }}{{ printf "%.1f" (div . 1099511627776.0) }}<small> TiB free</small>{{ else }}{{ printf "%.0f" (div . 1073741824.0) }}<small> GiB free</small>{{ end }}{{ end }}
+                {{ define "library" }}
+                  <li class="flex justify-between gap-10 items-center">
+                    <div class="text-truncate">{{ .String "path" }}</div>
+                    <div class="color-highlight shrink-0">{{ template "free" (.Float "freeSpace") }}</div>
+                  </li>
                 {{ end }}
-                {{ $radarr := (.Subrequest "radarr") }}
-                {{ $sonarr := (.Subrequest "sonarr") }}
+                {{ $radarr := .Subrequest "radarrRoot" }}
+                {{ $sonarr := .Subrequest "sonarrRoot" }}
                 {{ if and (ne $radarr.Response.StatusCode 200) (ne $sonarr.Response.StatusCode 200) }}
                   <div class="hl-fail">Radarr answered {{ $radarr.Response.Status }} · Sonarr answered {{ $sonarr.Response.Status }}</div>
                 {{ else }}
                   <ul class="list list-gap-14">
-                  {{ range $radarr.JSON.Array "" }}
-                    {{ template "disk" . }}
-                  {{ end }}
-                  {{/* Both apps mount the same media share, so a path Radarr already
-                       reported is skipped rather than drawn twice. */}}
-                  {{ range $sonarr.JSON.Array "" }}
-                    {{ $path := .String "path" }}
-                    {{ $duplicate := false }}
-                    {{ range $radarr.JSON.Array "" }}{{ if eq (.String "path") $path }}{{ $duplicate = true }}{{ end }}{{ end }}
-                    {{ if not $duplicate }}{{ template "disk" . }}{{ end }}
+                  {{ range $radarr.JSON.Array "" }}{{ template "library" . }}{{ end }}
+                  {{ range $sonarr.JSON.Array "" }}{{ template "library" . }}{{ end }}
+                  {{/* The download cache is on the flash pool rather than the library share,
+                       and it is the one path here whose total is known, so it gets a bar. */}}
+                  {{ range (.Subrequest "radarrDisk").JSON.Array "" }}
+                    {{ $total := .Float "totalSpace" }}
+                    {{ if and (gt $total 214748364800.0) (findMatch "download" (.String "path")) }}
+                      {{ $used := mul (div (sub $total (.Float "freeSpace")) $total) 100.0 }}
+                      <li>
+                        <div class="flex justify-between gap-10 items-center">
+                          <div class="text-truncate">{{ .String "path" }}</div>
+                          <div class="color-highlight shrink-0">{{ template "free" (.Float "freeSpace") }}</div>
+                        </div>
+                        <div class="hl-bar hl-thin{{ if ge $used 90.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" $used }}"></span></div>
+                      </li>
+                    {{ end }}
                   {{ end }}
                   </ul>
                 {{ end }}
