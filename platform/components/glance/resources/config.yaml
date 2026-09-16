@@ -4,10 +4,11 @@
 # owns 192.168.0.220 outright now — component, Deployment, Service, ConfigMaps and Secret all
 # carry the `glance` name.
 #
-# Layout lives in three files so each page reads on its own:
+# Layout lives in four files so each page reads on its own:
 #   glance.yml   server, theme, branding, and the page list
 #   home.yml     cluster at a glance — status, services, streams, downloads
 #   media.yml    the *arr side — queue, upcoming releases, requests, health
+#   cluster.yml  the infrastructure view — nodes, Longhorn, certs, busiest pods
 #
 # Every widget fetches server-side from cluster DNS and is cached for its `cache` window, so
 # a page load is served from memory instead of fanning out to a dozen APIs per visitor.
@@ -86,6 +87,7 @@ data:
     pages:
       - $include: home.yml
       - $include: media.yml
+      - $include: cluster.yml
 
   home.yml: |
     - name: Home
@@ -95,6 +97,14 @@ data:
         - size: small
           widgets:
             - type: clock
+              hour-format: 12h
+              hide-header: true
+
+            # open-meteo, no key and no account. An unresolvable location is a startup
+            # error rather than a broken widget, so this name is one Glance can geocode.
+            - type: weather
+              location: Candiac, Quebec, Canada
+              units: metric
               hour-format: 12h
               hide-header: true
 
@@ -555,6 +565,41 @@ data:
 
         - size: small
           widgets:
+            # No artwork on purpose: Plex only serves thumbnails with the token in the URL,
+            # which would put it in the page source for anyone on the LAN.
+            - type: custom-api
+              title: Recently added
+              title-url: http://192.168.0.230:32400/web
+              cache: 10m
+              url: http://plex.media.svc.cluster.local:32400/library/recentlyAdded
+              headers:
+                Accept: application/json
+                X-Plex-Token: ${PLEX_TOKEN}
+              parameters:
+                X-Plex-Container-Start: "0"
+                X-Plex-Container-Size: "6"
+              template: |
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Plex answered {{ .Response.Status }}</div>
+                {{ else }}
+                  {{ $items := .JSON.Array "MediaContainer.Metadata" }}
+                  {{ if eq (len $items) 0 }}
+                    <div class="hl-empty">Nothing added recently</div>
+                  {{ else }}
+                    <ul class="list list-gap-14">
+                    {{ range $items }}
+                      <li>
+                        <div class="color-highlight text-truncate">{{ if eq (.String "type") "episode" }}{{ .String "grandparentTitle" }}{{ else }}{{ .String "title" }}{{ end }}</div>
+                        <div class="size-h6 color-paragraph text-truncate">
+                          {{ if eq (.String "type") "episode" }}S{{ .Int "parentIndex" }}E{{ .Int "index" }} · {{ .String "title" }}{{ else if .Exists "year" }}{{ .Int "year" }}{{ end }}
+                          · <span {{ parseRelativeTime "unix" (.String "addedAt") }}></span>
+                        </div>
+                      </li>
+                    {{ end }}
+                    </ul>
+                  {{ end }}
+                {{ end }}
+
             - type: custom-api
               title: Requests
               title-url: http://192.168.0.236
@@ -620,6 +665,229 @@ data:
                   {{ range $p }}<li class="flex gap-10 items-start"><span class="hl-dot {{ if eq (.String "type") "error" }}hl-bad{{ else }}hl-warn{{ end }}"></span><div class="min-width-0"><div class="color-highlight">Prowlarr</div><div class="size-h6 color-paragraph">{{ .String "message" }}</div></div></li>{{ end }}
                   </ul>
                 {{ end }}
+  cluster.yml: |
+    - name: Cluster
+      columns:
+        - size: full
+          widgets:
+            # One row per node. Prometheus returns a separate series per metric, so the
+            # template walks the CPU series and looks up the matching node in the others.
+            # `job="node-exporter"` because the pod-annotation scrape returns these same
+            # metrics again WITHOUT a node label, which would double every row.
+            - type: custom-api
+              title: Nodes
+              title-url: http://192.168.0.240
+              cache: 30s
+              subrequests:
+                cpu:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: '100 - (avg by (node) (rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[5m])) * 100)'
+                mem:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: '(1 - sum by (node) (node_memory_MemAvailable_bytes{job="node-exporter"}) / sum by (node) (node_memory_MemTotal_bytes{job="node-exporter"})) * 100'
+                disk:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'max by (node) (1 - node_filesystem_avail_bytes{job="node-exporter",mountpoint="/"} / node_filesystem_size_bytes{job="node-exporter",mountpoint="/"}) * 100'
+                boot:
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'min by (node) (node_boot_time_seconds{job="node-exporter"})'
+              template: |
+                {{ define "meter" }}<div class="hl-node-value">{{ printf "%.0f" . }}<small>%</small></div><div class="hl-bar hl-thin{{ if ge . 85.0 }} hl-hot{{ end }}"><span style="--p: {{ printf "%.0f" . }}"></span></div>{{ end }}
+                {{ $mem := (.Subrequest "mem").JSON.Array "data.result" }}
+                {{ $disk := (.Subrequest "disk").JSON.Array "data.result" }}
+                {{ $boot := (.Subrequest "boot").JSON.Array "data.result" }}
+                {{ $nodes := sortByString "metric.node" "asc" ((.Subrequest "cpu").JSON.Array "data.result") }}
+                {{ if ne (.Subrequest "cpu").Response.StatusCode 200 }}
+                  <div class="hl-fail">Prometheus answered {{ (.Subrequest "cpu").Response.Status }}</div>
+                {{ else if eq (len $nodes) 0 }}
+                  <div class="hl-fail">No node-exporter series returned</div>
+                {{ else }}
+                  <ul class="list list-gap-14">
+                  {{ range $nodes }}
+                    {{ $node := .String "metric.node" }}
+                    <li class="hl-node">
+                      <div class="hl-node-name">
+                        <div class="color-highlight text-truncate">{{ $node }}</div>
+                        {{ range $boot }}{{ if eq (.String "metric.node") $node }}<div class="size-h6 color-paragraph">up <span {{ parseRelativeTime "unix" (.String "value.1") }}></span></div>{{ end }}{{ end }}
+                      </div>
+                      <div class="hl-node-stats">
+                        <div class="hl-node-cell">
+                          <div class="hl-label">CPU</div>
+                          {{ template "meter" (.Float "value.1") }}
+                        </div>
+                        <div class="hl-node-cell">
+                          <div class="hl-label">Memory</div>
+                          {{ range $mem }}{{ if eq (.String "metric.node") $node }}{{ template "meter" (.Float "value.1") }}{{ end }}{{ end }}
+                        </div>
+                        <div class="hl-node-cell">
+                          <div class="hl-label">Disk</div>
+                          {{ range $disk }}{{ if eq (.String "metric.node") $node }}{{ template "meter" (.Float "value.1") }}{{ end }}{{ end }}
+                        </div>
+                      </div>
+                    </li>
+                  {{ end }}
+                  </ul>
+                {{ end }}
+
+            - type: split-column
+              max-columns: 2
+              widgets:
+                # cAdvisor is the only pod-level source here — there is no kube-state-metrics —
+                # so these are container working set and CPU rate, summed per pod. The regex
+                # drops the ReplicaSet hash so a pod reads as the thing it belongs to.
+                - type: custom-api
+                  title: Most memory
+                  cache: 1m
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'topk(6, sum by (namespace, pod) (container_memory_working_set_bytes{container!="",pod!=""}))'
+                  template: |
+                    {{ if ne .Response.StatusCode 200 }}
+                      <div class="hl-fail">Prometheus answered {{ .Response.Status }}</div>
+                    {{ else }}
+                      <ul class="list list-gap-10">
+                      {{ range .JSON.Array "data.result" }}
+                        <li class="flex justify-between gap-10 items-center">
+                          <div class="min-width-0">
+                            <div class="text-truncate">{{ replaceMatches "-[a-f0-9]{6,10}-[a-z0-9]{5}$|-[a-f0-9]{16,}$|-[0-9]+$" "" (.String "metric.pod") }}</div>
+                            <div class="size-h6 color-paragraph">{{ .String "metric.namespace" }}</div>
+                          </div>
+                          <div class="color-highlight shrink-0">{{ printf "%.1f" (div (.Float "value.1") 1073741824.0) }}<small> GiB</small></div>
+                        </li>
+                      {{ end }}
+                      </ul>
+                    {{ end }}
+
+                - type: custom-api
+                  title: Most CPU
+                  cache: 1m
+                  url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+                  parameters:
+                    query: 'topk(6, sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!="",pod!=""}[5m])))'
+                  template: |
+                    {{ if ne .Response.StatusCode 200 }}
+                      <div class="hl-fail">Prometheus answered {{ .Response.Status }}</div>
+                    {{ else }}
+                      <ul class="list list-gap-10">
+                      {{ range .JSON.Array "data.result" }}
+                        <li class="flex justify-between gap-10 items-center">
+                          <div class="min-width-0">
+                            <div class="text-truncate">{{ replaceMatches "-[a-f0-9]{6,10}-[a-z0-9]{5}$|-[a-f0-9]{16,}$|-[0-9]+$" "" (.String "metric.pod") }}</div>
+                            <div class="size-h6 color-paragraph">{{ .String "metric.namespace" }}</div>
+                          </div>
+                          <div class="color-highlight shrink-0">{{ printf "%.0f" (mul (.Float "value.1") 1000.0) }}<small> m</small></div>
+                        </li>
+                      {{ end }}
+                      </ul>
+                    {{ end }}
+
+        - size: small
+          widgets:
+            # Longhorn's own API, which needs no credentials from inside the cluster. Volume
+            # health is the thing worth watching: two entries in docs/incidents started here.
+            - type: custom-api
+              title: Storage
+              cache: 2m
+              url: http://longhorn-backend.longhorn-system.svc.cluster.local:9500/v1/volumes
+              template: |
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Longhorn answered {{ .Response.Status }}</div>
+                {{ else }}
+                  {{ $vols := .JSON.Array "data" }}
+                  {{ $unhealthy := 0 }}
+                  {{ $provisioned := 0.0 }}
+                  {{ range $vols }}
+                    {{ if or (ne (.String "robustness") "healthy") (ne (.String "state") "attached") }}{{ $unhealthy = add $unhealthy 1 }}{{ end }}
+                    {{ $provisioned = add $provisioned (.Float "size") }}
+                  {{ end }}
+                  <div class="hl-stats">
+                    <div>
+                      <div class="hl-label">Volumes</div>
+                      <div class="hl-value">{{ len $vols }}</div>
+                    </div>
+                    <div>
+                      <div class="hl-label">Provisioned</div>
+                      <div class="hl-value">{{ printf "%.0f" (div $provisioned 1073741824.0) }}<small>GiB</small></div>
+                    </div>
+                  </div>
+                  <div class="margin-top-15">
+                  {{ if eq $unhealthy 0 }}
+                    <div class="hl-allclear"><span class="hl-dot"></span>All volumes attached and healthy</div>
+                  {{ else }}
+                    <ul class="list list-gap-10">
+                    {{ range $vols }}
+                      {{ if or (ne (.String "robustness") "healthy") (ne (.String "state") "attached") }}
+                      <li class="flex gap-10 items-start">
+                        <span class="hl-dot {{ if eq (.String "robustness") "faulted" }}hl-bad{{ else }}hl-warn{{ end }}"></span>
+                        <div class="min-width-0">
+                          <div class="color-highlight text-truncate">{{ or (.String "kubernetesStatus.pvcName") (.String "name") }}</div>
+                          <div class="size-h6 color-paragraph">{{ .String "state" }} · {{ .String "robustness" }} · {{ .Int "numberOfReplicas" }} replicas</div>
+                        </div>
+                      </li>
+                      {{ end }}
+                    {{ end }}
+                    </ul>
+                  {{ end }}
+                  </div>
+                  {{ $oldest := "" }}
+                  {{ range sortByString "lastBackupAt" "asc" $vols }}{{ if and (eq $oldest "") (ne (.String "lastBackupAt") "") }}{{ $oldest = .String "lastBackupAt" }}{{ end }}{{ end }}
+                  <div class="size-h6 color-paragraph margin-top-15">
+                    {{ if eq $oldest "" }}No volume reports a backup{{ else }}Oldest backup <span {{ parseRelativeTime "rfc3339" $oldest }}></span> · runs Saturdays 03:00{{ end }}
+                  </div>
+                {{ end }}
+
+            # cert-manager exports an expiry timestamp per Certificate. The LAN wildcard and the
+            # ArgoCD cert renew themselves; this is here to catch the renewal that did not.
+            - type: custom-api
+              title: Certificates
+              cache: 1h
+              url: http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+              parameters:
+                query: 'sort((certmanager_certificate_expiration_timestamp_seconds - time()) / 86400)'
+              template: |
+                {{ if ne .Response.StatusCode 200 }}
+                  <div class="hl-fail">Prometheus answered {{ .Response.Status }}</div>
+                {{ else }}
+                  {{ $certs := .JSON.Array "data.result" }}
+                  {{ if eq (len $certs) 0 }}
+                    <div class="hl-empty">No certificates reported</div>
+                  {{ else }}
+                    <ul class="list list-gap-10">
+                    {{ range $certs }}
+                      {{ $days := .Float "value.1" }}
+                      <li class="flex justify-between gap-10 items-center">
+                        <div class="min-width-0">
+                          <div class="text-truncate">{{ .String "metric.name" }}</div>
+                          <div class="size-h6 color-paragraph">{{ .String "metric.namespace" }}</div>
+                        </div>
+                        <div class="shrink-0 {{ if lt $days 14.0 }}color-negative{{ else if lt $days 30.0 }}color-primary{{ end }}">{{ printf "%.0f" $days }}<small> days</small></div>
+                      </li>
+                    {{ end }}
+                    </ul>
+                  {{ end }}
+                {{ end }}
+
+            # Upstream releases for what this cluster actually runs, so a version bump is
+            # something noticed here rather than in a changelog months later. Unauthenticated
+            # GitHub allows 60 requests an hour; six repos on a 6h cache is nowhere near it.
+            - type: releases
+              title: Upstream releases
+              cache: 6h
+              show-source-icon: true
+              limit: 8
+              collapse-after: 4
+              repositories:
+                - k3s-io/k3s
+                - argoproj/argo-cd
+                - longhorn/longhorn
+                - glanceapp/glance
+                - immich-app/immich
+                - cert-manager/cert-manager
+
 ---
 # Served at /assets/homelab.css. Theme colours are in glance.yml; this is only shape and the
 # few classes the custom-api templates use.
@@ -804,6 +1072,51 @@ data:
 
     .hl-bar.hl-hot > span {
       background: var(--color-negative);
+    }
+
+    /* ── node rows ──────────────────────────────────────────────────────────── */
+    .hl-node {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .hl-node-name {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .hl-node-stats {
+      display: flex;
+      gap: 1.4rem;
+      flex: 2 1 0;
+    }
+
+    .hl-node-cell {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .hl-node-value {
+      font-size: var(--font-size-h4);
+      color: var(--color-text-highlight);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+    }
+
+    .hl-node-value small {
+      font-size: var(--font-size-h6);
+      color: var(--color-text-base);
+      margin-left: 0.15em;
+    }
+
+    /* Narrow columns cannot hold name + three meters on one line. */
+    @media (max-width: 700px) {
+      .hl-node {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.6rem;
+      }
     }
 
     /* ── status ─────────────────────────────────────────────────────────────── */
