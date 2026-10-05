@@ -1,0 +1,73 @@
+# Public HTTPRoutes for Blockout Games (blockoutgames.com).
+#
+# The workloads are owned by the private BlockoutGames/Platform monorepo; whether they are
+# reachable from the internet is decided here, as for the portfolio network. Both hostnames
+# attach to `edge` (.204), which the Cloudflare tunnel reaches over plain HTTP. The
+# `blockout` namespace carries `exposure: public`, which is what lets these attach.
+#
+# ── THE CLOUDFLARE SIDE ───────────────────────────────────────────────────────────────────
+# blockoutgames.com is a second zone on the same Cloudflare account as the tunnel. The
+# tunnel needs public hostnames for the apex, www and studio, all → http://192.168.0.204.
+# A wildcard *.blockoutgames.com covers www and studio; the apex still needs its own entry,
+# because a wildcard matches one label, not zero. Cloudflare terminates TLS; the tunnel is
+# plain HTTP; Envoy matches the hostname and 404s anything not listed here.
+#
+# ── WHAT IS NOT ROUTED ───────────────────────────────────────────────────────────────────
+# Only www and the panel. The API, worker, Postgres and Redis have no route, and the
+# namespace's NetworkPolicies admit the gateway to ports 3000 and 3001 only. The panel
+# enforces GitHub organization membership on every request. Cloudflare Access in front of
+# studio.blockoutgames.com would be a second lock; it is optional, and unlike openGym's
+# WebAuthn the GitHub OAuth flow works through it.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: www
+  namespace: blockout
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - blockoutgames.com
+    - www.blockoutgames.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: www
+          port: 3001
+          weight: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: studio
+  namespace: blockout
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - studio.blockoutgames.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: panel
+          port: 3000
+          weight: 1
