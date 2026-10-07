@@ -187,7 +187,9 @@ portfolio deploys from the portfolio monorepo, for example, and that repo stays 
 source of truth for its own manifests.
 
 `templated: true` means the directory is a Helm chart and takes an env values file from
-components/<name>/values/. Otherwise it is plain YAML applied recursively.
+components/<name>/values/. `kustomize: true` means the path holds a kustomization.yaml
+and ArgoCD renders it with Kustomize (the Platform monorepo's overlay, for example).
+Otherwise it is plain YAML applied recursively.
 
 Usage: {{ include "platform.gitSource" (dict "root" $ "component" $c "dir" "resources" "spec" $spec) }}
 */}}
@@ -212,6 +214,8 @@ source:
   helm:
     valueFiles:
       - ../values/{{ $dir }}-{{ $root.Values.environment }}.yaml
+{{- else if $spec.kustomize }}
+  kustomize: {}
 {{- else }}
   directory:
     recurse: true

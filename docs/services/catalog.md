@@ -44,6 +44,7 @@ environment variables, resources, and manifests remain in `platform/components/`
 | ntfy | `networking` | Alert and operator notification delivery | LAN |
 | Minecraft Valhelsia | `games` | Modded game server | LAN / pinned service |
 | Portfolio | `portfolio` | Public portfolio Kubernetes workloads | Cloudflare edge |
+| Blockout Games | `blockout` | Studio panel, public website, API and Roblox collector from the private Platform monorepo; only www and the panel are routed | Cloudflare edge (www, studio) |
 
 ## Observability
 
