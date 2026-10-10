@@ -26,16 +26,39 @@ controllerServiceAccount:
 
 template:
   spec:
-    nodeSelector:
-      homelab.isaacwallace.dev/pool: apps
+    # The apps pool first, the cloud pool when apps is full. The apps pool is mostly reserved
+    # (the Minecraft server alone asks for 4 cores and 14 GiB of k8s-work-02), and a CI job is a
+    # few bursty minutes, so it may borrow the cloud node's spare room; it never lands on the
+    # media or control-plane nodes.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: homelab.isaacwallace.dev/pool
+                  operator: In
+                  values: [apps, cloud]
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: homelab.isaacwallace.dev/pool
+                  operator: In
+                  values: [apps]
+    tolerations:
+      - key: homelab.isaacwallace.dev/pool
+        operator: Equal
+        value: cloud
+        effect: NoSchedule
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest
         command: ["/home/runner/run.sh"]
+        # A small reservation so a job finds room; it may burst to the limit while it builds.
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 250m
+            memory: 768Mi
           limits:
             cpu: "2"
             memory: 4Gi
