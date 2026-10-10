@@ -71,12 +71,13 @@ template:
                 echo "Could not install the GitHub CLI; jobs that call gh will fail."
             fi
             exec /home/runner/run.sh
-        # The runner itself is light; image builds and service containers run in the Docker
-        # sidecar, which the chart leaves without limits.
+        # The chart gives the Docker sidecar no resources of its own, so this reservation
+        # covers both: the job's tools here and its containers there. Sized so a node holds
+        # only as many Docker jobs as it can run without starving them (see arc-runners).
         resources:
           requests:
-            cpu: 250m
-            memory: 768Mi
+            cpu: "1"
+            memory: 1536Mi
           limits:
             cpu: "2"
             memory: 4Gi
