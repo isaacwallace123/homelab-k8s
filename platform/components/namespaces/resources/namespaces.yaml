@@ -88,3 +88,16 @@ metadata:
   name: fitness
   labels:
     homelab.isaacwallace.dev/exposure: public
+---
+# arc-systems: GitHub's Actions Runner Controller. No state, no routes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-systems
+---
+# arc-runners: ephemeral CI runner pods for the BlockoutGames organisation, one per queued job.
+# They only call out; pre-resources of arc-runners deny all ingress.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners

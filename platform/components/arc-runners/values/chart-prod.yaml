@@ -1,0 +1,41 @@
+# The BlockoutGames runner scale set (gha-runner-scale-set). Jobs in any BlockoutGames
+# repository whose `runs-on` is `blockout` run here: each in a fresh pod, created when the job
+# is queued and deleted when it ends, so nothing from one job reaches the next. With no jobs
+# waiting there are no runner pods at all.
+#
+# The repositories pick this up through the Actions variable RUNS_ON = "blockout" (see the
+# Anime Clicker Heroes vault, "CI runner"). Unset it there to send jobs back to GitHub.
+
+githubConfigUrl: https://github.com/BlockoutGames
+
+# A GitHub App installed on the organisation, with "Self-hosted runners: Read and write".
+# Sealed into this namespace by pre-resources/ (create-sealed-github-app.sh).
+githubConfigSecret: arc-github-app
+
+# What workflows put in `runs-on`.
+runnerScaleSetName: blockout
+
+minRunners: 0
+maxRunners: 4
+
+# The controller from the arc-controller component: its release (and so its ServiceAccount)
+# is named after the ArgoCD Application.
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-controller-gha-rs-controller
+
+template:
+  spec:
+    nodeSelector:
+      homelab.isaacwallace.dev/pool: apps
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 4Gi

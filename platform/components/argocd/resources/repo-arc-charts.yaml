@@ -1,0 +1,15 @@
+# GitHub's Actions Runner Controller charts are published as OCI artifacts on ghcr.io. ArgoCD
+# pulls an OCI chart only from a repository it knows is OCI, so this declares it. Public: no
+# credential, nothing secret in it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-arc-charts
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: actions-runner-controller-charts
+  url: ghcr.io/actions/actions-runner-controller-charts
+  enableOCI: "true"
