@@ -480,6 +480,18 @@ components:
     preResources:
       enabled: true
 
+  # The same, with a Docker daemon beside each runner, for jobs whose `runs-on` is
+  # `blockout-docker` (image builds, service containers). Uses arc-runners' namespace and
+  # GitHub App secret, so it syncs a wave after it. See components/arc-runners/README.md.
+  - name: arc-runners-docker
+    tier: apps
+    waveOffset: 7
+    namespace: arc-runners
+    chart:
+      repoURL: ghcr.io/actions/actions-runner-controller-charts
+      name: gha-runner-scale-set
+      version: "0.15.0"
+
   # ── blockout ────────────────────────────────────────────────────────────────
   # Blockout Games. The manifests are owned by the private Platform monorepo, which
   # publishes images on every merge and pins them through a deploy pull request; ArgoCD

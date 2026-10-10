@@ -26,6 +26,17 @@ which is the point: the organisation's repositories are private.
    Actions → Runners. In each repository (or the organisation), set the Actions variable
    `RUNS_ON` to `"blockout"` (JSON, quotes included). Unset it to go back to GitHub's machines.
 
+## Two scale sets
+
+| `runs-on`         | Component            | For                                                               |
+| ----------------- | -------------------- | ----------------------------------------------------------------- |
+| `blockout`        | `arc-runners`        | Everything that needs no Docker, in unprivileged pods              |
+| `blockout-docker` | `arc-runners-docker` | Image builds and service containers, with a privileged Docker sidecar |
+
+Both use GitHub's minimal runner image and fetch the GitHub CLI before taking a job. Anything
+else a job needs (Node, kubectl, a browser's libraries) is installed by a step; the runner user
+has passwordless sudo.
+
 ## Checking it
 
 ```bash
