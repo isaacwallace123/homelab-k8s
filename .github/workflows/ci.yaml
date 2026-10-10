@@ -94,19 +94,31 @@ jobs:
       matrix:
         include:
           - name: postgres
-            image: cgr.dev/chainguard/postgres:latest@sha256:dc2f04037c1044a22af76cee4de70b9111885b17c561b939d7ed70103d100759
+            image: cgr.dev/chainguard/postgres:latest@sha256:7ec87651dd1aef191b990ac02678adbd4b9554dee3f6fc08b8f91568fef26c59
           - name: redis
-            image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+            image: cgr.dev/chainguard/redis:latest@sha256:2257ec2f6ea8b6c8664518b83a2274b72c0672633466a079d8a6c3c5d6fb7833
           - name: checkout
             image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
           - name: envoy
             image: envoyproxy/envoy:distroless-v1.38.0@sha256:a7a56545102f7a682e0cafea2c9b8448af1b09ebb710eab688dfb931e3ec7ff6
           - name: k6
-            image: grafana/k6:master@sha256:2f8f626bb998d8d73c22d741278e48dd591208f07926960935c7eaf63691fd8b
+            image: grafana/k6:master@sha256:c746f66b57ac51d5e28aebe0e96a6f71beb165599e29cbe3605d56f7eb8402dd
+            # Accepted until k6 ships a build on Go 1.27.2 / x/net 0.60 (no published k6 image
+            # has one on 2026-10-09). All four are denial of service in the HTTP stack of a load
+            # generator that lives only inside a lab run's namespace. They lapse on the date, so
+            # the scan fails again if k6 has not caught up.
+            accept: CVE-2026-78667 CVE-2026-78669 CVE-2026-97031
+            accept_until: "2026-11-09"
     steps:
       - name: Reject fixable high and critical vulnerabilities
+        env:
+          ACCEPT: ${{ matrix.accept }}
+          UNTIL: ${{ matrix.accept_until }}
         run: |
-          docker run --rm \
+          : > "$RUNNER_TEMP/trivyignore"
+          for id in $ACCEPT; do echo "$id exp:$UNTIL" >> "$RUNNER_TEMP/trivyignore"; done
+          docker run --rm -v "$RUNNER_TEMP/trivyignore:/trivyignore:ro" \
             aquasec/trivy@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa \
             image --quiet --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 \
+            --ignorefile /trivyignore \
             "${{ matrix.image }}"
