@@ -68,11 +68,14 @@ template:
                 echo "Could not install the GitHub CLI; jobs that call gh will fail."
             fi
             exec /home/runner/run.sh
-        # A small reservation so a job finds room; it may burst to the limit while it builds.
+        # A real reservation: a build or test run keeps about a core busy. With a token one,
+        # a burst of queued jobs piled onto one node and starved each other past their
+        # timeouts; now a job that finds no room waits in GitHub's queue, whose clock has
+        # not started, until a pod frees one. It may still burst to the limit.
         resources:
           requests:
-            cpu: 250m
-            memory: 768Mi
+            cpu: 750m
+            memory: 1Gi
           limits:
             cpu: "2"
             memory: 4Gi
