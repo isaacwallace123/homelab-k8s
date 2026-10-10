@@ -53,6 +53,30 @@
         content: "iscsi_tcp\n"
         mode: "0644"
 
+    # multipathd (on by default in Ubuntu) claims Longhorn's iSCSI disks as mpathX maps, and
+    # then nothing can mount them: "already mounted or mount point busy" with nothing mounted,
+    # and "Can't open blockdev" in dmesg. It left portfolio/auth-service unable to start for
+    # 35 hours. Longhorn's documented fix: multipath leaves sd* devices alone. These VMs have no
+    # multipath storage of their own.
+    - name: Keep multipathd off Longhorn's disks
+      copy:
+        dest: /etc/multipath.conf
+        content: |
+          defaults {
+              user_friendly_names yes
+          }
+          blacklist {
+              devnode "^sd[a-z0-9]+"
+          }
+        mode: "0644"
+      register: multipath_conf
+
+    - name: Restart multipathd after a change
+      systemd:
+        name: multipathd
+        state: restarted
+      when: multipath_conf.changed
+
     # -------------------------------------------------------------------------
     # NFS mount — /tank on 192.168.0.252 → /mnt/tank
     # -------------------------------------------------------------------------
