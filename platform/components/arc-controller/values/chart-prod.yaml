@@ -18,3 +18,9 @@ resources:
 # Scale sets live in arc-runners; the controller manages only namespaces that hold one.
 flags:
   logLevel: info
+  # ArgoCD tracks resources by the label argocd.argoproj.io/instance. The controller copies a
+  # scale set's labels onto the listener, Role and RoleBinding it creates, so ArgoCD claimed
+  # them for the arc-runners Application, found them missing from git and pruned them: the
+  # listener lived a few seconds at a time. Not copying that label leaves them the controller's.
+  excludeLabelPropagationPrefixes:
+    - "argocd.argoproj.io/instance"
