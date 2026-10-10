@@ -1,0 +1,20 @@
+# Actions Runner Controller (GitHub's gha-runner-scale-set-controller).
+#
+# The controller watches AutoscalingRunnerSet resources (one per runner scale set, see
+# arc-runners) and, when GitHub has jobs waiting, creates an ephemeral runner pod for each.
+# It holds no state and runs no jobs itself, so it sits on the general-purpose pool like the
+# other operators.
+nodeSelector:
+  homelab.isaacwallace.dev/pool: apps
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Scale sets live in arc-runners; the controller manages only namespaces that hold one.
+flags:
+  logLevel: info

@@ -303,6 +303,20 @@ components:
       name: cloudnative-pg
       version: "0.26.0"
 
+  # ── CI runners ──────────────────────────────────────────────────────────────
+  # GitHub's Actions Runner Controller. GitHub bills minutes on its own machines for private
+  # repositories; jobs on these runners are free. The controller is an operator like the
+  # others in this tier; the BlockoutGames scale set it serves is `arc-runners`, under apps.
+  # The chart repository is declared to ArgoCD as OCI in components/argocd/resources.
+  - name: arc-controller
+    tier: platform
+    waveOffset: 6
+    namespace: arc-systems
+    chart:
+      repoURL: ghcr.io/actions/actions-runner-controller-charts
+      name: gha-runner-scale-set-controller
+      version: "0.15.0"
+
   # ── platform API (XRDs + Compositions) ──────────────────────────────────────
   # XRDs and Compositions: LabRun (the Operations Arena), plus Database and Bucket
   # (the cloud tier's Postgres and S3).
@@ -450,6 +464,21 @@ components:
       git:                     # externally owned — the portfolio monorepo is the source of truth
         repoURL: https://github.com/isaacwallace123/portfolio-v3.git
         path: deploy/k8s
+
+  # ── BlockoutGames CI runners ────────────────────────────────────────────────
+  # The organisation's runner scale set: jobs with `runs-on: blockout` run in ephemeral pods
+  # here. pre-resources/ holds the sealed GitHub App credential and an ingress deny, which the
+  # scale set needs before it starts. See components/arc-runners/README.md.
+  - name: arc-runners
+    tier: apps
+    waveOffset: 6
+    namespace: arc-runners
+    chart:
+      repoURL: ghcr.io/actions/actions-runner-controller-charts
+      name: gha-runner-scale-set
+      version: "0.15.0"
+    preResources:
+      enabled: true
 
   # ── blockout ────────────────────────────────────────────────────────────────
   # Blockout Games. The manifests are owned by the private Platform monorepo, which
