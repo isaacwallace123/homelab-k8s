@@ -188,7 +188,8 @@ source of truth for its own manifests.
 
 `templated: true` means the directory is a Helm chart and takes an env values file from
 components/<name>/values/. `kustomize: true` means the path holds a kustomization.yaml
-and ArgoCD renders it with Kustomize (the Platform monorepo's overlay, for example).
+(the Platform monorepo's overlay, for example): the source gets no `directory` block, so
+ArgoCD detects the kustomization and renders it with Kustomize.
 Otherwise it is plain YAML applied recursively.
 
 Usage: {{ include "platform.gitSource" (dict "root" $ "component" $c "dir" "resources" "spec" $spec) }}
@@ -215,7 +216,9 @@ source:
     valueFiles:
       - ../values/{{ $dir }}-{{ $root.Values.environment }}.yaml
 {{- else if $spec.kustomize }}
-  kustomize: {}
+  {{- /* Nothing: ArgoCD renders a path holding a kustomization.yaml with Kustomize by itself.
+         An empty `kustomize: {}` here was dropped by the API server when the Application was
+         saved, so root saw it missing on every refresh and flapped in and out of sync. */}}
 {{- else }}
   directory:
     recurse: true
