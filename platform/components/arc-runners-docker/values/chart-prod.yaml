@@ -1,0 +1,82 @@
+# The BlockoutGames scale set for jobs that need Docker (gha-runner-scale-set in dind mode).
+# Jobs whose `runs-on` is `blockout-docker` run here. Like `blockout` (arc-runners), each job
+# gets a fresh pod and there are none while idle. Each pod also has a Docker daemon in a
+# privileged sidecar, so a job can build images, run `docker` and start service containers
+# (Testcontainers, compose).
+#
+# Separate from `blockout` so only the jobs that ask for Docker get a privileged pod; game CI
+# stays unprivileged. Only the organisation's private repositories can send jobs here, and
+# workflows from forks do not run. It shares the arc-runners namespace and that component's
+# GitHub App secret, so it has no pre-resources of its own.
+
+githubConfigUrl: https://github.com/BlockoutGames
+
+# Sealed into the arc-runners namespace by the arc-runners component's pre-resources.
+githubConfigSecret: arc-github-app
+
+# What workflows put in `runs-on`.
+runnerScaleSetName: blockout-docker
+
+# The Docker daemon: a privileged `docker:dind` sidecar sharing the job's work directory,
+# reached through DOCKER_HOST. The chart adds it around the runner container below. Service
+# containers share the pod's network, so a job reaches their ports on localhost.
+containerMode:
+  type: dind
+
+minRunners: 0
+maxRunners: 4
+
+# The controller from the arc-controller component: its release (and so its ServiceAccount)
+# is named after the ArgoCD Application.
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-controller-gha-rs-controller
+
+template:
+  spec:
+    # As arc-runners: the apps pool first, the cloud pool when apps is full; never the media or
+    # control-plane nodes.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: homelab.isaacwallace.dev/pool
+                  operator: In
+                  values: [apps, cloud]
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: homelab.isaacwallace.dev/pool
+                  operator: In
+                  values: [apps]
+    tolerations:
+      - key: homelab.isaacwallace.dev/pool
+        operator: Equal
+        value: cloud
+        effect: NoSchedule
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        # As arc-runners: fetch the GitHub CLI before taking the job.
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            if ! command -v gh > /dev/null; then
+              tag=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest)
+              tag=${tag##*/}
+              curl -fsSL "https://github.com/cli/cli/releases/download/${tag}/gh_${tag#v}_linux_amd64.tar.gz" |
+                sudo tar -xz -C /usr/local --strip-components=1 ||
+                echo "Could not install the GitHub CLI; jobs that call gh will fail."
+            fi
+            exec /home/runner/run.sh
+        # The runner itself is light; image builds and service containers run in the Docker
+        # sidecar, which the chart leaves without limits.
+        resources:
+          requests:
+            cpu: 250m
+            memory: 768Mi
+          limits:
+            cpu: "2"
+            memory: 4Gi
