@@ -466,7 +466,12 @@ spec:
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: redis
-                              image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+                              # Chainguard's build is rebuilt daily, so it carries OpenSSL fixes
+                              # the Alpine one waits weeks for. Protected mode off, as the
+                              # official image ships it: the checkout tier connects over the
+                              # pod network, and nothing outside the run's namespace can reach it.
+                              image: cgr.dev/chainguard/redis:latest@sha256:2257ec2f6ea8b6c8664518b83a2274b72c0672633466a079d8a6c3c5d6fb7833
+                              command: ["redis-server", "--protected-mode", "no"]
                               securityContext: { allowPrivilegeEscalation: false }
                               ports: [{ containerPort: 6379 }]
                               resources:
