@@ -53,7 +53,21 @@ template:
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest
-        command: ["/home/runner/run.sh"]
+        # GitHub's machines come with the GitHub CLI and many workflows call `gh`; this image
+        # has none, so the runner fetches the current release before it takes its job. The
+        # release is found through the /latest redirect rather than the API, which would rate
+        # limit a busy hour of pods. A failed fetch still starts the runner.
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            if ! command -v gh > /dev/null; then
+              tag=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest)
+              tag=${tag##*/}
+              curl -fsSL "https://github.com/cli/cli/releases/download/${tag}/gh_${tag#v}_linux_amd64.tar.gz" |
+                sudo tar -xz -C /usr/local --strip-components=1 ||
+                echo "Could not install the GitHub CLI; jobs that call gh will fail."
+            fi
+            exec /home/runner/run.sh
         # A small reservation so a job finds room; it may burst to the limit while it builds.
         resources:
           requests:
