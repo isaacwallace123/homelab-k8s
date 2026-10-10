@@ -13,6 +13,8 @@ which is the point: the organisation's repositories are private.
    write**. Generate a private key (a `.pem` downloads) and install the App on the organisation.
    Note the App ID (the App's page) and the Installation ID (the number at the end of the
    installation's URL).
+   Its description and logo are in `github-app/` (`description.md` for the description box,
+   `logo.png` under Display information).
 2. Seal it into the namespace and commit:
 
    ```bash
