@@ -26,10 +26,10 @@ controllerServiceAccount:
 
 template:
   spec:
-    # The apps pool first, the cloud pool when apps is full. The apps pool is mostly reserved
-    # (the Minecraft server alone asks for 4 cores and 14 GiB of k8s-work-02), and a CI job is a
-    # few bursty minutes, so it may borrow the cloud node's spare room; it never lands on the
-    # media or control-plane nodes.
+    # The apps pool on cyberlab only (k8s-work-01, k8s-work-02): cyberlab has the headroom, and
+    # pve2 (the cloud, media and first control-plane nodes) is short of it. With the Minecraft
+    # server gone, work-02's four cores are free for jobs. A job that finds no room waits in
+    # GitHub's queue rather than landing on pve2.
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
@@ -37,19 +37,10 @@ template:
             - matchExpressions:
                 - key: homelab.isaacwallace.dev/pool
                   operator: In
-                  values: [apps, cloud]
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            preference:
-              matchExpressions:
-                - key: homelab.isaacwallace.dev/pool
-                  operator: In
                   values: [apps]
-    tolerations:
-      - key: homelab.isaacwallace.dev/pool
-        operator: Equal
-        value: cloud
-        effect: NoSchedule
+                - key: topology.kubernetes.io/zone
+                  operator: In
+                  values: [cyberlab]
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest

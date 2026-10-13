@@ -34,8 +34,7 @@ controllerServiceAccount:
 
 template:
   spec:
-    # As arc-runners: the apps pool first, the cloud pool when apps is full; never the media or
-    # control-plane nodes.
+    # As arc-runners: the apps pool on cyberlab only, never pve2.
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
@@ -43,19 +42,10 @@ template:
             - matchExpressions:
                 - key: homelab.isaacwallace.dev/pool
                   operator: In
-                  values: [apps, cloud]
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            preference:
-              matchExpressions:
-                - key: homelab.isaacwallace.dev/pool
-                  operator: In
                   values: [apps]
-    tolerations:
-      - key: homelab.isaacwallace.dev/pool
-        operator: Equal
-        value: cloud
-        effect: NoSchedule
+                - key: topology.kubernetes.io/zone
+                  operator: In
+                  values: [cyberlab]
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest
