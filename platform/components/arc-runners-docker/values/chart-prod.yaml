@@ -24,7 +24,9 @@ containerMode:
   type: dind
 
 minRunners: 0
-maxRunners: 4
+# Two Docker jobs per cyberlab apps node at most, by their 1 CPU / 1.5 GiB reservation:
+# work-01 (12 GiB, ballooning off) and work-02 together hold eight.
+maxRunners: 8
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.
