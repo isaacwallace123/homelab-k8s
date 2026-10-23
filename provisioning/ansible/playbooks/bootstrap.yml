@@ -77,6 +77,23 @@
         state: restarted
       when: multipath_conf.changed
 
+    # Every container's log is a file Promtail watches, and the CI runners' Docker-in-Docker jobs
+    # (image builds, testcontainers, browsers) open many more. Ubuntu's default of 128 inotify
+    # instances per user ran out on k8s-work-02 on 2026-10-22: Promtail crash-looped with
+    # "too many open files" while CI ran. These are the limits Kubernetes nodes commonly use.
+    - name: Raise inotify limits for container logs and CI
+      copy:
+        dest: /etc/sysctl.d/90-inotify.conf
+        content: |
+          fs.inotify.max_user_instances = 8192
+          fs.inotify.max_user_watches = 524288
+        mode: "0644"
+      register: inotify_conf
+
+    - name: Apply the inotify limits now
+      command: sysctl --system
+      when: inotify_conf.changed
+
     # -------------------------------------------------------------------------
     # NFS mount — /tank on 192.168.0.252 → /mnt/tank
     # -------------------------------------------------------------------------
