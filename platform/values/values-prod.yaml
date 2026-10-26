@@ -329,10 +329,13 @@ components:
       enabled: true
 
   # ── observability ───────────────────────────────────────────────────────────
+  # Switched off 2026-10-26: Blockout runs its own metrics stack. The manifests stay for when
+  # the homelab needs them again; set enabled: true to bring it back.
   - name: monitoring
     tier: observability
     namespace: monitoring
     project: monitoring
+    enabled: false
     resources:
       enabled: true
 
