@@ -176,6 +176,28 @@ nodes = {
   #
   # Its Longhorn replicas MUST be evicted before the VM is removed. See the migration doc.
 
+  # ── pve2 apps node ─────────────────────────────────────────────────────────
+  # Every homelab app that is not Blockout Games: portfolio, cyberlab web, cloudflared,
+  # glance, ntfy, tailscale, crossplane, cert-manager and the rest that select `pool: apps`.
+  # The two cyberlab workers are the `blockout` pool now (2026-10-26: cyberlab is 100%
+  # Blockout), so the apps pool lives here. 4 vCPU / 12 GiB: the apps request ~1.5 CPU and
+  # ~5 GiB in all. .18 was never used; 112 is the next free vmid on pve2.
+  "k8s-apps-01" = {
+    host        = "pve2"
+    vmid        = 112
+    ip          = "192.168.0.18"
+    role        = "agent"
+    pool        = "apps"
+    machine     = "q35"
+    cores       = 4
+    memory      = 12288
+    disk_size   = 100
+    description = "k3s worker — general apps (everything that is not Blockout)"
+    tags        = ["worker", "apps"]
+    # The portfolio selects node-role.kubernetes.io/apps as well as the pool.
+    labels      = { "node-role.kubernetes.io/worker" = "true", "node-role.kubernetes.io/apps" = "true" }
+  }
+
   # ── cyberlab (LAN bridge only, never a range bridge) ───────────────────────
   "k8s-cp-03" = {
     machine         = "q35"
@@ -205,15 +227,17 @@ nodes = {
     vmid            = 810
     ip              = "192.168.0.16"
     role            = "agent"
-    pool            = "apps"
+    pool            = "blockout"
     machine         = "q35"
-    cores           = 6
-    memory          = 12288
-    memory_floating = 4096
+    cores           = 10
+    memory          = 40960
+    memory_floating = 40960
     disk_size       = 120
-    description     = "k3s worker — general apps, Crossplane, arena"
-    tags            = ["worker", "apps"]
+    description     = "k3s worker — Blockout Games and its CI runners"
+    tags            = ["worker", "blockout"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
+    # Only Blockout and its CI runners schedule here; everything else lives on pve2.
+    taints = ["homelab.isaacwallace.dev/pool=blockout:NoSchedule"]
   }
 
   # 24 GiB with ballooning OFF (floating == memory), and 250G of disk. Both are for the
@@ -239,14 +263,16 @@ nodes = {
     vmid            = 811
     ip              = "192.168.0.17"
     role            = "agent"
-    pool            = "apps"
+    pool            = "blockout"
     machine         = "q35"
-    cores           = 6
-    memory          = 24576
-    memory_floating = 24576
+    cores           = 10
+    memory          = 40960
+    memory_floating = 40960
     disk_size       = 250
-    description     = "k3s worker — general apps, game servers, second Longhorn replica target"
-    tags            = ["worker", "apps"]
+    description     = "k3s worker — Blockout Games and its CI runners, second Longhorn replica target"
+    tags            = ["worker", "blockout"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
+    # Only Blockout and its CI runners schedule here; everything else lives on pve2.
+    taints = ["homelab.isaacwallace.dev/pool=blockout:NoSchedule"]
   }
 }

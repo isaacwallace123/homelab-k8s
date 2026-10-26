@@ -184,8 +184,8 @@ variable "nodes" {
   # `pool = "storage"` drifted from the `pool=media` the manifests actually select, leaving
   # media Pending with no obvious cause.
   validation {
-    condition     = alltrue([for n in var.nodes : contains(["control", "apps", "media", "cloud"], n.pool)])
-    error_message = "Each node's pool must be one of: control, apps, media, cloud."
+    condition     = alltrue([for n in var.nodes : contains(["control", "apps", "media", "cloud", "blockout"], n.pool)])
+    error_message = "Each node's pool must be one of: control, apps, media, cloud, blockout."
   }
 
   # Control planes must span more than one Proxmox host.

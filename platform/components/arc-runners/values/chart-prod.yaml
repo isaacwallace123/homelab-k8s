@@ -37,10 +37,15 @@ template:
             - matchExpressions:
                 - key: homelab.isaacwallace.dev/pool
                   operator: In
-                  values: [apps]
+                  values: [blockout]
                 - key: topology.kubernetes.io/zone
                   operator: In
                   values: [cyberlab]
+    tolerations:
+      - key: homelab.isaacwallace.dev/pool
+        operator: Equal
+        value: blockout
+        effect: NoSchedule
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest

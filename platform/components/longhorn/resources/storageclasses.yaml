@@ -54,3 +54,22 @@ parameters:
   staleReplicaTimeout: "30"
   fsType: ext4
   dataLocality: strict-local
+---
+# Blockout's data stays on Blockout's nodes (the two cyberlab workers, Longhorn tag `blockout`):
+# two replicas, one per worker, never on pve2. The pool is one physical host, so this does not
+# survive losing cyberlab; the nightly Postgres backup to TrueNAS does.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-blockout
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "2"
+  nodeSelector: "blockout"
+  staleReplicaTimeout: "30"
+  fsType: ext4
+  replicaSoftAntiAffinity: "disabled"
+  dataLocality: best-effort
