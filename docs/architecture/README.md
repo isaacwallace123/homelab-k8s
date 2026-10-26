@@ -168,6 +168,7 @@ Taints:
 | :--- | :--- | :--- |
 | `k8s-media-01` | `pool=media:NoSchedule` | Nothing may compete with Plex for the Arc or with the NFS path for I/O |
 | `k8s-cloud-01` | `pool=cloud:NoSchedule` | Keeps the cloud tier's I/O predictable next to TrueNAS |
+| `k8s-work-01`, `k8s-work-02` | `pool=blockout:NoSchedule` | The cyberlab workers run Blockout Games and its CI runners only; every other app lives on pve2 |
 | control planes | `node-role.kubernetes.io/control-plane:NoSchedule` | Standard — and applied to **all three**, not just one |
 
 The taint key matches the pool label deliberately. They were previously

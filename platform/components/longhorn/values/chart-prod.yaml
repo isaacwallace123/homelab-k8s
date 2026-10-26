@@ -23,7 +23,7 @@ defaultSettings:
   #   CSINode k8s-cloud-01 does not contain driver driver.longhorn.io
   #
   # Longhorn reads this as `key=value:Effect` separated by semicolons.
-  taintToleration: "homelab.isaacwallace.dev/pool=media:NoSchedule;homelab.isaacwallace.dev/pool=cloud:NoSchedule;homelab.isaacwallace.dev/workload=media:NoSchedule"
+  taintToleration: "homelab.isaacwallace.dev/pool=media:NoSchedule;homelab.isaacwallace.dev/pool=cloud:NoSchedule;homelab.isaacwallace.dev/workload=media:NoSchedule;homelab.isaacwallace.dev/pool=blockout:NoSchedule"
 
   defaultReplicaCount: 2
   defaultDataPath: /var/lib/longhorn
@@ -66,6 +66,11 @@ longhornManager:
     - key: homelab.isaacwallace.dev/pool
       operator: Equal
       value: media
+      effect: NoSchedule
+    # The Blockout pool (cyberlab workers): Longhorn must run there for Blockout's volumes.
+    - key: homelab.isaacwallace.dev/pool
+      operator: Equal
+      value: blockout
       effect: NoSchedule
     - key: homelab.isaacwallace.dev/workload
       operator: Equal
