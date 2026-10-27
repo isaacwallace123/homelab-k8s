@@ -16,7 +16,7 @@ githubConfigSecret: arc-github-app
 runnerScaleSetName: blockout
 
 minRunners: 0
-maxRunners: 4
+maxRunners: 6
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.
@@ -37,7 +37,7 @@ template:
             - matchExpressions:
                 - key: homelab.isaacwallace.dev/pool
                   operator: In
-                  values: [blockout]
+                  values: [blockout, apps]  # apps until k8s-work-01/02 are relabelled blockout
                 - key: topology.kubernetes.io/zone
                   operator: In
                   values: [cyberlab]
@@ -69,9 +69,11 @@ template:
         # timeouts; now a job that finds no room waits in GitHub's queue, whose clock has
         # not started, until a pod frees one. It may still burst to the limit.
         resources:
+          # Cyberlab is Blockout's (2026-10-26): each job may burst to 4 CPUs, and six fit next
+          # to Blockout on the two workers (6 x 1 CPU requested).
           requests:
-            cpu: 750m
-            memory: 1Gi
+            cpu: "1"
+            memory: 2Gi
           limits:
-            cpu: "2"
-            memory: 4Gi
+            cpu: "4"
+            memory: 8Gi
