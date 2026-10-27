@@ -17,11 +17,82 @@ data:
       type: sqlite
       path: /data/data.db
 
+    # Branded to match blockoutgames.com (the studio theme in the Platform repo's
+    # packages/ui/src/styles/studio-theme.css, as HSL for Gatus' shadcn variables). The www
+    # site's own /status page replaces this page later; Gatus then serves only its JSON.
     ui:
-      title: Blockout Games status
-      header: Blockout Games status
-      description: Is Blockout Games up? Checked every minute.
+      title: Status · Blockout Games
+      header: Blockout Games
+      dashboard-heading: Status
+      dashboard-subheading: Every Blockout Games service, checked every minute from a separate server.
+      description: Is Blockout Games up? Every service, checked every minute.
+      logo: https://www.blockoutgames.com/icon
+      favicon:
+        default: https://www.blockoutgames.com/icon
       link: https://blockoutgames.com
+      dark-mode: true
+      buttons:
+        - name: Website
+          link: https://blockoutgames.com
+        - name: Docs
+          link: https://docs.blockoutgames.com
+      custom-css: |
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+        :root {
+          --background: 0.0 0.0% 98.0%;
+          --foreground: 0.0 0.0% 9.0%;
+          --card: 0.0 0.0% 100.0%;
+          --card-foreground: 0.0 0.0% 9.0%;
+          --popover: 0.0 0.0% 100.0%;
+          --popover-foreground: 0.0 0.0% 9.0%;
+          --primary: 20.5 90.2% 48.2%;
+          --primary-foreground: 0.0 0.0% 100.0%;
+          --secondary: 0.0 0.0% 94.1%;
+          --secondary-foreground: 0.0 0.0% 9.0%;
+          --muted: 0.0 0.0% 94.1%;
+          --muted-foreground: 0.0 0.0% 32.2%;
+          --accent: 0.0 0.0% 94.1%;
+          --accent-foreground: 0.0 0.0% 9.0%;
+          --destructive: 0.0 73.7% 41.8%;
+          --destructive-foreground: 0.0 0.0% 100.0%;
+          --border: 0.0 0.0% 89.8%;
+          --input: 0.0 0.0% 83.1%;
+          --ring: 20.5 90.2% 48.2%;
+          --radius: 0.75rem;
+        }
+        :root.dark {
+          --background: 0.0 0.0% 3.9%;
+          --foreground: 0.0 0.0% 98.0%;
+          --card: 0.0 0.0% 7.8%;
+          --card-foreground: 0.0 0.0% 98.0%;
+          --popover: 0.0 0.0% 11.0%;
+          --popover-foreground: 0.0 0.0% 98.0%;
+          --primary: 24.6 95.0% 53.1%;
+          --primary-foreground: 0.0 0.0% 6.7%;
+          --secondary: 0.0 0.0% 11.0%;
+          --secondary-foreground: 0.0 0.0% 98.0%;
+          --muted: 0.0 0.0% 11.0%;
+          --muted-foreground: 0.0 0.0% 63.9%;
+          --accent: 0.0 0.0% 11.0%;
+          --accent-foreground: 0.0 0.0% 98.0%;
+          --destructive: 358.1 75.1% 59.0%;
+          --destructive-foreground: 0.0 0.0% 98.0%;
+          --border: 0.0 0.0% 14.9%;
+          --input: 0.0 0.0% 18.0%;
+          --ring: 27.0 96.0% 61.0%;
+          --radius: 0.75rem;
+        }
+        body, button, input, select { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif !important; letter-spacing: -0.01em; }
+        :root.dark body { background: radial-gradient(1200px 600px at 50% -10%, rgba(249,115,22,0.10), transparent 60%), hsl(var(--background)); }
+        h1, h2 { letter-spacing: -0.03em; }
+        /* Cards: hairline borders and soft depth, as on blockoutgames.com */
+        .rounded-lg, .rounded-xl { border-radius: var(--radius) !important; }
+        :root.dark .border { border-color: hsl(var(--border)) !important; }
+        :root.dark .bg-card, :root.dark .rounded-lg.border { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); }
+        /* Status colours: our green and red, the orange only for the brand */
+        .bg-green-500, .bg-green-600 { background-color: #22c55e !important; }
+        .bg-red-500, .bg-red-600 { background-color: #ef4444 !important; }
+        a:hover { color: hsl(var(--ring)); }
 
     alerting:
       # ntfy here has no auth (networking/ntfy-config sets none), so there is no token to seal.
