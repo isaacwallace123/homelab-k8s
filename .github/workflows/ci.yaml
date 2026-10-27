@@ -94,21 +94,15 @@ jobs:
       matrix:
         include:
           - name: postgres
-            image: cgr.dev/chainguard/postgres:latest@sha256:7ec87651dd1aef191b990ac02678adbd4b9554dee3f6fc08b8f91568fef26c59
+            image: cgr.dev/chainguard/postgres:latest@sha256:6ff491c63a3d3295e68a09c784d96f9d337a91d1bad1feeecc78da222b858817
           - name: redis
-            image: cgr.dev/chainguard/redis:latest@sha256:2257ec2f6ea8b6c8664518b83a2274b72c0672633466a079d8a6c3c5d6fb7833
+            image: cgr.dev/chainguard/redis:latest@sha256:5d928bad6eb7c03bbd3e1d4a4392b43db224e4d97a1b7929903d7cd8fe7a1fb9
           - name: checkout
-            image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+            image: ghcr.io/isaacwallace123/portfolio-checkout-demo:25bb800@sha256:281246e758ecbc7feed9df61b795f544c48d06219d38d5c48294ae261df750e0
           - name: envoy
             image: envoyproxy/envoy:distroless-v1.38.0@sha256:a7a56545102f7a682e0cafea2c9b8448af1b09ebb710eab688dfb931e3ec7ff6
           - name: k6
-            image: grafana/k6:master@sha256:c746f66b57ac51d5e28aebe0e96a6f71beb165599e29cbe3605d56f7eb8402dd
-            # Accepted until k6 ships a build on Go 1.27.2 / x/net 0.60 (no published k6 image
-            # has one on 2026-10-09). All four are denial of service in the HTTP stack of a load
-            # generator that lives only inside a lab run's namespace. They lapse on the date, so
-            # the scan fails again if k6 has not caught up.
-            accept: CVE-2026-78667 CVE-2026-78669 CVE-2026-97031
-            accept_until: "2026-11-09"
+            image: grafana/k6:master@sha256:6f64de81ba8bb54fe22479bcb4c4d674e2ca9fc3bb0a066e2411f7046f671a5e
     steps:
       - name: Reject fixable high and critical vulnerabilities
         env:
