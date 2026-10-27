@@ -125,6 +125,13 @@ spec:
           podSelector:
             matchLabels:
               app: www
+        # The status app (status.blockoutgames.com) draws the history from Gatus's API.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: blockout
+          podSelector:
+            matchLabels:
+              app: status
       ports:
         - port: 8080
 ---
