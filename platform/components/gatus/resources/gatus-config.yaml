@@ -110,6 +110,9 @@ data:
       - name: Home page
         group: Website
         url: https://blockoutgames.com/
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -120,6 +123,9 @@ data:
       - name: www health
         group: Website
         url: https://www.blockoutgames.com/healthz
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -131,6 +137,9 @@ data:
       - name: Studio panel
         group: Panel
         url: https://studio.blockoutgames.com/healthz
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -143,6 +152,9 @@ data:
       - name: Developer API
         group: Developer API
         url: https://studio.blockoutgames.com/developer/v1/key
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 401"
@@ -155,6 +167,9 @@ data:
       - name: Docs
         group: Docs
         url: https://docs.blockoutgames.com/
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -168,6 +183,9 @@ data:
       - name: Collector
         group: Platform
         url: https://blockoutgames.com/api/status
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -178,6 +196,9 @@ data:
       - name: Game snapshots
         group: Platform
         url: https://blockoutgames.com/api/status
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -188,6 +209,9 @@ data:
       - name: GitHub sync
         group: Platform
         url: https://blockoutgames.com/api/status
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -198,6 +222,9 @@ data:
       - name: Assistant
         group: Platform
         url: https://blockoutgames.com/api/status
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -208,6 +235,9 @@ data:
       - name: Push notifications
         group: Platform
         url: https://blockoutgames.com/api/status
+        ui:
+          # A failed condition says what it tested, never the values it saw.
+          dont-resolve-failed-conditions: true
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -224,6 +254,7 @@ data:
         conditions:
           - "[STATUS] == 200"
         ui:
+          dont-resolve-failed-conditions: true
           hide-url: true
           hide-hostname: true
           hide-port: true
@@ -242,6 +273,7 @@ data:
         conditions:
           - "[STATUS] == 200"
         ui:
+          dont-resolve-failed-conditions: true
           hide-url: true
           hide-hostname: true
           hide-port: true
