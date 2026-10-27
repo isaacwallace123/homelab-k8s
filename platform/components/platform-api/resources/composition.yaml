@@ -535,7 +535,7 @@ spec:
                             kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
-                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:25bb800@sha256:281246e758ecbc7feed9df61b795f544c48d06219d38d5c48294ae261df750e0
                               securityContext:
                                 allowPrivilegeEscalation: false
                                 runAsNonRoot: true
@@ -669,7 +669,7 @@ spec:
                             kubernetes.io/hostname: k3s-worker-apps
                           containers:
                             - name: checkout
-                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:b9f89a3@sha256:c95b94387b53bb16e3d06bde699cb0783bed0a9944b151f5dc233156bfc9b19c
+                              image: ghcr.io/isaacwallace123/portfolio-checkout-demo:25bb800@sha256:281246e758ecbc7feed9df61b795f544c48d06219d38d5c48294ae261df750e0
                               securityContext:
                                 allowPrivilegeEscalation: false
                                 runAsNonRoot: true
