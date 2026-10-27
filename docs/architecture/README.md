@@ -250,7 +250,7 @@ Sync waves are derived from a named tier. Nobody writes an integer.
 | `platform` | 100 | Crossplane, providers, functions, ProviderConfigs |
 | `platform-api` | 120 | XRDs and Compositions |
 | `observability` | 140 | Prometheus, Loki, Grafana, Alertmanager |
-| `apps` | 160 | Plex, media stack, glance, ntfy, portfolio |
+| `apps` | 160 | Plex, media stack, glance, ntfy, portfolio, Blockout, Gatus (status page, pinned to pve2) |
 
 A component may set `waveOffset` for fine ordering inside its tier. Tiers are spaced by 20 so
 `pre`/`chart`/`resources` (−1/0/+1) plus offsets never collide with the next tier.
