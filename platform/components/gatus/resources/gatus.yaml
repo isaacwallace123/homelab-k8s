@@ -1,0 +1,146 @@
+# Gatus — the public uptime monitor behind status.blockoutgames.com.
+#
+# Pinned to pve2 (pool apps + zone pve2, i.e. k8s-apps-01) on purpose: Blockout runs on the
+# cyberlab workers, and a monitor on the same host goes dark with what it watches. From pve2
+# a cyberlab outage is a red row and an ntfy alert, not silence.
+#
+# One replica with a Recreate strategy: the SQLite history lives on a ReadWriteOnce volume.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatus
+  namespace: status
+  labels:
+    app: gatus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gatus
+  template:
+    metadata:
+      labels:
+        app: gatus
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        homelab.isaacwallace.dev/pool: apps
+        topology.kubernetes.io/zone: pve2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gatus
+          # v5.37.0, 2026-09-24
+          image: twinproduction/gatus:v5.37.0@sha256:094eb186e55235db367e90e9d56140e5897b7044c41de23cde4cc18e6da1242e
+          ports:
+            - containerPort: 8080
+              name: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            # The image reads config/config.yaml relative to its working directory, /.
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: gatus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: gatus-data
+---
+# Check history. Replicated so losing a node does not lose the uptime record.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gatus-data
+  namespace: status
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatus
+  namespace: status
+spec:
+  type: ClusterIP
+  selector:
+    app: gatus
+  ports:
+    - port: 8080
+      targetPort: http
+      name: http
+---
+# Two callers only: the edge gateway (status.blockoutgames.com) and Blockout's www, which
+# reads /api/v1/endpoints/statuses server-side. Everything else is refused.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gatus-ingress
+  namespace: status
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: edge
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: blockout
+          podSelector:
+            matchLabels:
+              app: www
+      ports:
+        - port: 8080
+---
+# Lets the `status` HTTPRoute in namespace blockout (blockout-routes) point at this Service.
+# Publication stays in that file; this only permits the cross-namespace reference.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: blockout-routes
+  namespace: status
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: blockout
+  to:
+    - group: ""
+      kind: Service
+      name: gatus

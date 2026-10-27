@@ -125,6 +125,17 @@ projects:
       - group: ""
         kind: Namespace
 
+  status:
+    description: >-
+      Gatus, the public uptime monitor for Blockout Games at status.blockoutgames.com.
+      Confined to the `status` namespace and run on pve2, so it outlives a cyberlab outage.
+    destinations: [status]
+    clusterResourceWhitelist:
+      # Namespace, because platform.syncPolicy sets CreateNamespace=true and an AppProject
+      # denies cluster-scoped kinds unless listed — same reason as `applications`.
+      - group: ""
+        kind: Namespace
+
   monitoring:
     description: Observability hub — homelab metrics plus read-only cross-lab visibility.
     destinations: [monitoring, networking]
@@ -501,6 +512,16 @@ components:
       git:                     # externally owned — the Platform monorepo is the source of truth
         repoURL: https://github.com/BlockoutGames/Platform.git
         path: infra/k8s/overlays/production
+
+  # Gatus, the uptime monitor at status.blockoutgames.com. Before blockout-routes, whose
+  # `status` route points at its Service. See components/gatus/README.md.
+  - name: gatus
+    tier: apps
+    waveOffset: 2
+    namespace: status
+    project: status
+    resources:
+      enabled: true
 
   # Public HTTPRoutes for Blockout Games, after the app at offset 2 for the same reason as
   # public-routes above. Publication stays a commit in this repository.
