@@ -399,7 +399,7 @@ spec:
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: postgres
-                              image: cgr.dev/chainguard/postgres:latest@sha256:7ec87651dd1aef191b990ac02678adbd4b9554dee3f6fc08b8f91568fef26c59
+                              image: cgr.dev/chainguard/postgres:latest@sha256:6ff491c63a3d3295e68a09c784d96f9d337a91d1bad1feeecc78da222b858817
                               securityContext: { allowPrivilegeEscalation: false }
                               env:
                                 - { name: POSTGRES_USER, value: checkout }
@@ -470,7 +470,7 @@ spec:
                               # the Alpine one waits weeks for. Protected mode off, as the
                               # official image ships it: the checkout tier connects over the
                               # pod network, and nothing outside the run's namespace can reach it.
-                              image: cgr.dev/chainguard/redis:latest@sha256:2257ec2f6ea8b6c8664518b83a2274b72c0672633466a079d8a6c3c5d6fb7833
+                              image: cgr.dev/chainguard/redis:latest@sha256:5d928bad6eb7c03bbd3e1d4a4392b43db224e4d97a1b7929903d7cd8fe7a1fb9
                               command: ["redis-server", "--protected-mode", "no"]
                               securityContext: { allowPrivilegeEscalation: false }
                               ports: [{ containerPort: 6379 }]
@@ -1042,7 +1042,7 @@ spec:
                           terminationGracePeriodSeconds: 3
                           containers:
                             - name: k6
-                              image: grafana/k6:master@sha256:c746f66b57ac51d5e28aebe0e96a6f71beb165599e29cbe3605d56f7eb8402dd
+                              image: grafana/k6:master@sha256:6f64de81ba8bb54fe22479bcb4c4d674e2ca9fc3bb0a066e2411f7046f671a5e
                               args: ["run", "--quiet", "/scripts/script.js"]
                               securityContext:
                                 allowPrivilegeEscalation: false
