@@ -119,13 +119,8 @@ spec:
           podSelector:
             matchLabels:
               gateway.envoyproxy.io/owning-gateway-name: edge
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: blockout
-          podSelector:
-            matchLabels:
-              app: www
-        # The status app (status.blockoutgames.com) draws the history from Gatus's API.
+        # The status app (status.blockoutgames.com) draws the history from Gatus's API; the
+        # website no longer reads Gatus.
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: blockout
