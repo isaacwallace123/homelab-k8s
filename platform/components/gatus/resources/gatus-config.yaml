@@ -26,9 +26,9 @@ data:
       dashboard-heading: Status
       dashboard-subheading: Every Blockout Games service, checked every minute from a separate server.
       description: Is Blockout Games up? Every service, checked every minute.
-      logo: https://www.blockoutgames.com/icon
+      logo: https://studio.blockoutgames.com/brand/icon-192.png
       favicon:
-        default: https://www.blockoutgames.com/icon
+        default: https://studio.blockoutgames.com/brand/icon-192.png
       link: https://blockoutgames.com
       dark-mode: true
       buttons:
