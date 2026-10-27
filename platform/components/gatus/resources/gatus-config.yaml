@@ -241,13 +241,13 @@ data:
         alerts:
           - type: ntfy
 
-      # Off until the ailab adds k8s-apps-01 (192.168.0.18/32) to ailab_litellm_allowed_cidrs;
-      # UFW on ai-core-01 admits only the workstation and the two cyberlab workers today.
+      # On since 2026-10-27: UFW on ai-core-01 admits k8s-apps-01 (192.168.0.18) on port 4000
+      # (recorded in the ailab repo's ailab_litellm_allowed_cidrs). Whether the assistant answers
+      # end to end is the Platform's status JSON's job (the "Platform" group).
       # The model server (ai-node-01:18090) is not checked at all: its UFW admits ai-core-01
       # only, and it has no auth, so it should stay that way.
-      - name: AI gateway
-        group: Internals
-        enabled: false
+      - name: Assistant gateway
+        group: AI
         url: http://192.168.0.221:4000/health/liveliness
         interval: 60s
         conditions:
