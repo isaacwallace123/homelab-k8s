@@ -101,10 +101,13 @@ spec:
 ---
 # The uptime page is the website's /status, in Blockout's own design, which reads Gatus
 # (components/gatus) inside the cluster. The old hostname redirects there for good.
+# A new name, not `status`: the app's ignoreDifferences on .spec.rules[].matches, with
+# RespectIgnoreDifferences, keeps an existing route's rules as they are live, so the old route
+# could never take the redirect. A new object is created whole.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: status
+  name: status-redirect
   namespace: blockout
 spec:
   parentRefs:
