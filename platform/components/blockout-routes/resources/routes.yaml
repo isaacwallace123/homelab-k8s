@@ -7,14 +7,14 @@
 #
 # ── THE CLOUDFLARE SIDE ───────────────────────────────────────────────────────────────────
 # blockoutgames.com is a second zone on the same Cloudflare account as the tunnel. The
-# tunnel needs public hostnames for the apex, www, studio and status, all → http://192.168.0.204.
-# A wildcard *.blockoutgames.com covers www, studio and status; the apex still needs its own entry,
+# tunnel needs public hostnames for the apex, www, studio, docs and status, all → http://192.168.0.204.
+# A wildcard *.blockoutgames.com covers www, studio, docs and status; the apex still needs its own entry,
 # because a wildcard matches one label, not zero. Cloudflare terminates TLS; the tunnel is
 # plain HTTP; Envoy matches the hostname and 404s anything not listed here.
 #
 # ── WHAT IS NOT ROUTED ───────────────────────────────────────────────────────────────────
-# Only www, the panel and the status page. The API, worker, Postgres and Redis have no route, and the
-# namespace's NetworkPolicies admit the gateway to ports 3000 and 3001 only. The panel
+# Only www, the panel and the docs (status only redirects). The API, worker, Postgres and Redis have
+# no route, and the namespace's NetworkPolicies admit the gateway to ports 3000, 3001 and 3002 only. The panel
 # enforces GitHub organization membership on every request. Cloudflare Access in front of
 # studio.blockoutgames.com would be a second lock; it is optional, and unlike openGym's
 # WebAuthn the GitHub OAuth flow works through it.
@@ -72,8 +72,35 @@ spec:
           port: 3000
           weight: 1
 ---
-# The uptime page. Gatus lives in namespace `status` (components/gatus), which is `internal`
-# and cannot attach to edge itself; this route reaches it through the ReferenceGrant there.
+# The public docs and API reference: the Platform's `docs` app (ADR-0058 there).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: docs
+  namespace: blockout
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - docs.blockoutgames.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: docs
+          port: 3002
+          weight: 1
+---
+# The uptime page is the website's /status, in Blockout's own design, which reads Gatus
+# (components/gatus) inside the cluster. The old hostname redirects there for good.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -93,10 +120,12 @@ spec:
         - path:
             type: PathPrefix
             value: /
-      backendRefs:
-        - group: ""
-          kind: Service
-          name: gatus
-          namespace: status
-          port: 8080
-          weight: 1
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            hostname: blockoutgames.com
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /status
+            statusCode: 301

@@ -151,10 +151,9 @@ data:
           - type: ntfy
 
       # ── Docs ────────────────────────────────────────────────────────────────────────────
-      # Off until docs.blockoutgames.com ships (it 404s today). Switch on in the launch commit.
+      # On since the docs app shipped (the Platform's ADR-0058).
       - name: Docs
         group: Docs
-        enabled: false
         url: https://docs.blockoutgames.com/
         interval: 60s
         conditions:
@@ -164,14 +163,10 @@ data:
           - type: ntfy
 
       # ── Platform features ───────────────────────────────────────────────────────────────
-      # Read from the platform's public status JSON, which does not exist yet: the Platform
-      # PR that adds GET /api/status on www has not been opened (2026-10-26). Turn these on
-      # once https://blockoutgames.com/api/status answers. The public URL, not
-      # www.blockout.svc:3001, because Blockout's default-deny admits only the edge gateway
-      # to www.
+      # Read from the platform's public status JSON (www's GET /api/status). The public URL, not
+      # www.blockout.svc:3001, because Blockout's default-deny admits only the edge gateway to www.
       - name: Collector
         group: Platform
-        enabled: false
         url: https://blockoutgames.com/api/status
         interval: 60s
         conditions:
@@ -182,7 +177,6 @@ data:
 
       - name: Game snapshots
         group: Platform
-        enabled: false
         url: https://blockoutgames.com/api/status
         interval: 60s
         conditions:
@@ -193,7 +187,6 @@ data:
 
       - name: GitHub sync
         group: Platform
-        enabled: false
         url: https://blockoutgames.com/api/status
         interval: 60s
         conditions:
@@ -204,7 +197,6 @@ data:
 
       - name: Assistant
         group: Platform
-        enabled: false
         url: https://blockoutgames.com/api/status
         interval: 60s
         conditions:
@@ -215,7 +207,6 @@ data:
 
       - name: Push notifications
         group: Platform
-        enabled: false
         url: https://blockoutgames.com/api/status
         interval: 60s
         conditions:
@@ -225,11 +216,9 @@ data:
           - type: ntfy
 
       # ── Internals ───────────────────────────────────────────────────────────────────────
-      # Off until the Platform repo admits namespace `status` to api:4000; today its
-      # api-from-web-apps NetworkPolicy lets in panel, www and ai only.
+      # The Platform's api-from-uptime-monitor NetworkPolicy admits this pod to api:4000.
       - name: API readiness
         group: Internals
-        enabled: false
         url: http://api.blockout.svc.cluster.local:4000/readyz
         interval: 60s
         conditions:
