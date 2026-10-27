@@ -26,7 +26,7 @@ containerMode:
 minRunners: 0
 # Two Docker jobs per cyberlab apps node at most, by their 1 CPU / 1.5 GiB reservation:
 # work-01 (12 GiB, ballooning off) and work-02 together hold eight.
-maxRunners: 8
+maxRunners: 6
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.
@@ -44,7 +44,7 @@ template:
             - matchExpressions:
                 - key: homelab.isaacwallace.dev/pool
                   operator: In
-                  values: [blockout]
+                  values: [blockout, apps]  # apps until k8s-work-01/02 are relabelled blockout
                 - key: topology.kubernetes.io/zone
                   operator: In
                   values: [cyberlab]
@@ -72,9 +72,11 @@ template:
         # covers both: the job's tools here and its containers there. Sized so a node holds
         # only as many Docker jobs as it can run without starving them (see arc-runners).
         resources:
+          # Image builds and end-to-end runs: 4-CPU bursts; six fit next to Blockout and the plain
+          # runners on the two cyberlab workers (6 x 1.5 CPU requested).
           requests:
-            cpu: "1"
-            memory: 1536Mi
+            cpu: 1500m
+            memory: 3Gi
           limits:
-            cpu: "2"
-            memory: 4Gi
+            cpu: "4"
+            memory: 8Gi
