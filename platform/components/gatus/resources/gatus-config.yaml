@@ -1,0 +1,189 @@
+# Gatus configuration: what status.blockoutgames.com checks and who it tells.
+#
+# Every endpoint runs once a minute from k8s-apps-01 on pve2. Public endpoints are checked
+# through Cloudflare, the same way a visitor reaches them, so a tunnel or DNS outage counts.
+# Endpoints with `enabled: false` are not checked and not shown; each says what flips it.
+#
+# Alerts go to ntfy topic `blockout-status` after 3 failures in a row and resolve after 2
+# successes. The status page itself is public: anything internal hides its URL, host and port.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatus-config
+  namespace: status
+data:
+  config.yaml: |
+    storage:
+      type: sqlite
+      path: /data/data.db
+
+    ui:
+      title: Blockout Games status
+      header: Blockout Games status
+      description: Is Blockout Games up? Checked every minute.
+      link: https://blockoutgames.com
+
+    alerting:
+      # ntfy here has no auth (networking/ntfy-config sets none), so there is no token to seal.
+      ntfy:
+        url: http://ntfy.networking.svc.cluster.local
+        topic: blockout-status
+        priority: 4
+        default-alert:
+          failure-threshold: 3
+          success-threshold: 2
+          send-on-resolved: true
+
+    endpoints:
+      # ── Website ─────────────────────────────────────────────────────────────────────────
+      - name: Home page
+        group: Website
+        url: https://blockoutgames.com/
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 5000"
+        alerts:
+          - type: ntfy
+
+      - name: www health
+        group: Website
+        url: https://www.blockoutgames.com/healthz
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].ok == true"
+        alerts:
+          - type: ntfy
+
+      # ── Panel ───────────────────────────────────────────────────────────────────────────
+      - name: Studio panel
+        group: Panel
+        url: https://studio.blockoutgames.com/healthz
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 5000"
+        alerts:
+          - type: ntfy
+
+      # ── Developer API ───────────────────────────────────────────────────────────────────
+      # 401 without a key proves the route reaches the API and the key check answers.
+      - name: Developer API
+        group: Developer API
+        url: https://studio.blockoutgames.com/developer/v1/key
+        interval: 60s
+        conditions:
+          - "[STATUS] == 401"
+          - "[RESPONSE_TIME] < 5000"
+        alerts:
+          - type: ntfy
+
+      # ── Docs ────────────────────────────────────────────────────────────────────────────
+      # Off until docs.blockoutgames.com ships (it 404s today). Switch on in the launch commit.
+      - name: Docs
+        group: Docs
+        enabled: false
+        url: https://docs.blockoutgames.com/
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 5000"
+        alerts:
+          - type: ntfy
+
+      # ── Platform features ───────────────────────────────────────────────────────────────
+      # Read from the platform's public status JSON, which does not exist yet: the Platform
+      # PR that adds GET /api/status on www has not been opened (2026-10-26). Turn these on
+      # once https://blockoutgames.com/api/status answers. The public URL, not
+      # www.blockout.svc:3001, because Blockout's default-deny admits only the edge gateway
+      # to www.
+      - name: Collector
+        group: Platform
+        enabled: false
+        url: https://blockoutgames.com/api/status
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].collector.state == ok"
+        alerts:
+          - type: ntfy
+
+      - name: Game snapshots
+        group: Platform
+        enabled: false
+        url: https://blockoutgames.com/api/status
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].jobs.snapshot.fresh == true"
+        alerts:
+          - type: ntfy
+
+      - name: GitHub sync
+        group: Platform
+        enabled: false
+        url: https://blockoutgames.com/api/status
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].jobs.github.fresh == true"
+        alerts:
+          - type: ntfy
+
+      - name: Assistant
+        group: Platform
+        enabled: false
+        url: https://blockoutgames.com/api/status
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].assistant.connected == true"
+        alerts:
+          - type: ntfy
+
+      - name: Push notifications
+        group: Platform
+        enabled: false
+        url: https://blockoutgames.com/api/status
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].push.ok == true"
+        alerts:
+          - type: ntfy
+
+      # ── Internals ───────────────────────────────────────────────────────────────────────
+      # Off until the Platform repo admits namespace `status` to api:4000; today its
+      # api-from-web-apps NetworkPolicy lets in panel, www and ai only.
+      - name: API readiness
+        group: Internals
+        enabled: false
+        url: http://api.blockout.svc.cluster.local:4000/readyz
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+        ui:
+          hide-url: true
+          hide-hostname: true
+          hide-port: true
+        alerts:
+          - type: ntfy
+
+      # Off until the ailab adds k8s-apps-01 (192.168.0.18/32) to ailab_litellm_allowed_cidrs;
+      # UFW on ai-core-01 admits only the workstation and the two cyberlab workers today.
+      # The model server (ai-node-01:18090) is not checked at all: its UFW admits ai-core-01
+      # only, and it has no auth, so it should stay that way.
+      - name: AI gateway
+        group: Internals
+        enabled: false
+        url: http://192.168.0.221:4000/health/liveliness
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+        ui:
+          hide-url: true
+          hide-hostname: true
+          hide-port: true
+        alerts:
+          - type: ntfy
