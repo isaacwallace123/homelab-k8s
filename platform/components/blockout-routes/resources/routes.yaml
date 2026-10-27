@@ -13,8 +13,8 @@
 # plain HTTP; Envoy matches the hostname and 404s anything not listed here.
 #
 # ── WHAT IS NOT ROUTED ───────────────────────────────────────────────────────────────────
-# Only www, the panel and the docs (status only redirects). The API, worker, Postgres and Redis have
-# no route, and the namespace's NetworkPolicies admit the gateway to ports 3000, 3001 and 3002 only. The panel
+# Only www, the panel, the docs and the status app. The API, worker, Postgres and Redis have
+# no route, and the namespace's NetworkPolicies admit the gateway to ports 3000 to 3003 only. The panel
 # enforces GitHub organization membership on every request. Cloudflare Access in front of
 # studio.blockoutgames.com would be a second lock; it is optional, and unlike openGym's
 # WebAuthn the GitHub OAuth flow works through it.
@@ -99,15 +99,15 @@ spec:
           port: 3002
           weight: 1
 ---
-# The uptime page is the website's /status, in Blockout's own design, which reads Gatus
-# (components/gatus) inside the cluster. The old hostname redirects there for good.
-# A new name, not `status`: the app's ignoreDifferences on .spec.rules[].matches, with
-# RespectIgnoreDifferences, keeps an existing route's rules as they are live, so the old route
-# could never take the redirect. A new object is created whole.
+# The status page: the Platform's own `status` app (styled like the studio panel), which reads
+# Gatus (components/gatus) and the platform's status inside the cluster. A new object name
+# (`status-site`): the app's ignoreDifferences on .spec.rules[].matches, with
+# RespectIgnoreDifferences, keeps an existing route's rules as they are live, so a route's rules
+# are changed by replacing the route, not by editing it.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: status-redirect
+  name: status-site
   namespace: blockout
 spec:
   parentRefs:
@@ -123,12 +123,9 @@ spec:
         - path:
             type: PathPrefix
             value: /
-      filters:
-        - type: RequestRedirect
-          requestRedirect:
-            scheme: https
-            hostname: blockoutgames.com
-            path:
-              type: ReplaceFullPath
-              replaceFullPath: /status
-            statusCode: 301
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: status
+          port: 3003
+          weight: 1
