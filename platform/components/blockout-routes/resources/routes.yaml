@@ -7,13 +7,13 @@
 #
 # ── THE CLOUDFLARE SIDE ───────────────────────────────────────────────────────────────────
 # blockoutgames.com is a second zone on the same Cloudflare account as the tunnel. The
-# tunnel needs public hostnames for the apex, www and studio, all → http://192.168.0.204.
-# A wildcard *.blockoutgames.com covers www and studio; the apex still needs its own entry,
+# tunnel needs public hostnames for the apex, www, studio and status, all → http://192.168.0.204.
+# A wildcard *.blockoutgames.com covers www, studio and status; the apex still needs its own entry,
 # because a wildcard matches one label, not zero. Cloudflare terminates TLS; the tunnel is
 # plain HTTP; Envoy matches the hostname and 404s anything not listed here.
 #
 # ── WHAT IS NOT ROUTED ───────────────────────────────────────────────────────────────────
-# Only www and the panel. The API, worker, Postgres and Redis have no route, and the
+# Only www, the panel and the status page. The API, worker, Postgres and Redis have no route, and the
 # namespace's NetworkPolicies admit the gateway to ports 3000 and 3001 only. The panel
 # enforces GitHub organization membership on every request. Cloudflare Access in front of
 # studio.blockoutgames.com would be a second lock; it is optional, and unlike openGym's
@@ -70,4 +70,33 @@ spec:
           kind: Service
           name: panel
           port: 3000
+          weight: 1
+---
+# The uptime page. Gatus lives in namespace `status` (components/gatus), which is `internal`
+# and cannot attach to edge itself; this route reaches it through the ReferenceGrant there.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: status
+  namespace: blockout
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - status.blockoutgames.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: gatus
+          namespace: status
+          port: 8080
           weight: 1
