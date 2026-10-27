@@ -101,3 +101,13 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: arc-runners
+---
+# status: Gatus, the uptime monitor behind status.blockoutgames.com. `internal` although the
+# page is public: its HTTPRoute lives in `blockout` (blockout-routes), reaching in through a
+# ReferenceGrant, so this namespace can never publish anything by itself.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: status
+  labels:
+    homelab.isaacwallace.dev/exposure: internal
