@@ -230,13 +230,13 @@ nodes = {
     pool            = "blockout"
     machine         = "q35"
     cores           = 10
-    memory          = 40960
-    memory_floating = 40960
+    memory          = 20480
+    memory_floating = 20480
     disk_size       = 120
-    description     = "k3s worker — Blockout Games and its CI runners"
+    description     = "k3s worker — Blockout Games"
     tags            = ["worker", "blockout"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
-    # Only Blockout and its CI runners schedule here; everything else lives on pve2.
+    # Only Blockout schedules here; its CI runners have k8s-ci-01, everything else lives on pve2.
     taints = ["homelab.isaacwallace.dev/pool=blockout:NoSchedule"]
   }
 
@@ -265,14 +265,39 @@ nodes = {
     role            = "agent"
     pool            = "blockout"
     machine         = "q35"
-    cores           = 10
-    memory          = 40960
-    memory_floating = 40960
+    cores           = 8
+    memory          = 16384
+    memory_floating = 16384
     disk_size       = 250
-    description     = "k3s worker — Blockout Games and its CI runners, second Longhorn replica target"
+    description     = "k3s worker — Blockout Games, second Longhorn replica target"
     tags            = ["worker", "blockout"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
-    # Only Blockout and its CI runners schedule here; everything else lives on pve2.
+    # Only Blockout schedules here; its CI runners have k8s-ci-01, everything else lives on pve2.
     taints = ["homelab.isaacwallace.dev/pool=blockout:NoSchedule"]
+  }
+
+  # ── cyberlab CI node ───────────────────────────────────────────────────────
+  # The BlockoutGames runner scale sets, and nothing else. A job runs code from pull requests
+  # and dependency updates, and the Docker scale set's sidecar is privileged, which is root on
+  # its node: so not on the blockout workers, whose disks hold Blockout's database and whose
+  # kubelets can read Blockout's secrets. No `node-role.kubernetes.io/worker` label, so
+  # Longhorn keeps no replicas here. Sized from measured use (2026-10-28): once CI leaves them,
+  # work-01 needs about 10 GiB and work-02 about 6, so they drop to 20 and 16 and CI gets 20,
+  # leaving room on cyberlab for both AI nodes (both Arc GPUs) with ~16 GiB spare.
+  "k8s-ci-01" = {
+    host            = "cyberlab"
+    vmid            = 812
+    # VERIFY THIS IS FREE before applying, as for .15.
+    ip              = "192.168.0.19"
+    role            = "agent"
+    pool            = "ci"
+    machine         = "q35"
+    cores           = 8
+    memory          = 20480
+    memory_floating = 20480
+    disk_size       = 120
+    description     = "k3s worker — BlockoutGames CI runners only"
+    tags            = ["worker", "ci"]
+    taints          = ["homelab.isaacwallace.dev/pool=ci:NoSchedule"]
   }
 }

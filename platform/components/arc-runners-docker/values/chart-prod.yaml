@@ -24,9 +24,8 @@ containerMode:
   type: dind
 
 minRunners: 0
-# Two Docker jobs per cyberlab apps node at most, by their 1 CPU / 1.5 GiB reservation:
-# work-01 (12 GiB, ballooning off) and work-02 together hold eight.
-maxRunners: 6
+# Six at most, on k8s-ci-01, sharing it with the plain scale set.
+maxRunners: 2  # k8s-ci-01 at 12 GiB fits two of each; three of each once it has 20 GiB
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.
@@ -36,7 +35,8 @@ controllerServiceAccount:
 
 template:
   spec:
-    # The Blockout pool on cyberlab (they build Blockout), never pve2.
+    # The ci pool only (k8s-ci-01), never the blockout workers: the Docker sidecar is
+    # privileged, which is root on whichever node the pod lands on.
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
@@ -44,14 +44,11 @@ template:
             - matchExpressions:
                 - key: homelab.isaacwallace.dev/pool
                   operator: In
-                  values: [blockout, apps]  # apps until k8s-work-01/02 are relabelled blockout
-                - key: topology.kubernetes.io/zone
-                  operator: In
-                  values: [cyberlab]
+                  values: [ci]
     tolerations:
       - key: homelab.isaacwallace.dev/pool
         operator: Equal
-        value: blockout
+        value: ci
         effect: NoSchedule
     containers:
       - name: runner
@@ -72,8 +69,7 @@ template:
         # covers both: the job's tools here and its containers there. Sized so a node holds
         # only as many Docker jobs as it can run without starving them (see arc-runners).
         resources:
-          # Image builds and end-to-end runs: 4-CPU bursts; six fit next to Blockout and the plain
-          # runners on the two cyberlab workers (6 x 1.5 CPU requested).
+          # Image builds and end-to-end runs: 4-CPU bursts, on k8s-ci-01 (6 x 1.5 CPU requested).
           requests:
             cpu: 1500m
             memory: 3Gi
