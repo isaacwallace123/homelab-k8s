@@ -129,3 +129,42 @@ spec:
           name: status
           port: 3003
           weight: 1
+---
+# account.blockoutgames.com: sign-in and settings for every Blockout site (Platform ADR-0067).
+# better-auth's endpoints go straight to the account service; every other path is the account
+# site. A new object name, as for `status-site`: rules change by replacing the route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: account-site
+  namespace: blockout
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+      namespace: networking
+      sectionName: http
+  hostnames:
+    - account.blockoutgames.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/auth
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: auth
+          port: 4200
+          weight: 1
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: account
+          port: 3004
+          weight: 1
