@@ -14,6 +14,8 @@ provisioning/terraform/.terraform.lock.hcl
 provisioning/terraform/.terraform.tfstate.lock.info
 provisioning/terraform/terraform.tfvars
 provisioning/terraform/terraform.tfstate*
+# Saved plans can hold variable values, the Proxmox token included, in plain text.
+*.tfplan
 
 # Terraform generates this from var.nodes; tfvars is the single source of truth.
 provisioning/ansible/inventory.generated.yml
