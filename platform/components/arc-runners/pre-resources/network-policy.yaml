@@ -1,5 +1,4 @@
 # Runner pods only call out (GitHub, package registries); nothing ever needs to reach them.
-# Egress stays open: a job downloads its tools and packages from the internet.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -8,3 +7,37 @@ metadata:
 spec:
   podSelector: {}
   policyTypes: [Ingress]
+---
+# Egress: the internet and the cluster's DNS, nothing private. Jobs run code from pull
+# requests and dependency updates; without this a job reaches the Proxmox API (.254),
+# TrueNAS, ArgoCD, ntfy, the LLM gateway (whose firewall admits node addresses, which pod
+# traffic leaves as) and every Service in the cluster. Docker's containers in the dind
+# sidecar share the pod's network, so this covers them too.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-internet-only
+  namespace: arc-runners
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8        # pods (10.42/16) and Services (10.43/16)
+              - 172.16.0.0/12
+              - 192.168.0.0/16    # the LAN: Proxmox, TrueNAS, MetalLB addresses, ai-core-01
+              - 100.64.0.0/10     # the tailnet
+              - 169.254.0.0/16
