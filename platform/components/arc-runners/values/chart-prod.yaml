@@ -16,7 +16,7 @@ githubConfigSecret: arc-github-app
 runnerScaleSetName: blockout
 
 minRunners: 0
-maxRunners: 2  # k8s-ci-01 at 12 GiB fits two of each; three of each once it has 20 GiB
+maxRunners: 5  # k8s-ci-01 (12 cores, 28 GiB) fits five of each: ten runners at once
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.

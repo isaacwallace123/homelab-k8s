@@ -25,7 +25,7 @@ containerMode:
 
 minRunners: 0
 # Six at most, on k8s-ci-01, sharing it with the plain scale set.
-maxRunners: 2  # k8s-ci-01 at 12 GiB fits two of each; three of each once it has 20 GiB
+maxRunners: 5  # k8s-ci-01 (12 cores, 28 GiB) fits five of each: ten runners at once
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.
@@ -71,7 +71,7 @@ template:
         resources:
           # Image builds and end-to-end runs: 4-CPU bursts, on k8s-ci-01 (6 x 1.5 CPU requested).
           requests:
-            cpu: 1500m
+            cpu: 1200m
             memory: 3Gi
           limits:
             cpu: "4"
