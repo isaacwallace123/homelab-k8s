@@ -511,6 +511,9 @@ components:
       kustomize: true
       git:                     # externally owned — the Platform monorepo is the source of truth
         repoURL: https://github.com/BlockoutGames/Platform.git
+        # The Release workflow pushes this branch: main at the released commit with the overlay
+        # pinned to its images. The push is the deployment (Platform ADR-0072).
+        revision: deploy/production
         path: infra/k8s/overlays/production
 
   # Gatus, the uptime monitor at status.blockoutgames.com. Before blockout-routes, whose
