@@ -1,0 +1,34 @@
+# Blockout's Prometheus may list the nodes and read their kubelet metrics (nodes/metrics), for the
+# Metrics page's Nodes section, and nothing else cluster-wide. The Platform repository never ships
+# a ClusterRole to this cluster (its Argo project does not whitelist them; security audit L6), so
+# this repository grants the one it needs. Never nodes/proxy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: blockout-prometheus-nodes
+  labels:
+    app.kubernetes.io/part-of: blockout
+    app.kubernetes.io/component: observability
+rules:
+  - apiGroups: ['']
+    resources: ['nodes']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['']
+    resources: ['nodes/metrics']
+    verbs: ['get']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: blockout-prometheus-nodes
+  labels:
+    app.kubernetes.io/part-of: blockout
+    app.kubernetes.io/component: observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: blockout-prometheus-nodes
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: blockout

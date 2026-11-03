@@ -426,6 +426,14 @@ components:
     resources:
       enabled: true
 
+  # Blockout's Prometheus reads each kubelet's metrics (Platform components/observability-nodes).
+  - name: blockout-access
+    tier: security
+    waveOffset: 4
+    namespace: blockout
+    resources:
+      enabled: true
+
   # The dashboard at 192.168.0.220. Renamed from `homepage` when gethomepage was replaced
   # by Glance — ArgoCD reads that as a delete plus a create, so the old Application takes its
   # Deployment, Service, ConfigMap and SealedSecret with it on the way out.
