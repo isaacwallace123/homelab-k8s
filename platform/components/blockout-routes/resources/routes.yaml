@@ -49,7 +49,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: studio
+  name: studio-site
   namespace: blockout
 spec:
   parentRefs:
@@ -190,7 +190,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: mcp-site
+  name: mcp-site-v2
   namespace: blockout
 spec:
   parentRefs:
