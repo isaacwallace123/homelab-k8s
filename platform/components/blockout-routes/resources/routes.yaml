@@ -71,6 +71,9 @@ spec:
           name: panel
           port: 3000
           weight: 1
+      # Envoy's default 15 s cuts a streaming answer (the assistant, an MCP confirmation) mid-way.
+      timeouts:
+        request: 130s
 ---
 # The public docs and API reference: the Platform's `docs` app (ADR-0058 there).
 apiVersion: gateway.networking.k8s.io/v1
@@ -209,3 +212,6 @@ spec:
           name: mcp
           port: 4300
           weight: 1
+      # Envoy's default 15 s cuts a streaming answer (the assistant, an MCP confirmation) mid-way.
+      timeouts:
+        request: 130s
