@@ -25,7 +25,7 @@ containerMode:
 
 minRunners: 0
 # Six at most, on k8s-ci-01, sharing it with the plain scale set.
-maxRunners: 3  # the Platform alone needs Docker: end-to-end in three parts at once, integration, releases
+maxRunners: 10  # as the plain set: whichever repos are busy use the node; the scheduler fits what it can
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.

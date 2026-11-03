@@ -16,7 +16,7 @@ githubConfigSecret: arc-github-app
 runnerScaleSetName: blockout
 
 minRunners: 0
-maxRunners: 7  # game repos (Template CI: lint, check, Rojo build) are plain jobs; 7 + 3 docker fit k8s-ci-01 (12 cores, 28 GiB)
+maxRunners: 10  # a ceiling, not a share: both sets may grow to 10 and k8s-ci-01 (12 cores, 28 GiB) decides; a runner that does not fit waits as a pending pod
 
 # The controller from the arc-controller component: its release (and so its ServiceAccount)
 # is named after the ArgoCD Application.
@@ -69,8 +69,8 @@ template:
           # Each job may burst to 4 CPUs; k8s-ci-01 holds the plain and Docker jobs together
           # (6 x 1 CPU here, 6 x 1.5 CPU there, requested); the rest wait in GitHub's queue.
           requests:
-            cpu: "1"
-            memory: 2Gi
+            cpu: 500m  # game repos run light jobs (Lune, Rojo); a small ask lets many share the node
+            memory: 1Gi
           limits:
             cpu: "4"
             memory: 8Gi
