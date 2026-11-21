@@ -1,0 +1,10 @@
+[Unit]
+Description=Check hypervisor storage headroom
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-storage-headroom
+Environment=NTFY_URL=http://192.168.0.222/homelab-storage
+StateDirectory=homelab-storage-headroom
+StateDirectoryMode=0700

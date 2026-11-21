@@ -1,30 +1,40 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:base"],
+  "extends": ["config:recommended"],
   "kubernetes": {
-    "fileMatch": ["manifests/.*\\.yaml$"]
+    "managerFilePatterns": ["/^platform\\/components\\/[^/]+\\/(?:pre-resources|resources)\\/.*\\.ya?ml$/"]
   },
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Update Helm charts declared in ArgoCD ApplicationSet descriptors",
-      "managerFilePatterns": ["/(^|/)argocd-apps/.+-helm-app\\.ya?ml$/"],
+      "description": "Update index-backed Helm charts in the platform configuration",
+      "managerFilePatterns": ["/^platform\\/values\\/values-prod\\.yaml$/"],
       "datasourceTemplate": "helm",
       "matchStrings": [
-        "repoURL:\\s*(?<registryUrl>\\S+)\\s+chart:\\s*(?<depName>\\S+)\\s+targetRevision:\\s*\"?(?<currentValue>[^\"\\n]+)\"?"
+        "repoURL:[ \\t]+(?<registryUrl>https?://[^\\s]+)\\s+name:[ \\t]+(?<depName>[^\\s]+)\\s+version:[ \\t]+\"?(?<currentValue>[^\\s\"]+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update OCI Helm charts in the platform configuration",
+      "managerFilePatterns": ["/^platform\\/values\\/values-prod\\.yaml$/"],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "{{{repository}}}/{{{chart}}}",
+      "matchStrings": [
+        "repoURL:[ \\t]+(?<repository>(?:ghcr\\.io|docker\\.io)/[^\\s]+)\\s+name:[ \\t]+(?<chart>[^\\s]+)\\s+version:[ \\t]+\"?(?<currentValue>[^\\s\"]+)"
       ]
     }
   ],
   "packageRules": [
     {
       "description": "Group LinuxServer media stack updates",
-      "matchPackagePatterns": ["^lscr\\.io/linuxserver/"],
+      "matchPackageNames": ["/^lscr\\.io\\/linuxserver\\//"],
       "groupName": "linuxserver media stack",
       "automerge": false
     },
     {
       "description": "Group monitoring stack updates",
-      "matchPackagePatterns": ["^(prom/|grafana/)"],
+      "matchPackageNames": ["/^(prom|grafana)\\//"],
       "groupName": "monitoring stack",
       "automerge": false
     },
