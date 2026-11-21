@@ -196,7 +196,7 @@ spec:
       containers:
         # ── API: passkeys, profiles, every workout ──────────────────────────────────────
         - name: api
-          image: ghcr.io/duartesantos8/opengym-api:1.3.7
+          image: ghcr.io/duartesantos8/opengym-api:1.4.5
           envFrom:
             - configMapRef:
                 name: opengym-config
@@ -224,7 +224,7 @@ spec:
 
         # ── web: frontend, exercise media, and the /api proxy ────────────────────────────
         - name: web
-          image: ghcr.io/duartesantos8/opengym-web:1.3.7
+          image: ghcr.io/duartesantos8/opengym-web:1.4.5
           envFrom:
             - configMapRef:
                 name: opengym-config
