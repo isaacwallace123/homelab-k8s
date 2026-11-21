@@ -256,17 +256,29 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: opengym-data
+            claimName: opengym-data-restored
         - name: media
           persistentVolumeClaim:
             claimName: opengym-media
 ---
-# Profiles, passkeys and every logged workout. Small — this is JSON, not a database — but
-# it is the irreplaceable half of this deployment, so it is replicated.
+# Retain the original claim and its snapshots after the pve2 storage outage.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: opengym-data
+  namespace: fitness
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Profiles, passkeys and workouts recovered from the original Longhorn volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opengym-data-restored
   namespace: fitness
 spec:
   accessModes: ["ReadWriteOnce"]
