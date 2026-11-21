@@ -1,5 +1,29 @@
 # Storage Tiers
 
+## Proxmox SSD headroom
+
+Watch the hypervisor thin pool as well as free space inside each VM. A guest can have
+space left when the host runs out of blocks to back its writes.
+
+Both Proxmox hosts run `homelab-storage-headroom.timer` every five minutes. It checks
+thin-pool data and metadata, the host root filesystem, and the backup mount when present.
+It records threshold crossings at 75%, 85%, and 95% in the journal and posts them to the
+`homelab-storage` topic on the LAN ntfy service. The host retries if ntfy is unavailable.
+
+```sh
+/usr/local/sbin/homelab-storage-headroom --check
+systemctl list-timers homelab-storage-headroom.timer
+journalctl -u homelab-storage-headroom.service
+```
+
+The unit files and checker are in `provisioning/proxmox/`. Before relocating a VM,
+verify its backup on a different storage device and confirm the destination has room
+for the complete virtual disk. For an AMD-to-Intel move, shut down the guest and use
+Proxmox's offline migration. After boot, check the VM's expected IP, the Kubernetes
+node's physical zone, and the workloads and volumes that depend on it.
+
+## Kubernetes storage classes
+
 Four classes, each with an explicit reason to exist. The previous setup had `local-path` and
 `longhorn` **both marked default**, which is an ambiguity Kubernetes resolves arbitrarily — a PVC
 with no `storageClassName` could land on either. That is fixed here: exactly one default.
