@@ -27,13 +27,14 @@ bridges. Host placement does not transfer ownership of cyberlab or AI workloads 
 | VM / node | Host | Address | Role | Pool | Resources | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | `TrueNAS` | `pve2` | `192.168.0.252` | NAS | — | 4 vCPU / 8 GiB | NFS exports and backup target |
-| `k8s-cp-01` | `pve2` | `192.168.0.10` | k3s server | `control` | 2 vCPU / 4 GiB | etcd minority member |
+| `k8s-cp-01` | `pve2` | `192.168.0.10` | k3s server | `control` | 2 vCPU / 4 GiB | etcd minority member, boot disk on `pve2-system` |
 | `k8s-cp-02` | `cyberlab` | `192.168.0.11` | k3s server | `control` | 2 vCPU / 4 GiB | etcd majority member |
 | `k8s-media-01` | `pve2` | `192.168.0.12` | k3s agent | `media` | 6 vCPU / 16 GiB | Intel Arc A380, Plex, Longhorn |
 | `k8s-cp-03` | `cyberlab` | `192.168.0.14` | k3s server | `control` | 2 vCPU / 4 GiB | etcd majority member |
 | `k8s-cloud-01` | `pve2` | `192.168.0.15` | k3s agent | `cloud` | 4 vCPU / 18 GiB | Immich, Garage, cloud services |
 | `k8s-work-01` | `cyberlab` | `192.168.0.16` | k3s agent | `apps` | 6 vCPU / 12 GiB | General application workloads |
 | `k8s-work-02` | `cyberlab` | `192.168.0.17` | k3s agent | `apps` | 6 vCPU / 12 GiB | General application workloads |
+| `k8s-apps-01` | `cyberlab` | `192.168.0.18` | k3s agent | `apps` | 4 vCPU / 12 GiB | VM and dedicated 80 GiB Longhorn data disk on `secondary` |
 
 The Kubernetes hostname `k8s-store-01` may remain until the media node is drained and rejoined;
 Terraform's VM key and the Kubernetes node name are separate identities.

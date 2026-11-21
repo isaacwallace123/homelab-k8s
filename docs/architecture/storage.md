@@ -22,6 +22,12 @@ for the complete virtual disk. For an AMD-to-Intel move, shut down the guest and
 Proxmox's offline migration. After boot, check the VM's expected IP, the Kubernetes
 node's physical zone, and the workloads and volumes that depend on it.
 
+The general-apps VM runs on `cyberlab`'s `secondary` SSD. Its additional 80 GiB disk
+is mounted at `/var/lib/longhorn-ssd` by filesystem UUID. Longhorn reserves 16 GiB on
+that disk and places new replicas there on this VM. Existing replicas on its OS disk
+stay in place. The `homelab-apps-vm` Proxmox job backs up the VM at 04:00 on Sundays
+to `backupstore` and retains four scheduled backups.
+
 ## Kubernetes storage classes
 
 Four classes, each with an explicit reason to exist. The previous setup had `local-path` and

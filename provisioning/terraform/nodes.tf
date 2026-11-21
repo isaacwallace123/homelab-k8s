@@ -79,8 +79,7 @@ resource "proxmox_virtual_environment_vm" "node" {
     ssd          = true
   }
 
-  # Optional second disk on its own datastore. No node declares one today; it exists for
-  # a workload that needs bulk local storage separate from the OS disk.
+  # Optional data disk for workloads that need separate space from the OS filesystem.
   dynamic "disk" {
     for_each = each.value.data_disk == null ? [] : [each.value.data_disk]
     content {

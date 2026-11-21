@@ -178,14 +178,10 @@ nodes = {
   #
   # Its Longhorn replicas MUST be evicted before the VM is removed. See the migration doc.
 
-  # ── pve2 apps node ─────────────────────────────────────────────────────────
-  # Every homelab app that is not Blockout Games: portfolio, cyberlab web, cloudflared,
-  # glance, ntfy, tailscale, crossplane, cert-manager and the rest that select `pool: apps`.
-  # The two cyberlab workers are the `blockout` pool now (2026-10-26: cyberlab is 100%
-  # Blockout), so the apps pool lives here. 4 vCPU / 12 GiB: the apps request ~1.5 CPU and
-  # ~5 GiB in all. .18 was never used; 112 is the next free vmid on pve2.
+  # General apps pool. Both disks use the secondary SSD on cyberlab.
+  # Mount the data disk at /var/lib/longhorn-ssd before adding it to Longhorn.
   "k8s-apps-01" = {
-    host        = "pve2"
+    host        = "cyberlab"
     vmid        = 112
     ip          = "192.168.0.18"
     role        = "agent"
@@ -194,6 +190,8 @@ nodes = {
     cores       = 4
     memory      = 12288
     disk_size   = 100
+    datastore   = "secondary"
+    data_disk   = { datastore = "secondary", size = 80 }
     description = "k3s worker — general apps (everything that is not Blockout)"
     tags        = ["worker", "apps"]
     # The portfolio selects node-role.kubernetes.io/apps as well as the pool.
@@ -238,7 +236,7 @@ nodes = {
     description     = "k3s worker — Blockout Games"
     tags            = ["worker", "blockout"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
-    # Only Blockout schedules here; its CI runners have k8s-ci-01, everything else lives on pve2.
+    # Only Blockout schedules here; its CI runners use k8s-ci-01.
     taints = ["homelab.isaacwallace.dev/pool=blockout:NoSchedule"]
   }
 
@@ -274,7 +272,7 @@ nodes = {
     description     = "k3s worker — Blockout Games, second Longhorn replica target"
     tags            = ["worker", "blockout"]
     labels          = { "node-role.kubernetes.io/worker" = "true" }
-    # Only Blockout schedules here; its CI runners have k8s-ci-01, everything else lives on pve2.
+    # Only Blockout schedules here; its CI runners use k8s-ci-01.
     taints = ["homelab.isaacwallace.dev/pool=blockout:NoSchedule"]
   }
 

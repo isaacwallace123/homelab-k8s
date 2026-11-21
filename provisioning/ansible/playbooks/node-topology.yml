@@ -46,6 +46,7 @@
       ansible.builtin.command: >-
         {{ kubectl }} label node {{ node_name_map[item] | default(item) }}
         topology.kubernetes.io/zone={{ hostvars[item].node_zone }}
+        failure-domain.beta.kubernetes.io/zone={{ hostvars[item].node_zone }}
         homelab.isaacwallace.dev/pool={{ hostvars[item].node_pool }}
         {% for k, v in (hostvars[item].node_labels | default({})).items() %}{{ k }}={{ v }} {% endfor %}
         --overwrite
