@@ -145,6 +145,7 @@ variable "nodes" {
     memory_floating = optional(number)
     disk_size       = number
     datastore       = optional(string, "local-lvm")
+    disk_format     = optional(string, "raw")
     # No default: VM 104 was created before `machine` was ever set, so Proxmox reports the
     # implicit i440fx. Defaulting to q35 here would rewrite the machine type of a running
     # control plane. Leave it unset to inherit whatever the VM already has.

@@ -73,7 +73,7 @@ resource "proxmox_virtual_environment_vm" "node" {
     datastore_id = each.value.datastore
     size         = each.value.disk_size
     interface    = "scsi0"
-    file_format  = "raw"
+    file_format  = each.value.disk_format
     discard      = "on"
     iothread     = true
     ssd          = true

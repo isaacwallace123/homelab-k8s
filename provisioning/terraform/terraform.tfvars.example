@@ -59,6 +59,8 @@ nodes = {
     # and the 2 GiB is worth more as headroom on the host that carries media and cloud.
     memory    = 4096
     disk_size = 80
+    datastore = "pve2-system"
+    disk_format = "qcow2"
     # machine intentionally unset: this VM predates the setting and Proxmox reports the
     # implicit i440fx, which is not a value the provider accepts. Setting q35 would rewrite
     # the machine type of a running control plane.

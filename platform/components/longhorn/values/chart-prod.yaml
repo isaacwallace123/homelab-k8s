@@ -28,8 +28,8 @@ defaultSettings:
   defaultReplicaCount: 2
   # 200, not the chart's 150: on k8s-work-01 (115 GiB) the volumes reserved there passed 150%
   # while the disk still had 55 GiB free, so no copy could be rebuilt there and Blockout's
-  # database ran on one replica (2026-10-26). Real usage is what fills a disk; the minimal
-  # available percentage below still stops writes before it is full.
+  # database ran on one replica (2026-10-26). The minimum available percentage gates new
+  # replica placement. Existing volumes can still grow, so check hypervisor headroom too.
   storageOverProvisioningPercentage: 200
   storageMinimalAvailablePercentage: 15
   defaultDataPath: /var/lib/longhorn
